@@ -1,0 +1,10 @@
+{
+  // Vérifie que le code partagé tourne sans navigateur (futur serveur Node) :
+  // pas de DOM ici, donc `document`, `window` ou `performance` y sont refusés.
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": []
+  },
+  "include": ["."]
+}

@@ -1,0 +1,37 @@
+import { describe, expect, it } from "vitest";
+
+// Code source de src/shared et src/server, lu en texte brut
+const sharedSources = import.meta.glob<string>("../src/shared/**/*.ts", { query: "?raw", import: "default", eager: true });
+const serverSources = import.meta.glob<string>("../src/server/**/*.ts", { query: "?raw", import: "default", eager: true });
+const clientSources = import.meta.glob<string>("../src/client/**/*.ts", { query: "?raw", import: "default", eager: true });
+
+describe("architecture", () => {
+  it("src/shared ne dépend ni de Babylon ni du client", () => {
+    const offenders = Object.entries(sharedSources)
+      .filter(([, code]) => /from\s+["'](@babylonjs\/|[./]+\/client\/)/.test(code))
+      .map(([file]) => file);
+    expect(Object.keys(sharedSources).length).toBeGreaterThan(10);
+    expect(offenders).toEqual([]);
+  });
+
+  it("src/server ne dépend ni de Babylon ni du client, et seul son point d'entrée touche à Node", () => {
+    const offenders = Object.entries(serverSources)
+      .filter(([, code]) => /from\s+["'](@babylonjs\/|[./]+\/client\/)/.test(code))
+      .map(([file]) => file);
+    expect(Object.keys(serverSources).length).toBeGreaterThan(1);
+    expect(offenders).toEqual([]);
+    // La salle de jeu ne connaît pas le transport : elle se teste sans réseau
+    const nodeOnly = Object.entries(serverSources)
+      .filter(([file, code]) => !file.endsWith("main.ts") && /from\s+["'](node:|ws["'])/.test(code))
+      .map(([file]) => file);
+    expect(nodeOnly).toEqual([]);
+  });
+
+  it("le client importe Babylon par morceaux, depuis client/babylon.ts seulement", () => {
+    const offenders = Object.entries(clientSources)
+      .filter(([file, code]) => !file.endsWith("/client/babylon.ts") && /from\s+["']@babylonjs\/core["']/.test(code))
+      .map(([file]) => file);
+    expect(Object.keys(clientSources).length).toBeGreaterThan(10);
+    expect(offenders).toEqual([]);
+  });
+});

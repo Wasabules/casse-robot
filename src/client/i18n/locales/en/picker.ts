@@ -1,0 +1,55 @@
+import type { Locomotion, RobotSort } from "../../../menu/robotCatalog";
+import type { Message, ZoneOf } from "../../i18n";
+import type { picker as fr } from "../fr/picker";
+import { section } from "../section";
+
+export const picker = {
+  ...section("locomotion", {
+    wheels: "Wheels",
+    tracks: "Tracks",
+    legs: "Legs",
+    pads: "Hover pads",
+    hover: "Hovering flight",
+    plane: "Plane",
+  } as const satisfies Record<Locomotion, Message>),
+  ...section("locomotionFilter", {
+    wheels: "Wheels",
+    tracks: "Tracks",
+    legs: "Legs",
+    pads: "Pads",
+    hover: "Flyers",
+    plane: "Planes",
+  } as const satisfies Record<Locomotion, Message>),
+  ...section("sort", {
+    order: "Game order",
+    costUp: "Cost: low to high",
+    costDown: "Cost: high to low",
+    name: "Name",
+  } as const satisfies Record<RobotSort, Message>),
+  "picker.filters": "Filter by locomotion",
+  "picker.all": "All",
+  "picker.own": "My garage",
+  "picker.searchHint": "Search: name, weapon…",
+  "picker.search": "Search for a robot",
+  "picker.sort": "Sort",
+  "picker.list": "Robots",
+  "picker.noMatch": "No robot matches.",
+  "picker.tagGarage": "garage",
+  "picker.tagLast": "last",
+  "picker.unarmed": "unarmed",
+  "picker.line": "{locomotion} · {weapons}",
+  "picker.lockedLine": "to unlock · {parts}",
+  "picker.rowTitle": "{name}: {trait}",
+  "picker.nothing": "No robot to show.",
+  "picker.cost": "Cost",
+  "picker.budget": "{cost} / {budget}",
+  "picker.mass": "Mass",
+  "picker.locomotion": "Locomotion",
+  "picker.speed": "Speed",
+  "picker.weapons": "Weapons",
+  "picker.weaponCount": "{name} ×{n}",
+  "picker.noWeapon": "Unarmed",
+  "picker.unlockFirst": "Unlock in the garage first",
+  "picker.ownTrait": { one: "{trait} · {n} block", other: "{trait} · {n} blocks" },
+  "picker.lockedParts": "Parts to unlock: {parts}",
+} as const satisfies ZoneOf<typeof fr>;

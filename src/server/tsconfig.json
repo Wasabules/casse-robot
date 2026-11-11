@@ -1,0 +1,9 @@
+{
+  // Le serveur tourne dans Node : pas de DOM, mais les types de Node (http, ws, process).
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": ["node"]
+  },
+  "include": ["."]
+}

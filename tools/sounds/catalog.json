@@ -1,0 +1,1649 @@
+{
+  "about": "Sons générés avec ElevenLabs (effets sonores, eleven_text_to_sound_v2). Chaque son : son prompt et ses réglages, et les variantes retenues (fichiers de tools/sounds/raw/<son>/, ignorés par git). npm run sounds en fait public/sounds/<son>-<n>.ogg.",
+  "sounds": {
+    "cannon-shot": {
+      "prompt": "Heavy robot cannon firing, deep punchy boom, metallic breech clank, short tail",
+      "duration": 2.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-AexwEQFUzVHUDQuVS32N",
+        "2-AFLYNUzoFX9ua23pIqnc",
+        "3-puaCbOlOhRm8y1nojtAN",
+        "4-b2InhOtTi577xmiJZNYo"
+      ]
+    },
+    "explosion": {
+      "prompt": "Powerful close explosion, massive deep boom with heavy sub bass punch, sharp crack, debris raining down",
+      "duration": 3,
+      "influence": 0.6,
+      "loop": false,
+      "note": "Variantes 1 à 4 : premier essai, prompt « Medium explosion outdoors, deep boom, crackling metal debris scattering, close » (nœud xcpm5NzHRPKwVOzIAjpm, influence 0,5).",
+      "keep": [
+        "1-yyg2HeUMhM9tySXyDr9G",
+        "2-yNmvlpOxQVGHlEIaVazE",
+        "3-tevVC6TJ8bSb7grOkmOp",
+        "4-SN9IwoL7UHbgJuh3uwNB",
+        "5-NbeTCCs9VMgWRzantXhx",
+        "6-3UaBfolF3aYl0cMr7m2O",
+        "7-XFpO6ucuppGjI5IM5AUq",
+        "8-zCIsUE9Fc65LPuuRdLbG"
+      ]
+    },
+    "impact-metal": {
+      "prompt": "Bullet hitting thick steel armor plate, sharp metallic ping, short ricochet",
+      "duration": 1,
+      "influence": 0.5,
+      "loop": false,
+      "note": "La variante 2 (1rjTK9FgSn9PuoWDW07l) est écartée : 0,34 s, 11 dB plus faible que les autres.",
+      "keep": [
+        "1-8xUh6Ek6MDZQ5cGayAL9",
+        "3-HijBGzmMowmd0tng2SZf",
+        "4-NzxXE94qk7bzV3MOpER4"
+      ]
+    },
+    "wheels-roll": {
+      "prompt": "Continuous steady rolling of a small four-wheel off-road vehicle on gravel at constant speed, knobby tires crunching small stones, low diesel engine drone, drivetrain rumble, light suspension rattle, even level",
+      "duration": 4,
+      "influence": 0.6,
+      "loop": true,
+      "note": "Remplace l'ancien « motor-electric » (nœud cDYLefq69Mev664U8U2c, prompt « Steady electric motor whine of a small robot vehicle driving, smooth gear hum, constant speed ») : un sifflement à raies (+20 à +37 dB vers 1-1,6 kHz et 6-7 kHz), qui faisait voiture électrique ; les variantes retenues n'ont aucune raie. Écartées : 1 à 4, premier essai (nœud ESVw9CGUs4sCuHInIGmW, 5 s, influence 0,5, prompt « Small off-road vehicle rolling steadily on dirt and gravel, big knobby tires crunching pebbles, suspension creaks and clunks, mechanical drivetrain rumble, small diesel engine chugging underneath, constant speed, close-mic ») : 8 à 15 dB de plus dans la première et la dernière demi-seconde, un à-coup à chaque tour (1 et 2 creusent même de 21-23 dB au milieu, 2 saute au raccord) ; 5-x3I9SYUjpqeMTN67H8L7 monte de 11 dB sur sa fin.",
+      "keep": [
+        "6-eAH7vOK8KUmdWTyz4ThR",
+        "7-3IzpQCx8ZWh282wfcVSJ",
+        "8-xwjCpVX7Hi2LXjMEaOR2"
+      ]
+    },
+    "lock-acquired": {
+      "prompt": "Two short separate high pitched electronic beeps, target lock confirmation",
+      "duration": 0.8,
+      "influence": 0.5,
+      "loop": false,
+      "note": "Écartées : 6-7juiI56MzL5OJ27WsNdy, 7-O8plWh5DhEqTSAEKrPYx",
+      "keep": [
+        "5-uLoc5vcZY4Bpo9TfWUdz",
+        "8-Rkwpnwp4zme6sg9V0Aeg"
+      ]
+    },
+    "rifle-shot": {
+      "prompt": "Automatic rifle single gunshot, sharp crack, short metallic mechanism click",
+      "duration": 0.7,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-mJkQ91D9xBRYBJbRrpFp",
+        "2-9GBipkLLAY7HO0yMnEJV",
+        "3-44UDH1rNASlHP1TLsNVY",
+        "4-ynLUe545XUw5zv5vHKuc"
+      ]
+    },
+    "sniper-shot": {
+      "prompt": "High caliber sniper rifle gunshot, loud supersonic crack, long echo outdoors",
+      "duration": 2.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-TUq5vY1k6h8YHSWiVv2l",
+        "2-ySgEClInR0cSoR1QrbWL",
+        "3-ISL5CLvocMvPB3lPQ5Y4"
+      ]
+    },
+    "missile-launch": {
+      "prompt": "Missile launching from a tube, ignition bang and rocket motor whoosh",
+      "duration": 2,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-dE4m7QDyIygN4phWQLi0",
+        "2-uit66TFcJGtDaCxyCRkJ",
+        "3-UZsihsBtCrrnUjECM9aW"
+      ]
+    },
+    "flak-shot": {
+      "prompt": "Anti-aircraft autocannon firing a single round, deep thump and metallic clank",
+      "duration": 1.2,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-VJJSML5MxvjYPvQdb9io",
+        "2-8300UIq1qy6UEpzzAQNA",
+        "3-IUmdL32KFTwhOAwlJYCR"
+      ]
+    },
+    "mine-drop": {
+      "prompt": "Heavy metal landmine dropped onto the ground, dull clunk, then a short electronic arming beep",
+      "duration": 1.2,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-I1cL2tS7yLkZTHDI6evP",
+        "2-OooE1v4ojIsSjckYUibQ",
+        "3-EcqMY5JXN6xWzK1KLhey"
+      ]
+    },
+    "flamer-loop": {
+      "prompt": "Flamethrower firing continuously, roaring flame jet, whooshing fire",
+      "duration": 4,
+      "influence": 0.5,
+      "loop": true,
+      "keep": [
+        "1-qn6isOC7fGGWbG8vbomG",
+        "2-8XYAoVyxnsNuHGlZltPE"
+      ]
+    },
+    "emp-shot": {
+      "prompt": "Electromagnetic pulse cannon firing, charged electric zap with humming discharge",
+      "duration": 1.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-5NxljZI15dnhCaXDLpz7",
+        "2-BUAFp0j4y0CvQuz6U9h4",
+        "3-eO6uNk3FO4xHKA2mD7Zs"
+      ]
+    },
+    "smoke-shot": {
+      "prompt": "Smoke grenade launcher firing, hollow pop and thump",
+      "duration": 1,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-isteP9UParyn354PlbXl",
+        "2-lawPX81h1ugaXpgG1T3a",
+        "3-U5qEbPxSawkKouJtp9ui"
+      ]
+    },
+    "laser-shot": {
+      "prompt": "Sci-fi laser gun single shot, short bright electric zap",
+      "duration": 0.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-0BeLul3BhJ9uRw4dY99t",
+        "2-3eGMIoj061PW302S6CCH",
+        "3-JZxVRGkbM7wHTxGXt8BK",
+        "4-3KaNMqAe5Z0QkFX5zrZ9"
+      ]
+    },
+    "rail-shot": {
+      "prompt": "Railgun: quick rising electric zip, instantly followed by one massive thunderclap boom, then a short fading crackle",
+      "duration": 1.5,
+      "influence": 0.7,
+      "loop": false,
+      "note": "Une charge aiguë de 0,1 à 0,3 s (aigus seuls), puis le coup (les graves bondissent de 15 à 33 dB) et sa décroissance. Variante 1 (9-ck2qpBVxd3QW1AvbytT9) : nœud dSh48goNZJaOAIbiYJj9, prompt « Sci-fi railgun single shot: a very short rising high-pitched electric charge chirp, then one massive explosive electromagnetic thunder crack with a deep boom, fast decay into faint crackling static ». Variante 3 (22-4JSZ1CEI1I9PasAORM5z) : nœud XhZSBcrHkPpk2Quzmrci, prompt « Railgun: quick rising electric zip, instantly followed by a massive thunderclap boom and crackling sparks ». Même durée et influence. Les variantes 1 à 3 de tools/sounds/raw/rail-shot sont l'ancien son (nœud 67MKYJkhXlIHP1RcFj48, 2,5 s, prompt « Railgun firing, rising electric charge whine then powerful electromagnetic crack ») : 2 s d'un bloc à plein niveau, continu. Écartées : sans charge, le coup d'emblée (5, 8, 10 à 15, 19) ; un plateau continu de 0,6 à 1 s (4, 6, 7, 17, 18) ; une charge trop longue, le coup arrivant trop tard (16 : 0,75 s, 23 : 0,5 s) ; un grondement qui tient à plein niveau 0,7 s ou jusqu'à la coupure (20, 21, 24, 26, 27).",
+      "keep": [
+        "9-ck2qpBVxd3QW1AvbytT9",
+        "25-fZ1JpCj8sNB1TQGQhVZN",
+        "22-4JSZ1CEI1I9PasAORM5z"
+      ]
+    },
+    "shotgun-shot": {
+      "prompt": "Heavy combat shotgun blast, punchy boom, then pump action rack",
+      "duration": 1.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-jsQKvzDCIVJH21bFv2U5",
+        "2-y5Q9L3MQ3jctBPuujoz3",
+        "3-8b3vE2qIMle6SblklfUt",
+        "4-BTyhgHn5Nr5q4w3MSyQs"
+      ]
+    },
+    "rocket-launch": {
+      "prompt": "Small rocket launching from a pod, quick sharp whoosh",
+      "duration": 0.8,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-c2UtIXYKirAm1p5Vpl2E",
+        "2-ZL7tlEIKFhMdr4s5eWBk",
+        "3-i1GJAqZQSH5sAZ9svs6X",
+        "4-1DeqavfWEwApnQ3w1JnE"
+      ]
+    },
+    "plasma-loop": {
+      "prompt": "Continuous plasma energy stream, crackling electric hum, sci-fi weapon firing",
+      "duration": 3,
+      "influence": 0.5,
+      "loop": true,
+      "keep": [
+        "1-n55lQAqWQIjwrqwHNHZN",
+        "2-W9TpsQcDo1QIsREFMhz4"
+      ]
+    },
+    "lockon-launch": {
+      "prompt": "Guided missile launching from a pod, sharp ignition and rocket whoosh",
+      "duration": 1.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-uw7xj5X13MrajF5SaD6Q",
+        "2-tp6T5SE6L6qqeHCcx8u4",
+        "3-2KgxrJ43ikCHfTEM7g78"
+      ]
+    },
+    "warhead-launch": {
+      "prompt": "Heavy cruise missile launch, deep ignition roar, powerful rocket thrust",
+      "duration": 3,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-lTMW6WKtCLvOnMdN8hqU",
+        "2-LoYyDvj9bMvsol9QcejQ"
+      ]
+    },
+    "bullet-flyby": {
+      "prompt": "Bullet whizzing past close to the ear, fast supersonic whiz",
+      "duration": 0.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-Is0mubJnwHCHDn7BVsUy",
+        "2-DfeMI48DvASDgPBZcJ8t",
+        "3-FLdcROOibuGMU3qqNYJ8",
+        "4-cI2pQsUY0KocMAKEKG5g"
+      ]
+    },
+    "missile-flight": {
+      "prompt": "Steady rocket engine exhaust, constant loud hissing roar, continuous thrust",
+      "duration": 3,
+      "influence": 0.5,
+      "loop": true,
+      "note": "Écartées : 1-ONqYVIN3T4vvU9CyR9UY, 2-MbCPeUMUun4OtZfqI6Rl",
+      "keep": [
+        "3-d78ClaoLWrOSjn2Oo18h",
+        "4-BgUGyNTr8GthKisq8Ew1"
+      ]
+    },
+    "rocket-flight": {
+      "prompt": "Small rocket in flight, continuous high pitched hissing whoosh",
+      "duration": 2,
+      "influence": 0.5,
+      "loop": true,
+      "note": "Écartées : 1-2XLLcJ5WnPIdKTXiJy60",
+      "keep": [
+        "2-c9JBbsN13RBRsYRjm8bI",
+        "3-Tw0FjlIN5qspFbgriFid"
+      ]
+    },
+    "warhead-flight": {
+      "prompt": "Large cruise missile jet engine in flight, continuous roaring thrust and rushing wind",
+      "duration": 4,
+      "influence": 0.5,
+      "loop": true,
+      "keep": [
+        "1-fMiTvpueLk0cum8EhMwC",
+        "2-5sCr3ljqHQ7lchJHKdoe"
+      ]
+    },
+    "shell-whistle": {
+      "prompt": "Artillery shell whistling through the air, continuous whistle",
+      "duration": 2,
+      "influence": 0.5,
+      "loop": true,
+      "note": "Écartées : 2-mZZ5Yc6uTbjScYGCpHjx",
+      "keep": [
+        "1-EwXf3DGOQwV8wePMaRKN",
+        "3-uWuGiLNUPVeAHTuYwpDm"
+      ]
+    },
+    "rotor-heli": {
+      "prompt": "Helicopter main rotor blades chopping, rhythmic thumping, close",
+      "duration": 4,
+      "influence": 0.5,
+      "loop": true,
+      "keep": [
+        "1-NBHYOHoJirTngGLLJFbw",
+        "2-vItvCdHzx3AdZzWFrm0b"
+      ]
+    },
+    "rotor-drone": {
+      "prompt": "Quadcopter drone propellers buzzing, high pitched motor whine",
+      "duration": 3,
+      "influence": 0.5,
+      "loop": true,
+      "keep": [
+        "1-VHmzeNpIKuAKYdQhgFKF",
+        "2-I2RuMCCaJpcgZSgzvaND"
+      ]
+    },
+    "propeller-plane": {
+      "prompt": "Small propeller airplane engine in flight, steady droning buzz",
+      "duration": 4,
+      "influence": 0.5,
+      "loop": true,
+      "keep": [
+        "1-caBfKgB4R3RCHg4rE6f5",
+        "2-VxRQ2RU1Un4Ux7YhDkrw"
+      ]
+    },
+    "hover-pad": {
+      "prompt": "Anti-gravity hover engine hum, deep pulsing electric throb",
+      "duration": 4,
+      "influence": 0.5,
+      "loop": true,
+      "keep": [
+        "1-hkgOqFMx1KG0cgOBS9nZ",
+        "2-NwIHEt8nx0iucKOU9Uso"
+      ]
+    },
+    "tracks": {
+      "prompt": "Tank tracks clanking and squeaking, metal treads rolling",
+      "duration": 3,
+      "influence": 0.5,
+      "loop": true,
+      "keep": [
+        "1-2axB5xZCXgfMtfAGiCrk",
+        "2-uFLLQsdrdjdmcxSFt4Cq"
+      ]
+    },
+    "legs-servo": {
+      "prompt": "Walking robot legs, servo motors whirring and hydraulic actuators hissing, rhythmic",
+      "duration": 3,
+      "influence": 0.5,
+      "loop": true,
+      "keep": [
+        "1-8PVaSXlVFjV4f6fN50Ka",
+        "2-5nItjbczRmqMaoBOzsC9"
+      ]
+    },
+    "fire-loop": {
+      "prompt": "Flames burning on hot metal, crackling fire",
+      "duration": 4,
+      "influence": 0.5,
+      "loop": true,
+      "keep": [
+        "1-6a2gdm9X3Io9VS88BFBZ",
+        "2-VfnwiUA5NTz1wj90oru5"
+      ]
+    },
+    "amb-depot": {
+      "prompt": "Industrial depot outdoors, distant machinery hum, light wind, occasional metal creaks",
+      "duration": 20,
+      "influence": 0.5,
+      "loop": true,
+      "stereo": true,
+      "keep": [
+        "1-9lTtrtCiFpkcb2HQ7UId",
+        "2-mv0j5Wj0ppCVGjhXIDn8"
+      ]
+    },
+    "amb-fortress": {
+      "prompt": "Windy stone fortress courtyard, strong gusts of wind",
+      "duration": 20,
+      "influence": 0.5,
+      "loop": true,
+      "stereo": true,
+      "keep": [
+        "1-Vk3r3gcaTxv91myDdOVw",
+        "2-Ucj0VUmtL5Kw9gcaOMss"
+      ]
+    },
+    "amb-trenches": {
+      "prompt": "Muddy battlefield trenches, cold wind, distant low rumble",
+      "duration": 20,
+      "influence": 0.5,
+      "loop": true,
+      "stereo": true,
+      "keep": [
+        "1-wCFX7sHbSJowr7u9Qo6R",
+        "2-mw6Eq01VFa2fSWiZnpvD"
+      ]
+    },
+    "amb-yard": {
+      "prompt": "Construction site ambience, distant heavy machinery, occasional metal clangs, wind",
+      "duration": 20,
+      "influence": 0.5,
+      "loop": true,
+      "stereo": true,
+      "note": "Écartées : 1-ekLJlnoyTLGqVm5RqIEy",
+      "keep": [
+        "2-G5TL9Lk8goSEUQnl0PBu"
+      ]
+    },
+    "block-break": {
+      "prompt": "Metal armor block breaking apart, crunching steel with small debris",
+      "duration": 1,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-PdRSYXIDacyC9unJAbKD",
+        "2-Zfl1j0HLxAvS2fNJqqAp",
+        "3-434kbAJD2J1NQhipUXWd",
+        "4-sUVdfC79v7PDGoPhKjkW"
+      ]
+    },
+    "link-snap": {
+      "prompt": "Heavy metal beam snapping, loud creak then bang",
+      "duration": 1.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-nDQYTAP8TwYxeaVO7EW9",
+        "2-AK6my3Bda586JyTGO1jk",
+        "3-8S7d9p89ocRJfKVNcO3z"
+      ]
+    },
+    "collision": {
+      "prompt": "Heavy metal robot crashing into a wall, loud clang and crunch",
+      "duration": 1.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-0PEbjnKIed56LEUSR2eQ",
+        "2-2exkNCofZjrSv0WqyUwO",
+        "3-pwFFHEjH7mVYNVEFVLpW",
+        "4-RnASNQCIXWOqtNw7Y3gi"
+      ]
+    },
+    "robot-destroyed": {
+      "prompt": "Robot vehicle exploding, big blast, metal parts flying, electrical sparks",
+      "duration": 3,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-Dovl0Q3KBsQkhzf62vSI",
+        "2-cASqKhsOxIuWjD4DEDU0",
+        "3-ZPfaxSVFiDvon3DrEe6q"
+      ]
+    },
+    "fire-ignite": {
+      "prompt": "Fire igniting with a sudden whoosh",
+      "duration": 1.2,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-jUa6J4dqoJYygqdDRPQn",
+        "2-gjx6pZLaGPMnXZpMBpAX",
+        "3-iFogTvCcbfBTPGlkLWjO"
+      ]
+    },
+    "emp-burst": {
+      "prompt": "Electromagnetic pulse blast, electric discharge burst with crackling static",
+      "duration": 2,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-4CulxsqXUUZAufxhOX58",
+        "2-GXxsPrnkxcxbYx0xtLaR",
+        "3-V3G0umvbV6JHP1OAnGgF"
+      ]
+    },
+    "stun-crackle": {
+      "prompt": "Electric short circuit crackling, sparks and buzzing",
+      "duration": 1.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-3iY8H95iLPkPGmlwD12P",
+        "2-nSuIFFn2Ga0BGtI0he2K"
+      ]
+    },
+    "smoke-hiss": {
+      "prompt": "Smoke canister releasing thick smoke, strong gas hiss",
+      "duration": 2,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-4ubx6W3m0p5LyvzUKC4s",
+        "2-P2nnCr44u0tk33itFk9E"
+      ]
+    },
+    "shield-hit": {
+      "prompt": "Energy force field absorbing a hit, short sci-fi shimmer zap",
+      "duration": 0.7,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-yeSsQ7vgWkp1WSAfKC7p",
+        "2-IxNI8MAmM8Sq0L8hPzuw",
+        "3-bclDwTf0DF4NyNwAVoul",
+        "4-wdqzb3XB5T3HDpqee7zZ"
+      ]
+    },
+    "impact-ground": {
+      "prompt": "Bullet hitting concrete, sharp thud with dirt debris",
+      "duration": 0.6,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-OUwuv2LGPAvtAMCxXQtf",
+        "2-JGHbNAAyB3tbrfZCqCqT",
+        "3-kLgCbIOUwD0G0DB179pi",
+        "4-EVDaFok7CIgJtsTG1LWS"
+      ]
+    },
+    "impact-prop": {
+      "prompt": "Bullet hitting a wooden crate, splintering thud",
+      "duration": 0.6,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-xGZELHXFkEK92zAGVgNp",
+        "2-B4hFSf5j8PvT4FP5PxSu",
+        "3-FO3kN67hwN9QetSuZqP1"
+      ]
+    },
+    "explosion-small": {
+      "prompt": "Close grenade explosion, sharp loud bang with flying debris",
+      "duration": 1.5,
+      "influence": 0.5,
+      "loop": false,
+      "note": "Écartées : 1-fqeCNsSTYTWqmf3OIUa3, 2-vlUAlMYYtj9bAiySwqzU, 3-AeHh8qacTE9nNGGyPdwi",
+      "keep": [
+        "4-kThF35Q1nn2JjHButwix",
+        "5-KZh5JEJhE39WT0g4S4tW"
+      ]
+    },
+    "explosion-huge": {
+      "prompt": "Enormous devastating explosion, earth shaking deep sub bass boom, shockwave, long heavy rumble and falling debris",
+      "duration": 5,
+      "influence": 0.6,
+      "loop": false,
+      "note": "Variantes 1 et 2 : prompt « Massive explosion, huge deep boom with long rolling rumble » (nœud k5mWcVNS07zsZsY2P3Ly, influence 0,5).",
+      "keep": [
+        "1-vf2NTqneXDoSsAgeT4q7",
+        "2-pFsQaw2C1YJJpNvfnOwU",
+        "3-jQe91VgjAcTh56NAbQTW",
+        "4-cV3zPgsCsgSPuw3En5w6",
+        "5-vFFKmxNdG3QD3HMURjFP",
+        "6-eKhx9y9Bbso2KBcJ12lR"
+      ]
+    },
+    "crate-break": {
+      "prompt": "Wooden crate smashing apart, splintering wood",
+      "duration": 1.2,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-7AMeevOJsBHwHcVYJUCD",
+        "2-CkCbe3Xti6xtzTDAl4rV",
+        "3-3uIlVT1md4egCe1jKDqm"
+      ]
+    },
+    "hit-marker": {
+      "prompt": "Short crisp metallic tick, subtle hit confirmation",
+      "duration": 0.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-Y7MBNSGHQxRSqZJ5AmjI",
+        "2-gAmIbJK6OGrUqK4vGixi",
+        "3-LXbjvR8gRYIy0oEjMUNT",
+        "4-vzpIDaXQldZyZlJkMvLv"
+      ]
+    },
+    "kill-confirm": {
+      "prompt": "Short rewarding electronic chime, target destroyed confirmation",
+      "duration": 1,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-5PRzeawlXdiQL9eE6eEo",
+        "2-y30n90AiMHfCsLBwmQLB",
+        "3-kXytvS4A2GxDSuKocYTr"
+      ]
+    },
+    "hurt": {
+      "prompt": "Muffled heavy metal thud on armor, taking a hit",
+      "duration": 0.6,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-pZIF9bbLxO2bjehWF0pk",
+        "2-nZhoFS5QbL2b8bCXTlmm",
+        "3-KW6fqQgWDqhiDf18f0r8"
+      ]
+    },
+    "zone-captured": {
+      "prompt": "Positive rising electronic chime, objective captured",
+      "duration": 1.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-pLwCuKzsWhCNPNdF65wf",
+        "2-9lHxPIjx7qx5LE5LDoCR"
+      ]
+    },
+    "zone-lost": {
+      "prompt": "Low descending electronic alert tone, objective lost",
+      "duration": 1.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-U2sz5MTRFLZ1Gc4A6e3G",
+        "2-47sIu7PBuW2sMt07Vscs"
+      ]
+    },
+    "overheat-alarm": {
+      "prompt": "Weapon overheating warning, rapid electronic alarm beeps",
+      "duration": 1,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-CRcIGist3oreZI3fBD9c",
+        "2-K2bemEALXv1EducHsMgc"
+      ]
+    },
+    "dry-fire": {
+      "prompt": "Empty gun trigger click, dry fire, metallic click",
+      "duration": 0.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-yjQxJDT28bIweepdbna1",
+        "2-2wa1DnvQTjU29jufhrTH",
+        "3-CIItJPUUowXL7ZdKUdea"
+      ]
+    },
+    "reload-ready": {
+      "prompt": "Weapon reloaded, mechanical chambering click and clack",
+      "duration": 0.6,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-cbHsZA1X8jGqG8bAUAkd",
+        "2-MvrioHUgiNdI9QcN3S4D",
+        "3-WP0sNCegtIuly0BKUekd"
+      ]
+    },
+    "missile-warning": {
+      "prompt": "Incoming missile warning, fast urgent electronic beeping",
+      "duration": 1,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-9gcjyUjrXGroyvTR7qCD",
+        "2-GiZ2J3siWhv6c0XJOkCe"
+      ]
+    },
+    "integrity-alarm": {
+      "prompt": "Critical damage alarm in a robot cockpit, low pulsing warning tone",
+      "duration": 1.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-bTbUGw8WNaB4zbOITw65",
+        "2-cx859NubEzDvnBi0qyke"
+      ]
+    },
+    "battery-low": {
+      "prompt": "Low battery warning, descending electronic beeps",
+      "duration": 1,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-nNkEs1QUWENfgIkSxwtu",
+        "2-33PMI05ohxjOf1le04rc"
+      ]
+    },
+    "match-start": {
+      "prompt": "Loud industrial horn blast, match start signal",
+      "duration": 2.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-cWQ0r7pwymMRG56KAYAa",
+        "2-WILTjmMfpl6ZvktjkhzE"
+      ]
+    },
+    "countdown-tick": {
+      "prompt": "Single short digital countdown beep",
+      "duration": 0.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-1tSVQUaru2D7wDCJ1PUC",
+        "2-AsYYTuvEEB4ObUJUIomd"
+      ]
+    },
+    "hill-moved": {
+      "prompt": "Alert chime, objective relocated notification, two rising tones",
+      "duration": 1.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-wjT68VMCmFmct9MYAbjd",
+        "2-ENP8D0qAJ6u6ygid7hQl"
+      ]
+    },
+    "respawn": {
+      "prompt": "Robot powering up, electronic boot sequence whir rising",
+      "duration": 1.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-0jwqvSYmtL51B0CVvWxG",
+        "2-tRhJ1sNoF6jPtZyODrNg",
+        "3-WacH8Li99eP4qg6RyXJS"
+      ]
+    },
+    "righting": {
+      "prompt": "Gyroscope spinning up with a hydraulic push, heavy robot righting itself",
+      "duration": 1.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-3o8f6aP0k4n110jzKGOK",
+        "2-sywdGVYtMU4mN3ADL8Tn"
+      ]
+    },
+    "mine-arm": {
+      "prompt": "Landmine arming, short high pitched electronic beep",
+      "duration": 0.6,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-3Gm50T6DhHwKf8nHLIhd",
+        "2-fsghrCseiD5pUjLpwIGm"
+      ]
+    },
+    "footstep": {
+      "prompt": "Heavy robot mechanical footstep, metal foot stomping on the ground",
+      "duration": 0.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-z0um5uJrGQD7MknYdKdK",
+        "2-FMBh60QfoYeq6aGsHWI2",
+        "3-kZXJYHyK3Fho0Kij0YRf",
+        "4-bumLIFbpNFYyLQFmEBb4"
+      ]
+    },
+    "gas-leak": {
+      "prompt": "Pressurized gas escaping from a punctured canister, loud continuous hiss",
+      "duration": 3,
+      "influence": 0.5,
+      "loop": true,
+      "note": "Écartées : 2-n5121iccQ2WU8Oq5xgKa",
+      "keep": [
+        "1-gjDEhEp6nSOxMrzmw9C2"
+      ]
+    },
+    "fuse-hiss": {
+      "prompt": "Burning fuse sizzling, crackling sparks",
+      "duration": 2,
+      "influence": 0.5,
+      "loop": true,
+      "keep": [
+        "1-w0qkNqgsrusjPsSdNW2g",
+        "2-ez4Kt4SBB1LhxMgQOhli"
+      ]
+    },
+    "menu-click": {
+      "prompt": "Clean UI button click, soft digital tap",
+      "duration": 0.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-EWvDkX6qxiiPhDP2wigx",
+        "2-9LfVp1tl6BDk2ogRWAqg",
+        "3-Pn0WTlpZr9q6MiPt70m5"
+      ]
+    },
+    "menu-hover": {
+      "prompt": "Very subtle UI hover tick, soft and short",
+      "duration": 0.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-m6a0wU2aPC9FrkyUx5vG",
+        "2-IBHEGjLhAGL2kZMyVZIh"
+      ]
+    },
+    "menu-back": {
+      "prompt": "UI back button, soft reverse swoosh and click",
+      "duration": 0.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-FEULC4uXITSQPtOMltb8",
+        "2-WMA7aL6ZSzcW38XUeDkw"
+      ]
+    },
+    "unlock": {
+      "prompt": "Item unlocked reward, bright sparkling chime",
+      "duration": 1.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-elMMOTFdJKdZABslBCUP",
+        "2-DAwVDk0RIih3NStsH9FW"
+      ]
+    },
+    "credits": {
+      "prompt": "Coins counting reward, quick bright jingle",
+      "duration": 1,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-11ZeFMwS6bEJBvMjE4zb",
+        "2-0jXo7MPmMRWVtT8U8qU8"
+      ]
+    },
+    "garage-place": {
+      "prompt": "Metal block snapping into place magnetically, solid clunk",
+      "duration": 0.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-7wA500w9xXcNJFolLAgP",
+        "2-mKy1I6bwSJvR2gff0qbm",
+        "3-cpmOjv33omSNhq8glyKn",
+        "4-2fSFBM9M0JSaokVFYAoC"
+      ]
+    },
+    "garage-remove": {
+      "prompt": "Metal block unlatching and lifted away, light clank",
+      "duration": 0.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-IzwG5A5mxV41uUwRn7t4",
+        "2-yV9NLcKqHg1e0KaOOlUK",
+        "3-OnryPy2HJGJCLqIT1viM"
+      ]
+    },
+    "garage-rotate": {
+      "prompt": "Small servo rotating a mechanical part, short whir and click",
+      "duration": 0.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-wYnGjfWCMNBRqtlS4XP8",
+        "2-Dj4Y3QcUXWKVyuStPYPN"
+      ]
+    },
+    "garage-wheel": {
+      "prompt": "Heavy wheel bolted onto an axle, ratchet and clunk",
+      "duration": 0.6,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-g4gcpt4PJ86T7wnuRdpl",
+        "2-SnB72mYrfAYR5Tm640Ua"
+      ]
+    },
+    "garage-error": {
+      "prompt": "Short negative error buzz, user interface",
+      "duration": 0.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-uGu2TlWnto12pwP3DYDq",
+        "2-4fIn5DjX5GRYzos1W2Jg"
+      ]
+    },
+    "garage-save": {
+      "prompt": "Saved confirmation, soft positive chime",
+      "duration": 1,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-jSet0N3WLtYrspgYise2",
+        "2-SNWLXDvM5B9bkbB3iWPx"
+      ]
+    },
+    "music-menu": {
+      "prompt": "Instrumental electronic rock theme for a robot combat video game main menu, driving synth bass, punchy drums, heroic confident mood, steady tempo, no vocals",
+      "duration": 90,
+      "model": "eleven_music_v2_5",
+      "instrumental": true,
+      "loop": true,
+      "stereo": true,
+      "music": true,
+      "keep": [
+        "1-5aJYNzwAP7L6QDJGIlxe",
+        "2-S1c8Etc0M9MQwQaWIPVw"
+      ]
+    },
+    "music-garage": {
+      "prompt": "Calm instrumental electronic music for a robot workshop, soft synth pads, light mechanical percussion, focused and relaxed mood, steady tempo, no vocals",
+      "duration": 75,
+      "model": "eleven_music_v2_5",
+      "instrumental": true,
+      "loop": true,
+      "stereo": true,
+      "music": true,
+      "keep": [
+        "1-CP2XNEqVxFkXmuHuTmn5",
+        "2-j16d8JtoqQhotrN6BmGP"
+      ]
+    },
+    "music-battle-a": {
+      "prompt": "Intense instrumental electronic rock battle music, heavy distorted synth bass, fast driving drums, tense and energetic, steady tempo, no vocals",
+      "duration": 90,
+      "model": "eleven_music_v2_5",
+      "instrumental": true,
+      "loop": true,
+      "stereo": true,
+      "music": true,
+      "keep": [
+        "1-wUynZIAY1F6KA8EPu1qr",
+        "2-TPaSIrh4UEBIciwSUtUv"
+      ]
+    },
+    "music-battle-b": {
+      "prompt": "Instrumental industrial electronic combat music, pounding percussion, gritty arpeggiated synths, dark and relentless, steady tempo, no vocals",
+      "duration": 90,
+      "model": "eleven_music_v2_5",
+      "instrumental": true,
+      "loop": true,
+      "stereo": true,
+      "music": true,
+      "keep": [
+        "1-xV1KE7yBD3FLl3bnjVMP",
+        "2-GSRWydwaasncT3JewRQQ"
+      ]
+    },
+    "stinger-victory": {
+      "prompt": "Short triumphant victory fanfare, electronic rock, bright synth brass and drums, ends on a resolved chord, no vocals",
+      "duration": 8,
+      "model": "eleven_music_v2_5",
+      "instrumental": true,
+      "loop": false,
+      "stereo": true,
+      "music": true,
+      "keep": [
+        "1-Sed4vQUBU84oflZNiN89",
+        "2-BBZCiyIAWpFP2YC1kEH7"
+      ]
+    },
+    "stinger-defeat": {
+      "prompt": "Short somber defeat sting, electronic, slow descending synth notes, low drone, ends quietly, no vocals",
+      "duration": 8,
+      "model": "eleven_music_v2_5",
+      "instrumental": true,
+      "loop": false,
+      "stereo": true,
+      "music": true,
+      "keep": [
+        "1-XIhskAoOwDnQxaYGC8oT",
+        "2-cfmvQabMeHPLyGAXMDFm"
+      ]
+    },
+    "music-battle-c": {
+      "prompt": "Epic hybrid orchestral battle music for a robot arena game, staccato strings, bold brass stabs, thundering trailer percussion layered with gritty analog synth bass, heroic and urgent, 140 BPM in C minor, steady tempo, consistent high energy throughout, moves through several distinct melodic sections without breakdowns, no vocals",
+      "duration": 200,
+      "model": "eleven_music_v2_5",
+      "instrumental": true,
+      "loop": true,
+      "stereo": true,
+      "music": true,
+      "keep": [
+        "1-8OoR1dR2EVmAtaH6VGma"
+      ],
+      "note": "Deux générations. Variante 2 écartée : trois creux de ~1,5 s presque muets (-40 dB, à 69, 98 et 160 s)."
+    },
+    "music-battle-d": {
+      "prompt": "Mechanical drum and bass for a robot combat game, fast rolling breakbeats at 174 BPM, deep growling reese bass, metallic clanking percussion, dark futuristic and driving, F minor, steady tempo, consistent high energy throughout, several distinct sections without breakdowns, no vocals",
+      "duration": 180,
+      "model": "eleven_music_v2_5",
+      "instrumental": true,
+      "loop": true,
+      "stereo": true,
+      "music": true,
+      "keep": [
+        "1-naeP7v4IqHksJtdDEvvL",
+        "2-RZotIym93NorpvITQqux"
+      ]
+    },
+    "music-battle-e": {
+      "prompt": "Aggressive retro synthwave action music, darksynth style, punchy gated reverb drums, driving sixteenth-note analog bass arpeggios, soaring lead synth melodies, nervous and energetic, 118 BPM in D minor, steady tempo, consistent energy throughout, several distinct sections without breakdowns, no vocals",
+      "duration": 190,
+      "model": "eleven_music_v2_5",
+      "instrumental": true,
+      "loop": true,
+      "stereo": true,
+      "music": true,
+      "keep": [
+        "1-DUKLTpA7frUokAvxe3jh",
+        "2-h8rAbk7PsObWRXKYS2GV"
+      ],
+      "note": "Deux générations, gardées : la variante 2 a un arrêt de 0,4 s à 31,5 s (une coupure avant la reprise, pas un trou)."
+    },
+    "music-battle-f": {
+      "prompt": "Heavy industrial metal instrumental for robot battles, chugging downtuned distorted guitars, pounding double kick drums, harsh synth stabs and machine noises, relentless and powerful, 100 BPM in drop D, steady tempo, consistent high energy throughout, several distinct riffs without breakdowns, no vocals",
+      "duration": 180,
+      "model": "eleven_music_v2_5",
+      "instrumental": true,
+      "loop": true,
+      "stereo": true,
+      "music": true,
+      "keep": [
+        "1-kXvOPje9iohzYXzcdtXj",
+        "2-78UVx5hZsvpeGOkx8Wo9"
+      ]
+    },
+    "music-battle-g": {
+      "prompt": "Dark electronic bass music for a robot combat game, heavy halftime beat at 150 BPM, growling wobble bass, glitchy robotic sound design, sharp snares, menacing and tense, G minor, steady tempo, consistent energy throughout, several distinct sections without long breakdowns, no vocals",
+      "duration": 200,
+      "model": "eleven_music_v2_5",
+      "instrumental": true,
+      "loop": true,
+      "stereo": true,
+      "music": true,
+      "keep": [
+        "1-X8SUWl3BsLlPdjiz2ilb"
+      ],
+      "note": "Deux générations. Variante 2 écartée : des passages calmes répétés et des creux à -43 dB (à 62 et 139 s), 12 dB d’écart de niveau. La variante 1 a une introduction de 12 s (retirée à la préparation) et un arrêt de 0,8 s à 24 s avant la reprise."
+    },
+    "music-menu-b": {
+      "prompt": "Cinematic electronic main menu theme for a robot combat game, warm analog synth arpeggios, steady electronic drums, wide orchestral string pads and a confident synth lead, hopeful anticipation, 110 BPM in A minor, steady tempo, consistent level throughout, no vocals",
+      "duration": 120,
+      "model": "eleven_music_v2_5",
+      "instrumental": true,
+      "loop": true,
+      "stereo": true,
+      "music": true,
+      "keep": [
+        "1-kom40RiQypqbTJKWOCYn"
+      ],
+      "note": "Une seule génération (budget)."
+    },
+    "music-garage-b": {
+      "prompt": "Relaxed instrumental downtempo for a robot workshop, mellow electric piano chords, soft funky bassline, crisp laid-back drums, light mechanical clicks and ratchet sounds as percussion, focused and creative mood, 90 BPM in E flat major, steady tempo, consistent level throughout, no vocals",
+      "duration": 120,
+      "model": "eleven_music_v2_5",
+      "instrumental": true,
+      "loop": true,
+      "stereo": true,
+      "music": true,
+      "keep": [
+        "1-q51KE8GA7LvH2Xnt67fV"
+      ],
+      "note": "Une seule génération (budget)."
+    },
+    "stinger-victory-b": {
+      "prompt": "Short orchestral victory fanfare, triumphant brass and timpani rolls with bright synth layers, ends on a strong resolved major chord, no vocals",
+      "duration": 8,
+      "model": "eleven_music_v2_5",
+      "instrumental": true,
+      "loop": false,
+      "stereo": true,
+      "music": true,
+      "keep": [
+        "2-2vNJBM4BaPX4djWOHXNE"
+      ],
+      "note": "Deux générations. Variante 1 écartée : elle monte pendant 2 s avant d’éclater (un motif doit partir tout de suite). Une seule gardée : les motifs restent décodés (~3 Mo chacun)."
+    },
+    "stinger-defeat-b": {
+      "prompt": "Short defeat sting, low brass and dark synth descending slowly, a muted timpani hit, ends quietly on a low note, no vocals",
+      "duration": 8,
+      "model": "eleven_music_v2_5",
+      "instrumental": true,
+      "loop": false,
+      "stereo": true,
+      "music": true,
+      "keep": [
+        "2-X9U1z2A5Yu4SPyANEH6K"
+      ],
+      "note": "Deux générations. Variante 1 écartée : elle ne s’entend que 3 s. Une seule gardée : les motifs restent décodés (~3 Mo chacun)."
+    },
+    "bomb-release": {
+      "prompt": "Aircraft bomb bay release, heavy metal latch clunk and mechanical click as a bomb drops away",
+      "duration": 1,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-NjRVbfd0LNG0vGbAHH4y",
+        "2-qAZ0MWXqSpxjKoJxBtdq",
+        "3-SA49KZiTBMwNQirAGmw6",
+        "4-VjJziJ1i3HCCDklNFTzk"
+      ]
+    },
+    "bomb-whistle": {
+      "prompt": "Falling aerial bomb whistle, continuous loud high pitched whistling scream of air",
+      "duration": 3,
+      "influence": 0.5,
+      "loop": true,
+      "keep": [
+        "1-sv8KHWkdxeNxRwiiHEWU",
+        "2-0YB9oWFRbPODlCz3IDLp",
+        "3-n8wCLrOucUaxjPEApsaY"
+      ]
+    },
+    "explosion-bomb": {
+      "prompt": "Heavy aerial bomb explosion, huge deep boom with ground shaking thud, dirt and debris raining down",
+      "duration": 4,
+      "influence": 0.6,
+      "loop": false,
+      "keep": [
+        "1-PHiwXynTrCDHQ0phmvqZ",
+        "2-rLTMkzyaw4GrkrTWDgtL",
+        "3-Hz5uRVDK3ifHcQ1HjwBh",
+        "4-1pu4qZPbxH7B94NJNUjR"
+      ]
+    },
+    "mine-jump": {
+      "prompt": "Bouncing landmine springing up out of the ground, sharp metallic pop and spring launch",
+      "duration": 1,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-wGNUGberfnTXayhk1OO6",
+        "2-VJ4aCAZ1CkWTgP80JIWn",
+        "3-eSMpZ5yXOu4K5EUx8TOJ"
+      ]
+    },
+    "sensor-ping": {
+      "prompt": "Electronic proximity sensor detection ping, short high-tech radar blip alert",
+      "duration": 1,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-AlOIvmuJdd81C9grrs0X",
+        "2-ysnLqVkwqBppMMEDEJe0",
+        "3-RnOL8GghdKHDXohygbfK"
+      ]
+    },
+    "limpet-attach": {
+      "prompt": "Magnetic mine clamping onto a metal hull, heavy magnetic clunk and latch",
+      "duration": 1,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-xA7HOw3S0Hw8FkP6u2XJ",
+        "2-xX4Jb1TpfPTcnzXtniic",
+        "3-9VDvuJJCxb6H9VWdzjNt"
+      ]
+    },
+    "remote-detonator": {
+      "prompt": "Radio detonator trigger, click and short electronic confirmation chirp",
+      "duration": 1,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-qc7jt01yQGvVBf0nJZ6j",
+        "2-O5dJv4tKHQC5riyEFcO2",
+        "3-3fJessijr6OT0iJ1ARxd"
+      ]
+    },
+    "napalm-burst": {
+      "prompt": "Incendiary napalm explosion, huge whooshing fireball ignition with roaring flames",
+      "duration": 3,
+      "influence": 0.6,
+      "loop": false,
+      "keep": [
+        "1-9aCd8b24ZSn8ccuQ9N6W",
+        "2-QBiIVp8noWgUNzK3q0Bb",
+        "3-NS43BchckAZGptf87StN"
+      ]
+    },
+    "repair-beam": {
+      "prompt": "Repair beam, continuous electric welding hum with crackling sparks, sci-fi healing ray",
+      "duration": 3,
+      "influence": 0.5,
+      "loop": true,
+      "keep": [
+        "1-SzNoFY6w5HqoZBWvTn4A",
+        "2-3VH1TuKObS2uoMvX8a82",
+        "3-Ck3SwqkIhXRlUxhcS2K2"
+      ]
+    },
+    "flare-launch": {
+      "prompt": "Countermeasure flare dispenser firing a salvo, rapid sharp pops and whooshes of burning flares ejected",
+      "duration": 1.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-pLPuqoYZwxwuMCoyfV1H",
+        "2-YWpJ9zo2vj4UpPEbXvxR",
+        "3-oii9RINulI7peGzdraZx"
+      ]
+    },
+    "flare-burn": {
+      "prompt": "Burning magnesium flare falling through the air, continuous intense fizzing hiss and crackle",
+      "duration": 3,
+      "influence": 0.5,
+      "loop": true,
+      "keep": [
+        "1-9SBGnnenR1ICGtGbLwDa",
+        "2-JMP1YSWjmR57KiShDEHA",
+        "3-8zxqRthVHvB1mre2RWtV"
+      ]
+    },
+    "missile-intercepted": {
+      "prompt": "Missile shot down in mid air, sharp metallic hit and a quick crackling airburst explosion",
+      "duration": 1.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-f99NpZtoqLYudydRlVjO",
+        "2-mLV3s30NRKlZhEoxSPEG",
+        "3-YfVtUWQkydup5S8nZxCI"
+      ]
+    },
+    "jet-engine": {
+      "prompt": "Jet engine running at high power, continuous turbine whine and deep roaring exhaust, steady",
+      "duration": 4,
+      "influence": 0.5,
+      "loop": true,
+      "keep": [
+        "1-iGOGkCZiHUpba04YvlvG",
+        "2-UK43KzjXVQpwpSElSW54",
+        "3-Lmf7bWFtzrZQP5Pu0FCJ"
+      ]
+    },
+    "propeller-big": {
+      "prompt": "Large piston aircraft engine with a big propeller, continuous deep rumbling engine drone and heavy propeller wash, steady",
+      "duration": 4,
+      "influence": 0.5,
+      "loop": true,
+      "keep": [
+        "1-uLn6Fq01N2JVnt6dVlDX",
+        "2-GEsxv9ZITsIQ7t9wuxrK",
+        "3-dFUBQg9R9rj16zRtLGKF"
+      ]
+    },
+    "wall-collapse": {
+      "prompt": "Brick wall collapsing, masonry crumbling and heavy rubble falling onto the ground, dusty crash",
+      "duration": 2.2,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-NYPX1nt7MmpFEeM3ladz",
+        "2-gSjjcE6HVAcrmEGON9LL",
+        "3-Hqvh0hR79GnLIwmXzFbu"
+      ]
+    },
+    "tree-fall": {
+      "prompt": "Large tree trunk cracking and creaking at the base, then the tree crashing down onto the ground with branches snapping",
+      "duration": 3.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-zr35j6bmisY60iTMxXYf",
+        "2-ko78Tu19bpnEkjGmVtDl"
+      ]
+    },
+    "metal-crash": {
+      "prompt": "Corrugated sheet metal wall collapsing, metal panels crumpling, clanging and clattering onto the ground",
+      "duration": 2,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-b96wec1ja8s2zGeTLCCu",
+        "2-04V86LvBKgKbRONoggqe"
+      ]
+    },
+    "amb-valley": {
+      "prompt": "Outdoor countryside ambience: steady wind blowing through pine trees, a nearby river flowing over stones, birds chirping, clearly audible, no music, no voices",
+      "duration": 20,
+      "influence": 0.5,
+      "loop": true,
+      "stereo": true,
+      "note": "Écartées : 1-MPu2hAGzXlvWK2e1horq, 2-gNc15Gir9iI2hcM8DRn1 (ancien nœud DHoPSEn1hqiognspEH6u, ancien prompt « Open countryside valley ambience, gentle wind through pine trees, distant birds, a river flowing softly in the distance, peaceful, no music »), presque muettes (crête -43 et -47 dB, niveau moyen -61 et -62 dB) ; ramenées au niveau des boucles (+42 et +45 dB), il ne reste qu'un souffle uniforme jusqu'à 16 kHz et deux ou trois chants d'oiseaux. Régénérées avec un prompt moins « doux et lointain » (nœud OA4362BZlse53oDb94To) : 3 et 4.",
+      "keep": [
+        "3-Zyk6czkqMkf5h9DZFFYL",
+        "4-A0bahkqEVQj4boNy7rGS"
+      ]
+    },
+    "nanite-launch": {
+      "prompt": "Swarm of tiny nanobots released from a small launcher, shimmering electronic whoosh, many minuscule metallic chirps and clicks scattering outward, short",
+      "duration": 1.2,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-jR3kYxMdhlLGzzdcumch",
+        "2-bUq81fEoeMaQSgf8SAt7",
+        "3-KhG8wvwBdHEa5go88svb"
+      ]
+    },
+    "barrier-deploy": {
+      "prompt": "Sci-fi energy shield wall deploying, electric hum quickly rising and blooming into a resonant shimmering force field tone",
+      "duration": 1.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-Ag7ixnYwRCag7UMScfjh",
+        "2-E3VNLFUYDvb6ghYAKWE4",
+        "3-a1gLrWYR25fyhFY69tFe"
+      ]
+    },
+    "barrier-break": {
+      "prompt": "Sci-fi energy shield wall shattering, sharp crystalline electric burst breaking apart, crackling static sizzle fading out",
+      "duration": 1.5,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-KAbfDfe3I7BNJYwPfUmN",
+        "2-2j2a6q7iV1y8x2b738ta",
+        "3-umnVO8mlCN2rHlvzjZfX"
+      ]
+    },
+    "block-regrow": {
+      "prompt": "Armor plate rebuilding itself with sci-fi technology, rising magnetic whoosh with sparkling shimmer, ending in a small metallic click",
+      "duration": 0.8,
+      "influence": 0.5,
+      "loop": false,
+      "keep": [
+        "1-7Aj7d2aKAJGpqVrWUUwc",
+        "2-qNb4n0ozkhfKzOlAJgCE",
+        "3-1XFUfLOy9Nm1Jg6TaInF"
+      ]
+    },
+    "spinner-whine": {
+      "prompt": "Heavy steel spinner weapon rotating at constant high speed, low droning metallic hum with fast air flutter, steady even level",
+      "duration": 3,
+      "influence": 0.6,
+      "loop": true,
+      "note": "Toupie horizontale (la barre) : un bourdon à 86 Hz (raie à +34 à +37 dB) sous un souffle aigu (centre spectral 4,7 à 8 kHz), régulier (3 à 5 dB d'écart d'une fenêtre de 100 ms à l'autre). Le jeu le joue de 0,5 à 1,2 fois sa vitesse selon le régime. Écartées : 1 à 3, premier essai (nœud tlHMk4tsImNMlV1uEHVc, flow GgLdalnpMSHvL8lySVNT, prompt « Massive steel bar spinning at full speed, deep pulsing whoosh of air and low metallic hum, steady ») : des houles de 24 à 43 dB (« pulsing », « whoosh », « throbbing » font des boucles qui enflent et retombent) ; 5 (pv7xEujh9hU1UtUvf1rp), régulière mais sans médiums (-25 dB).",
+      "keep": [
+        "4-IN161dvkoZHSltNn0D2Z",
+        "6-O2otNkp2Xy7qkS3aW18x",
+        "7-Lf2fluBoWswzh2jOZ9ZH"
+      ]
+    },
+    "disc-whine": {
+      "prompt": "Heavy steel disc rotating at constant high speed, sustained metallic whirring whine, steady even level",
+      "duration": 3,
+      "influence": 0.6,
+      "loop": true,
+      "note": "Toupie verticale (le disque) : un sifflement métallique (raies de 0,7 à 2,8 kHz, centre 4,5 à 6,3 kHz), régulier (2 à 4 dB). Écartées : 1 à 3, premier essai (nœud G9ir8KgtGkViO5nFs1ec, flow GgLdalnpMSHvL8lySVNT, prompt « Heavy steel disc spinning very fast, high sustained whirring hum and air whoosh, steady ») : 14 à 28 dB d'écart, la première moitié plus forte ; 6 (8mMVoqlITy0qcbZtp0La), régulière aussi, non retenue (trois suffisent).",
+      "keep": [
+        "4-Cxap5YRRthkfCJ6ysRQO",
+        "5-ZuyxzeX6wzSZxYSb03x0",
+        "7-gLKYN560QUtwUXySFdMY"
+      ]
+    },
+    "drum-whine": {
+      "prompt": "Heavy toothed steel drum spinning fast, rumbling rolling whir with rapid tooth flutter, steady",
+      "duration": 3,
+      "influence": 0.6,
+      "loop": true,
+      "note": "Tambour : un vrombissement denté autour de 1 kHz (raies de 0,24 à 3 kHz), 6 à 9 dB d'écart. Écartée : 2 (19 dB, fin 7 dB plus forte, raccord qui saute).",
+      "keep": [
+        "1-VdK05RIaGEEVO6TMdQKn",
+        "3-MPy2wbymdEd3XDN6Vwjw",
+        "4-9W0I67CYtxGwl25px47b"
+      ]
+    },
+    "shell-whine": {
+      "prompt": "Giant steel ring rotating at constant speed, very deep droning rumble and low metallic hum, steady even level",
+      "duration": 3,
+      "influence": 0.6,
+      "loop": true,
+      "note": "Anneau-coque : un grondement très grave (centre 137 et 204 Hz, raies à 86 et 151 Hz), 6 et 13 dB d'écart (la 7 saute au raccord brut, que le fondu enchaîné de build.mjs efface). Écartées : 1 à 4, premier essai (nœud Iu23EpVt3cVXIdN8UC2F, flow 6FdPl8JE11NoTzZIyEzj, prompt « Enormous steel ring spinning around a robot, huge deep rotating whoosh, low throbbing hum, steady ») : des houles de 17 à 35 dB, la fin plus forte de 4 à 22 dB ; 6 : début 14 dB plus bas ; 8 : début et fin 6 à 8 dB plus bas.",
+      "keep": [
+        "7-64rZwqLTHWmNVBOJkzOz",
+        "5-M5k01PryE3kygwWRICda"
+      ]
+    },
+    "flail-whirl": {
+      "prompt": "Heavy chain spinning at constant speed, steady metallic rattling with low whirring hum, even level",
+      "duration": 3,
+      "influence": 0.6,
+      "loop": true,
+      "note": "Fléau : le cliquetis d'une chaîne, des aigus seulement (centre 12 kHz : le « low whirring hum » n'y est pas ; le jeu garde dessous le souffle grave synthétisé de la boule), régulier (3 à 5 dB). Le jeu le fait enfler deux fois par tour, au passage de la boule. Écartées : 1 à 3 (nœud 6z2AB8q2dBAVIGfQ9zJe, flow GgLdalnpMSHvL8lySVNT, prompt « Heavy steel chain whirling fast in circles, continuous whirring air and rattling chain links, steady ») et 4 à 7 (nœud VVGulfIX1aA0zMaDMInE, flow tHEY3izaeSwnPmQpyh4n, prompt « Steel chain swung in fast circles at constant speed, continuous rattling links and whirring air, steady even level ») : des passages rythmés de 23 à 32 dB (sauf 4, 9 dB), qui se battraient avec celui de la boule ; 9 : 15 dB.",
+      "keep": [
+        "8-A05whUHQBVqymtr681LD",
+        "10-UXpRiwMNNTjg8Q1TLREU",
+        "11-Lj6QTGGWWejIqgtbFGOq"
+      ]
+    },
+    "saw-whine": {
+      "prompt": "Circular metal-cutting saw running at high RPM, not cutting, steady high-pitched blade whine",
+      "duration": 3,
+      "influence": 0.6,
+      "loop": true,
+      "note": "Scie circulaire à vide : un sifflement aigu (centre 5 à 6 kHz, raies de 1,4 à 3,5 kHz), très régulier (3 dB d'écart) ; il descend quand le régime baisse sous la charge.",
+      "keep": [
+        "1-h5eeNsT15enAb41z7Zfh",
+        "2-vmquSuA4CTIjA51ehTDK",
+        "3-NZRNsyQNW8ZzXJRVvWip"
+      ]
+    },
+    "saw-bite": {
+      "prompt": "Circular saw cutting through thick steel, loud screeching grinding, metal shriek, continuous",
+      "duration": 3,
+      "influence": 0.6,
+      "loop": true,
+      "note": "La scie qui mord l'acier : un grincement hurlant (centre 3,6 à 3,9 kHz), 5 et 6 dB d'écart. Écartées : 2 (21 dB, raccord qui saute) ; 4 (début et fin 5 dB plus forts que le milieu : un à-coup à chaque tour).",
+      "keep": [
+        "1-RfMucWu6MRlcwFQ04cWJ",
+        "3-Kg1Ka00rDDDJsH6rIgAH"
+      ]
+    },
+    "drill-whine": {
+      "prompt": "Large heavy-duty boring machine running, deep low rumbling motor and gearbox drone, steady even level",
+      "duration": 3,
+      "influence": 0.6,
+      "loop": true,
+      "note": "Foreuse à vide : un grondement de moteur et de réducteur (centre 155 à 300 Hz, raie à 108 Hz), 5 à 7 dB d'écart ; la coupe (drill-bite), aiguë, s'y ajoute. Écartées : 1 à 3, premier essai (nœud V30y4eS5gz2CSxnPvyUb, flow GgLdalnpMSHvL8lySVNT, prompt « Heavy industrial drill motor running, deep geared drone, steady ») : régulières (2 et 3), mais une perceuse qui siffle (centre 4,7 kHz, graves à -23 dB) malgré « deep » ; 6 (s12VACot8rqIhXgcHWyB), comme la 4, non retenue.",
+      "keep": [
+        "4-tWaPMmkKYWG6yzdHkQKi",
+        "5-dqyonFrAqr920NvZlaId",
+        "7-LLdIXsmELKmXMYl2c0ev"
+      ]
+    },
+    "drill-bite": {
+      "prompt": "Heavy drill boring into steel plate, continuous grinding and crunching metal, strained motor",
+      "duration": 3,
+      "influence": 0.6,
+      "loop": true,
+      "note": "La foreuse qui perce l'acier : un grincement (centre 4,8 à 5,4 kHz ; la 4 a plus de graves, -13 dB), 3 dB d'écart. Écartées : 2 (début 9 dB plus bas), 3 (12 dB).",
+      "keep": [
+        "1-Fa2mfgDXLdKSElV7Cs6V",
+        "4-nbd7oxg0TVEuJdA9uTmZ"
+      ]
+    },
+    "jaw-crush": {
+      "prompt": "Hydraulic press crushing steel, continuous metal groaning, creaking and crumpling, hydraulic strain",
+      "duration": 3,
+      "influence": 0.6,
+      "loop": true,
+      "note": "La mâchoire qui écrase : de la tôle qui gémit et se froisse (centre 3 kHz), 6 et 16 dB d'écart (la 2 perd ses aigus un quart de seconde : un craquement). Joué tant que les tranches d'écrasement (toutes les 0,25 s) se suivent. Écartées : 1 (17 dB, deux trous d'aigus), 3 (21 dB, un fracas à 2,2 s qui reviendrait à chaque tour).",
+      "keep": [
+        "4-vOohzwXmE2uEqi2BdGMJ",
+        "2-3ejliy5JsuyMvhmIsqhb"
+      ]
+    },
+    "saber-hum": {
+      "prompt": "Sci-fi plasma weapon humming, deep electric buzz with slight wavering, steady even level",
+      "duration": 3,
+      "influence": 0.6,
+      "loop": true,
+      "note": "Lame laser allumée : un bourdon électrique (raie à 151 Hz, centre 0,5 à 1 kHz), 6 et 11 dB d'écart ; le jeu le fait monter de 0,5 à 1,2 fois sa vitesse en 0,5 s à l'allumage. La 8 vient du nœud bLiJ3DbpfQNZMIbzcNkj (flow 2u8sFhpfxQqES7hW9EB3), même prompt. Un sabre d'énergie sort presque toujours comme un allumage : 1 à 4 (nœud Y96aOdCxETdADxlpEXE2, flow tHEY3izaeSwnPmQpyh4n, prompt « Energy blade sword idle hum, deep electric buzzing drone with slight wavering, steady even level ») montent du silence (41 à 75 dB d'écart) ; avec le prompt retenu, 6 des 8 ont encore un creux de 0,25 à 1 s au début (23 à 70 dB).",
+      "keep": [
+        "8-IupbxPnfsw5CwwvfSDB9",
+        "11-Z5vYuVnGrEYnddOA5fla"
+      ]
+    },
+    "saber-cut": {
+      "prompt": "Molten metal sizzling and spitting continuously, crackling sparks and electric hiss, steady even level",
+      "duration": 3,
+      "influence": 0.6,
+      "loop": true,
+      "note": "La lame laser qui découpe : un grésillement de métal en fusion (centre 7,7 à 9,5 kHz), 8 à 12 dB d'écart. Joué tant que les coups (toutes les 0,08 s au plus) se suivent. Écartées : 1 à 4, premier essai (nœud n8BDkB8XVqNeyykRwePa, flow DxwRBHqw0p51L8j9Sm6F, prompt « Energy blade slicing through steel, continuous sizzling molten metal and crackling sparks, steady ») : 16 à 29 dB, des trous d'un quart à une demi-seconde ; 7 : début 6 dB plus bas, fin plus forte.",
+      "keep": [
+        "5-3wa8muG4WbE47Wlx4VXw",
+        "6-qPMLhlRGR5Z8VA6yFXZF",
+        "8-XjPW0195tJFYULe3n8eO"
+      ]
+    },
+    "field-hum": {
+      "prompt": "Sci-fi force field generator, deep electric hum with low vibrating drone, steady even level",
+      "duration": 3,
+      "influence": 0.6,
+      "loop": true,
+      "note": "Champ broyeur armé : un bourdon électrique grave (raies à 86 Hz, +51 dB, et 172 Hz), 5 à 9 dB d'écart. Écartée : 4 (centre à 49 Hz : presque rien sur de petits haut-parleurs).",
+      "keep": [
+        "1-TeQVjlBeUwCGBsjiwDQb",
+        "2-m8Ha49bPlgATKFEKJtbF",
+        "3-Gzcj8N8ENnbCCK5TMOyD"
+      ]
+    },
+    "spinner-hit": {
+      "prompt": "Massive steel spinner weapon smashing into armor, enormous metal impact bang, shower of sparks",
+      "duration": 1.5,
+      "influence": 0.6,
+      "loop": false,
+      "note": "Coup de la barre : attaque en 7 à 19 ms, éteint en 0,2 à 0,4 s, graves à -7 à -12 dB du total (le jeu ajoute dessous un coup sourd synthétisé, `STEEL_THUMP`).",
+      "keep": [
+        "1-q0TzeQ3v1Epo3ej74x0Y",
+        "2-RgTugZXDJg73g7J9FqXF",
+        "3-CcH5fwry4DgzRaDZEIbc",
+        "4-cpbjozlhNon9wvqsyw1s"
+      ]
+    },
+    "disc-hit": {
+      "prompt": "Spinning steel disc striking metal armor, sharp heavy metallic clang and scraping sparks",
+      "duration": 1.5,
+      "influence": 0.6,
+      "loop": false,
+      "note": "Coup du disque : un claquement médium (graves à -20 à -27 dB), attaque en 15 à 20 ms (1, 5) ; 4 et 8 ont leur crête à 0,13 et 0,15 s mais partent déjà à plein niveau (la 8 résonne 0,6 s). Variantes 5 à 8 : nœud 4yllpYjyb0f58pxkpUO3 (flow 2u8sFhpfxQqES7hW9EB3), prompt « Steel disc spinner hitting metal armor, instant sharp heavy clang, sparks ». Écartées : 2 (deux coups, le second à 0,39 s), 3 et 7 (un dixième de seconde plus faible avant le coup), 6 (non retenue, quatre suffisent).",
+      "keep": [
+        "1-ggucf2DJEGrg41LwPoEN",
+        "4-tpImG577aoBAxK6D9dNI",
+        "5-Cny03Har4ZSzzM7cIbUm",
+        "8-VIL6dDXwYjfkGZUdd6Xt"
+      ]
+    },
+    "drum-hit": {
+      "prompt": "Drum spinner teeth striking steel, short sharp metallic clank",
+      "duration": 0.8,
+      "influence": 0.6,
+      "loop": false,
+      "note": "Coup du tambour : un claquement bref et aigu (0,1 à 0,4 s, presque sans graves), pour des coups rapprochés. Écartée : 2 (attaque en 57 ms, centre à 9 kHz : un souffle).",
+      "keep": [
+        "1-aaVo2j1IYdxr7FEoYjSr",
+        "3-BOU4VPfSH3Bm2yMtn6Xm",
+        "4-eM49tD5LHuS4fcXQAZoQ"
+      ]
+    },
+    "shell-hit": {
+      "prompt": "Huge spinning steel ring hitting metal, deep resonant clang like a struck bell, sparks",
+      "duration": 2,
+      "influence": 0.6,
+      "loop": false,
+      "note": "Coup de l'anneau : un coup de cloche métallique qui résonne 0,5 à 1,5 s (médiums ; graves à -17 à -22 dB : le jeu ajoute un coup sourd à 55 Hz). Écartée : 2 (attaque en 91 ms, plein niveau pendant 0,9 s).",
+      "keep": [
+        "1-pqJePMwJS3SR0S6tymId",
+        "3-St7izLd8lhHnVLXiosDG",
+        "4-UHz4JR0qCXkaIgra4Su3"
+      ]
+    },
+    "propeller-hit": {
+      "prompt": "Spinning propeller blades striking metal, sharp chopping clatter and snapping crack",
+      "duration": 1,
+      "influence": 0.6,
+      "loop": false,
+      "note": "Coup des pales de l'hélice tranchante : un claquement haché (0,2 à 0,3 s ; la 1 a un premier coup 0,1 s avant le plus fort). L'hélice siffle avec son moteur (propeller-big) : seul ce coup est à elle. Écartée : 3 (un souffle 0,3 s avant le coup).",
+      "keep": [
+        "2-QsTLPAu2GaBv8rSGhhZd",
+        "4-pdseE9ABCNVpWy6s6eqa",
+        "1-74FXtt5KYD9wrELZbTMh"
+      ]
+    },
+    "hammer-swing": {
+      "prompt": "Pneumatic piston firing, sharp compressed air blast, short hiss",
+      "duration": 1,
+      "influence": 0.6,
+      "loop": false,
+      "note": "Le vérin du marteau qui se détend : une bouffée d'air comprimé (aigus, 0,4 s), crête à 80 à 120 ms. La quatrième génération a échoué (erreur passagère du service, rien de facturé).",
+      "keep": [
+        "1-k1STwGExoJ6C4SzHRx4d",
+        "2-0v9Z8p7AjJpXa8hfozVN",
+        "3-oEJcuOBmIDICQS8TpsKR"
+      ]
+    },
+    "hammer-hit": {
+      "prompt": "Heavy pneumatic hammer slamming onto steel plate, deep dull metallic thud",
+      "duration": 1.2,
+      "influence": 0.6,
+      "loop": false,
+      "note": "Coup du marteau : un coup sourd (graves dominants, 0,2 à 0,3 s), attaque en 2 à 33 ms. La quatrième génération a échoué (erreur passagère, rien de facturé).",
+      "keep": [
+        "1-HwQ92sbfCizklXLh1ioD",
+        "2-4sNmlH8CpMqILAOgXOjx",
+        "3-awjWUb8G2d3oPaoUkQmc"
+      ]
+    },
+    "flipper-swing": {
+      "prompt": "Violent pneumatic ram firing, huge sudden compressed air blast with a heavy mechanical clunk",
+      "duration": 1.5,
+      "influence": 0.6,
+      "loop": false,
+      "note": "Le vérin du flipper qui se vide : une détente énorme, graves dominants, 0,6 s, crête à 40 à 180 ms. Le coup du plateau sur un robot emprunte « collision ». Écartée : 2 (crête à 0,24 s, la plus lente).",
+      "keep": [
+        "1-I0pFULKR3nqpENmkUT9C",
+        "3-YXDxjcPKyv8u3XxnLG7y",
+        "4-CmsJlKretshQPBJ5cDpR"
+      ]
+    },
+    "flail-hit": {
+      "prompt": "Heavy spiked steel ball smashing into metal armor, loud crunching impact and chain rattle",
+      "duration": 1.2,
+      "influence": 0.6,
+      "loop": false,
+      "note": "Coup de la boule du fléau : attaque en 1 à 91 ms, 0,3 à 0,4 s ; la 3 a le plus de graves (-5 dB).",
+      "keep": [
+        "1-r5cpej9uAC86GVSLPxh0",
+        "2-ryxkDZIfX2kQ3VW8sKWM",
+        "3-HLsMbB6AHCeVACxAd3b6",
+        "4-TxqnQYQG94joQtJhjvgk"
+      ]
+    },
+    "jaw-swing": {
+      "prompt": "Steel jaws snapping shut, quick hydraulic hiss and heavy metallic clack",
+      "duration": 0.8,
+      "influence": 0.6,
+      "loop": false,
+      "note": "Les mâchoires qui se ferment : un claquement bref (0,2 à 0,3 s, attaque en 6 à 13 ms), aigu (graves à -19 à -27 dB) malgré « heavy » : le jeu le joue 15 % plus grave. Ce qu'elles saisissent emprunte « collision ». Écartée : 2 (centre à 7,9 kHz, raies de 11 à 16 kHz : un sifflement).",
+      "keep": [
+        "1-twOAgbPA8QLCxsFOmKA5",
+        "3-ewLiSEy4ivDWkaHsJ8yh",
+        "4-AtONuCPfknEEgv5BYUW2"
+      ]
+    },
+    "whip-swing": {
+      "prompt": "Electric plasma whip lashing, quick rising whoosh then sharp electric crack",
+      "duration": 1,
+      "influence": 0.6,
+      "loop": false,
+      "note": "Le fouet plasma qui part : un souffle puis le claquement, crête à 0,1 et 0,2 s (le fouet arrive au bout de son arc en 0,2 s). Écartée : 3 (crête à 0,36 s).",
+      "keep": [
+        "1-xz5P5GVjA54Jsr9DuexH",
+        "2-79BqcJF6irTJKpuDxlo2",
+        "4-T2Zwfkq5zAaqs2LcZwq2"
+      ]
+    },
+    "whip-hit": {
+      "prompt": "Plasma whip striking metal, sizzling electric burn and crackle",
+      "duration": 1,
+      "influence": 0.6,
+      "loop": false,
+      "note": "Coup du fouet : un claquement qui grésille (0,2 à 0,5 s, attaque en 10 à 120 ms). Écartée : 2 (graves à -19 dB, la plus mince).",
+      "keep": [
+        "1-khLVNtQ08FskI8hxP8n1",
+        "3-5t6Uca6y5xpD2zHx8bMB",
+        "4-Bx3KEGLyIZpwbgjOeTWv"
+      ]
+    },
+    "lance-swing": {
+      "prompt": "Electric stun lance thrusting out, quick buzzing electric sizzle",
+      "duration": 0.8,
+      "influence": 0.6,
+      "loop": false,
+      "note": "La lance électrique qui sort : un grésillement égal de 0,6 à 0,7 s (aigus). Écartée : 2 (pareille, 7 dB plus faible).",
+      "keep": [
+        "1-pw0qPxoH2OqNxEXuvMR7",
+        "3-m8elMSEdNPyOvn7iKNMf",
+        "4-6jeCNqnSWLKMlhR3LPxJ"
+      ]
+    },
+    "lance-hit": {
+      "prompt": "Powerful electric discharge, single sharp dry zap crack",
+      "duration": 0.8,
+      "influence": 0.6,
+      "loop": false,
+      "note": "La décharge de la lance : sèche, attaque en 1 à 79 ms, 0,3 à 0,4 s (la paralysie locale qu'elle cause fait entendre en plus stun-crackle). La 2 (crête à 0,12 s) n'est pas retenue (trois suffisent).",
+      "keep": [
+        "3-0HuQEC2UjYS884SagAWz",
+        "4-nstxeodgntOb39X8NnNc",
+        "1-XfK4U83pVwrfjl6DOXKp"
+      ]
+    }
+  }
+}

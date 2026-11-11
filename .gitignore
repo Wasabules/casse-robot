@@ -1,0 +1,13 @@
+node_modules/
+dist/
+dist-server/
+dist-tools/
+.DS_Store
+
+# Progression des joueurs gardée par le serveur de jeu (npm run server)
+casse-robot-progress.json
+casse-robot-progress.json.tmp
+
+# Sons bruts générés (tools/sounds/build.mjs en fait les fichiers du jeu, dans public/sounds)
+tools/sounds/raw/
+

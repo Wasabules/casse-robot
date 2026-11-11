@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Casse-Robot</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+</head>
+<body>
+<canvas id="c" aria-label="Arène 3D : robots ennemis en blocs à détruire" data-i18n-aria-label="hud.page.canvas"></canvas>
+
+<!-- Tableau (Tab : maintenir pour voir, appuyer pour épingler) : les robots des deux équipes,
+     la partie, les outils de l'arène libre, les commandes (client/hud/hud.ts) -->
+<section class="tab-panel" id="tabPanel" hidden aria-label="Tableau de la partie" data-i18n-aria-label="hud.page.board">
+  <div class="tab-head">
+    <h2 id="tab-title"></h2>
+    <span class="tab-hint"><kbd data-key-action="scoreboard">Tab</kbd> <span data-i18n="hud.page.tabHint">maintenir : voir · appuyer : épingler</span></span>
+  </div>
+  <div class="tab-body">
+    <div class="teams">
+      <div class="team blue">
+        <h3><span data-i18n="team.blue">Bleus</span><span class="team-score" id="tab-score-blue"></span><span class="count" id="tab-count-blue"></span></h3>
+        <div class="team-cols"><span data-i18n="hud.page.robot">Robot</span><span title="Destructions / morts" data-i18n-title="hud.page.kdTitle" data-i18n="hud.page.kd">D / M</span></div>
+        <ul class="enemies" id="team-blue"></ul>
+      </div>
+      <div class="team red">
+        <h3><span data-i18n="team.red">Rouges</span><span class="team-score" id="tab-score-red"></span><span class="count" id="tab-count-red"></span></h3>
+        <div class="team-cols"><span data-i18n="hud.page.robot">Robot</span><span title="Destructions / morts" data-i18n-title="hud.page.kdTitle" data-i18n="hud.page.kd">D / M</span></div>
+        <ul class="enemies" id="team-red"></ul>
+      </div>
+    </div>
+    <div class="tab-side">
+      <div class="group" id="arenaTools">
+        <div class="label" data-i18n="hud.page.arenaTools">Arène</div>
+        <div class="row">
+          <button class="btn" id="reset"><span data-i18n="hud.page.wave">Vague</span><small data-key-action="newWave">R</small></button>
+          <button class="btn" id="pause" aria-pressed="false"><span data-i18n="hud.page.freeze">Figer IA</span><small data-key-action="freezeAi">P</small></button>
+          <button class="btn" id="slowmo" aria-pressed="false"><span data-i18n="hud.page.slowmo">Ralenti</span><small><span data-key-action="slowmo">T</span> · ×¼</small></button>
+        </div>
+      </div>
+      <dl class="stats">
+        <dt data-i18n="hud.page.statAlive">Robots actifs</dt><dd id="s-alive">–</dd>
+        <dt data-i18n="hud.page.statDestroyed">Blocs détruits</dt><dd id="s-destroyed">–</dd>
+        <dt data-i18n="hud.page.statBodies">Corps physiques</dt><dd id="s-bodies">–</dd>
+        <dt data-i18n="hud.page.statFps">Images / s</dt><dd id="s-fps">–</dd>
+        <dt data-i18n="hud.page.statPhys">Temps physique / image</dt><dd id="s-phys">–</dd>
+      </dl>
+      <div class="group">
+        <div class="label" data-i18n="hud.page.controls">Commandes</div>
+        <!-- Rempli selon le mode, avec les touches choisies (client/keys.ts) -->
+        <dl class="keys" id="helpKeys"></dl>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Mini-carte (client/hud/minimap.ts) ; M : la carte entière -->
+<div class="minimap" id="minimap">
+  <canvas id="minimapCanvas" aria-label="Mini-carte" data-i18n-aria-label="hud.page.minimap"></canvas>
+  <div class="mm-foot">
+    <button class="mm-key" id="mmTab" title="Robots, partie, commandes" data-i18n-title="hud.page.boardButtonTitle"><kbd data-key-action="scoreboard">Tab</kbd> <span data-i18n="hud.page.boardButton">tableau</span></button>
+    <button class="mm-key" id="mmMap" title="La carte entière" data-i18n-title="hud.page.mapButtonTitle"><kbd data-key-action="map">M</kbd> <span data-i18n="hud.page.mapButton">carte</span></button>
+  </div>
+</div>
+<div class="bigmap" id="bigmap" hidden>
+  <div class="bigmap-frame">
+    <div class="bigmap-head"><h2 id="bigmap-title"></h2><span class="tab-hint"><kbd data-key-action="map">M</kbd> <span data-i18n="hud.page.close">fermer</span></span></div>
+    <canvas id="bigmapCanvas" aria-label="Carte de l'arène" data-i18n-aria-label="hud.page.bigmap"></canvas>
+  </div>
+</div>
+
+<!-- Partie : score et temps, destructions, état du robot du joueur (client/hud/matchHud.ts) -->
+<div class="scoreboard" id="scoreboard" hidden>
+  <span class="side blue"><b id="score-blue">0</b> <span data-i18n="team.blue">Bleus</span></span>
+  <span class="clock" id="match-clock"></span>
+  <span class="zones" id="match-zones" hidden></span>
+  <span class="side red"><span data-i18n="team.red">Rouges</span> <b id="score-red">0</b></span>
+</div>
+<ol class="killfeed" id="killfeed" aria-live="polite"></ol>
+<!-- En bas : les armes, puis l'état du robot piloté -->
+<div class="bottom-dock">
+  <!-- Armes : celles du robot piloté, ou tout le catalogue à la caméra libre (client/hud/hud.ts) -->
+<div class="weapon-bar" id="weaponBar">
+  <div class="label"><span data-i18n="hud.page.weapons">Armes</span> <kbd id="weaponKeys"></kbd></div>
+  <div class="seg" id="weapons"></div>
+</div>
+<div class="status" id="playerStatus" hidden>
+  <div class="st-head"><span id="st-name"></span><span class="chip" id="st-mode"></span></div>
+  <div class="st-bar"><span data-i18n="hud.page.structure">Structure</span><span class="bar"><i id="st-integrity"></i></span><span id="st-integrity-pct"></span></div>
+  <div class="st-bar" id="st-energy-row"><span data-i18n="hud.page.energy">Énergie</span><span class="bar"><i id="st-energy"></i></span><span id="st-energy-pct"></span></div>
+  <div class="st-bar" id="st-flares-row" hidden><span data-i18n="hud.page.flares">Leurres</span><span class="pips" id="st-flares"></span><span class="st-key" data-key-action="flares">F</span></div>
+  <div class="st-note" id="st-note"></div>
+</div>
+</div>
+<div class="hint" id="hint" data-i18n="hud.page.hint">Deux équipes s'affrontent. Tire sur un baril pour une explosion en chaîne, abats un rotor du drone, ou clique sur un nom pour suivre un robot.</div>
+<!-- Commandes tactiles en pilotant (client/input/touchPad.ts) -->
+<div class="touchpad" id="touchPad" hidden>
+  <div class="tp-stick" id="tpStick" aria-label="Manche : avancer et tourner" data-i18n-aria-label="hud.page.touchStick"><div class="tp-knob" id="tpKnob"></div></div>
+  <div class="tp-buttons">
+    <button class="tp-btn tp-fire" data-hold="fire" data-i18n="hud.page.touchFire">Tir</button>
+    <button class="tp-btn" data-hold="up" aria-label="Monter" data-i18n-aria-label="hud.page.touchUp">▲</button>
+    <button class="tp-btn" data-hold="down" aria-label="Descendre" data-i18n-aria-label="hud.page.touchDown">▼</button>
+    <button class="tp-btn tp-boost" data-hold="boost" data-i18n="hud.page.touchBoost">Turbo</button>
+    <button class="tp-btn tp-scope" data-hold="scope" data-i18n="hud.page.touchScope">Viseur</button>
+  </div>
+</div>
+<!-- Viseur : bords assombris ou lunette, et grossissement ; réticule de l'arme (client/hud/reticle.ts) -->
+<div class="scope-overlay" id="scopeOverlay" hidden>
+  <!-- Optique de la lunette : montants épais, croix fine, repères gradués, point lumineux -->
+  <svg class="scope-optic" viewBox="-100 -100 200 200" aria-hidden="true">
+    <path class="post" d="M-100 0H-32M32 0H100M0 32V100M0 -100V-32"/>
+    <path class="thin" d="M-32 0H32M0 -32V32"/>
+    <g class="mils"><circle cx="8" cy="0" r="1.2"/><circle cx="-8" cy="0" r="1.2"/><circle cx="0" cy="8" r="1.2"/><circle cx="0" cy="-8" r="1.2"/><circle cx="16" cy="0" r="1.2"/><circle cx="-16" cy="0" r="1.2"/><circle cx="0" cy="16" r="1.2"/><circle cx="0" cy="-16" r="1.2"/><circle cx="24" cy="0" r="1.2"/><circle cx="-24" cy="0" r="1.2"/><circle cx="0" cy="24" r="1.2"/><circle cx="0" cy="-24" r="1.2"/></g>
+    <circle class="lit" r="1.1"/>
+  </svg>
+  <span class="scope-zoom" id="scopeZoom"></span>
+</div>
+<div class="steady-hint" id="steadyHint" hidden></div>
+<!-- Tir en cloche : hausse, cap, portée, temps de vol, et point de chute prévu (client/hud/instruments.ts) -->
+<div class="gunnery" id="gunnery" hidden>
+  <svg class="gn-gauge" viewBox="-6 -58 64 64" aria-hidden="true">
+    <path class="gn-arc" d="M50 0A50 50 0 0 0 0 -50"/>
+    <line class="gn-zero" x1="39.2" y1="-7.8" x2="54.9" y2="-10.9"/>
+    <g id="gn-mark"><path class="gn-mark" d="M45 0L55 -4L55 4Z"/></g>
+    <g id="gn-needle"><line class="gn-needle" x1="0" y1="0" x2="47" y2="0"/></g>
+    <circle class="gn-hub" r="2.5"/>
+  </svg>
+  <dl>
+    <dt data-i18n="hud.page.elevation">Hausse</dt><dd><b id="gn-elevation"></b> <span class="gn-arrow">→</span> <span id="gn-target"></span></dd>
+    <dt data-i18n="hud.page.heading">Cap</dt><dd id="gn-bearing"></dd>
+    <dt data-i18n="hud.page.range">Portée</dt><dd id="gn-range"></dd>
+    <dt data-i18n="hud.page.flightTime">Vol</dt><dd id="gn-flight"></dd>
+  </dl>
+  <div class="gn-state" id="gn-state"></div>
+</div>
+<!-- Ogive pilotée : le panneau du pilote, quand la caméra est à son nez (client/hud/instruments.ts) -->
+<div class="warhead-hud" id="warheadHud" hidden>
+  <div class="wh-title" data-i18n="weapon.warhead">Ogive pilotée</div>
+  <div class="wh-fuel"><i id="wh-fuel"></i></div>
+  <dl>
+    <dt data-i18n="hud.page.timeLeft">Reste</dt><dd id="wh-time"></dd>
+    <dt data-i18n="hud.page.altitude">Altitude</dt><dd id="wh-alt"></dd>
+    <dt data-i18n="hud.page.speed">Vitesse</dt><dd id="wh-speed"></dd>
+    <dt data-i18n="hud.page.distance">Distance</dt><dd id="wh-range"></dd>
+  </dl>
+  <div class="wh-hint"><span data-i18n="hud.page.warheadSteer">Viser : diriger</span> · <span data-key-action="fire">clic</span><span data-i18n="hud.page.warheadDetonate"> : faire exploser</span></div>
+</div>
+<div class="lock-mark" id="lockMark" hidden>
+  <svg viewBox="-30 -30 60 60" aria-hidden="true"><g id="lockCorners"><path d="M-20 -11V-20H-11M11 -20H20V-11M20 11V20H11M-11 20H-20V11"/></g></svg>
+  <span id="lockLabel"></span>
+</div>
+<!-- Bombes : où tombera la prochaine, la taille de son explosion, son temps de chute -->
+<div class="bomb-mark" id="bombMark" hidden>
+  <svg aria-hidden="true"><circle id="bombRing" r="12"/><path d="M-5 0H5M0 -5V5"/></svg>
+  <span id="bombTime"></span>
+</div>
+<div class="impact-mark" id="impactMark" hidden>
+  <svg viewBox="-12 -12 24 24" aria-hidden="true"><path d="M0 -9L9 0L0 9L-9 0Z"/><circle r="1.6"/></svg>
+</div>
+<!-- Robot volant : horizon artificiel, altitude, vitesse, cap (client/hud/instruments.ts) -->
+<div class="flight-hud" id="flightHud" hidden>
+  <svg class="fh-attitude" viewBox="-60 -60 120 120" aria-hidden="true">
+    <defs><clipPath id="fh-clip"><circle r="55"/></clipPath></defs>
+    <g clip-path="url(#fh-clip)">
+      <g id="fh-horizon">
+        <rect class="fh-sky" x="-200" y="-400" width="400" height="400"/>
+        <rect class="fh-ground" x="-200" y="0" width="400" height="400"/>
+        <line class="fh-line" x1="-200" y1="0" x2="200" y2="0"/>
+        <path class="fh-ladder" d="M-10 -14H10M-16 -28H16M-10 -42H10M-10 14H10M-16 28H16M-10 42H10"/>
+      </g>
+    </g>
+    <circle class="fh-rim" r="55"/>
+    <path class="fh-ticks" d="M-47.6 -27.5L-40.7 -23.5M-38.9 -38.9L-35.4 -35.4M-27.5 -47.6L-23.5 -40.7M-18.8 -51.7L-17.1 -47.0M-9.6 -54.2L-8.7 -49.2M9.6 -54.2L8.7 -49.2M18.8 -51.7L17.1 -47.0M27.5 -47.6L23.5 -40.7M38.9 -38.9L35.4 -35.4M47.6 -27.5L40.7 -23.5"/>
+    <g id="fh-bank"><path class="fh-pointer" d="M0 -46L-4 -39H4Z"/></g>
+    <path class="fh-plane" d="M-30 0H-11L-6 6L0 0L6 6L11 0H30"/>
+    <circle class="fh-dot" r="1.6"/>
+  </svg>
+  <dl class="fh-read">
+    <dt data-i18n="hud.page.speed">Vitesse</dt><dd id="fh-speed"></dd>
+    <dt data-i18n="hud.page.altitude">Altitude</dt><dd id="fh-alt"></dd>
+    <dt data-i18n="hud.page.climb">V/S</dt><dd id="fh-climb"></dd>
+    <dt data-i18n="hud.page.heading">Cap</dt><dd id="fh-heading"></dd>
+    <dt data-i18n="hud.page.pitch">Assiette</dt><dd id="fh-pitch"></dd>
+    <dt data-i18n="hud.page.bank">Inclinaison</dt><dd id="fh-roll"></dd>
+    <dt id="fh-power-dt" data-i18n="hud.page.throttle">Gaz</dt><dd id="fh-power"></dd>
+  </dl>
+  <div class="fh-mode" id="fh-mode" hidden></div>
+</div>
+<div class="crosshair" id="crosshair" hidden></div>
+<div class="gun-marks" id="gunMarks" aria-hidden="true"></div>
+<div class="nose-mark" id="noseMark" hidden aria-hidden="true"></div>
+<div class="hit-marker" id="hitMarker" hidden><i></i><i></i><i></i><i></i></div>
+<div class="damage-ring" id="damageRing" aria-hidden="true"></div>
+<div class="scope-hint" id="scopeHint" hidden><span data-i18n="hud.page.scopeOnly">Cette arme ne tire qu'au viseur :</span> <span data-key-action="scope">clic droit</span></div>
+<div class="detonate-hint" id="detonateHint" hidden></div>
+<div class="missile-hint" id="missileHint" hidden></div>
+<div class="lock-hint" id="lockHint" hidden><span data-i18n="hud.page.lockHint">Clique dans l'arène pour viser à la souris ·</span> <kbd data-key-action="pause">Esc</kbd> <span data-i18n="hud.page.lockHintRelease">pour la rendre</span></div>
+<!-- Manette branchée (client/hud/padBadge.ts) : une icône, et un mot quand elle arrive ou part -->
+<div class="pad-badge" id="padBadge" hidden>
+  <svg viewBox="0 0 24 16" aria-hidden="true"><path d="M6.5 1h11A5.5 5.5 0 0 1 23 6.5v2.8a5.7 5.7 0 0 1-10.2 3.5H11.2A5.7 5.7 0 0 1 1 9.3V6.5A5.5 5.5 0 0 1 6.5 1Z"/><path class="pb-mark" d="M6 5v4M4 7h4M16.5 5.5h.01M18.5 8.5h.01"/></svg>
+  <span id="padBadgeText"></span>
+</div>
+<div class="menu" id="menu" hidden></div>
+<!-- Images par seconde (réglage graphique, client/hud/fpsBadge.ts) -->
+<div class="fps-badge" id="fpsBadge" hidden aria-live="off"></div>
+<!-- Panneau du garage (client/garage/garage.ts) -->
+<aside class="garage" id="garage" hidden aria-label="Garage" data-i18n-aria-label="hud.page.garage"></aside>
+<aside class="inventory" id="inventory" hidden aria-label="Inventaire des pièces" data-i18n-aria-label="hud.page.inventory"></aside>
+<div class="g-compass" id="garageCompass" hidden aria-hidden="true"></div>
+<!-- Écran de chargement : au démarrage, puis avant chaque partie (client/menu/loading.ts) -->
+<div class="loading" id="loading" role="progressbar" aria-label="Chargement" data-i18n-aria-label="menu.loading.label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+  <div class="loading-panel">
+    <h1 class="menu-title loading-title" translate="no">Casse<span>-</span>Robot</h1>
+    <p class="loading-subtitle" id="loadingSubtitle" data-i18n="menu.loading.prepare">Préparation du jeu</p>
+    <div class="loading-bar"><div class="loading-fill" id="loadingFill"></div></div>
+    <p class="loading-step" id="loadingStep" data-i18n="menu.loading.physics">Chargement de la physique…</p>
+    <button class="menu-entry primary loading-go" id="loadingGo" type="button" hidden><span class="menu-label" data-i18n="menu.loading.start">Cliquer pour commencer</span></button>
+  </div>
+</div>
+<!-- Erreur fatale (client/hud/overlay.ts) -->
+<div class="overlay" id="overlay" hidden><p id="overlayText"></p></div>
+
+<script type="module" src="/src/client/main.ts"></script>
+</body>
+</html>
