@@ -219,6 +219,11 @@
     <button class="menu-entry primary loading-go" id="loadingGo" type="button" hidden><span class="menu-label" data-i18n="menu.loading.start">Cliquer pour commencer</span></button>
   </div>
 </div>
+<!-- La carte graphique réinitialisée (client/hud/gpuNotice.ts) -->
+<div class="gpu-notice" id="gpuNotice" role="status" hidden>
+  <p id="gpuNoticeText"></p>
+  <button class="menu-entry primary" id="gpuReload" type="button" hidden><span class="menu-label" data-i18n="hud.gpu.reload">Recharger la page</span></button>
+</div>
 <!-- Erreur fatale (client/hud/overlay.ts) -->
 <div class="overlay" id="overlay" hidden><p id="overlayText"></p></div>
 

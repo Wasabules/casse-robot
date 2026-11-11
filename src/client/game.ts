@@ -18,7 +18,7 @@ import { GAME_MODES, matchEntries, pickRoster, type GameModeId } from "../shared
 import { blockWorldPos, liveThrusters } from "../shared/robot/queries";
 import { isDetected } from "../shared/sim/detection";
 import type { ArmState, Bot, Projectile, Team, Turret } from "../shared/sim/entities";
-import { endMatch, selfDestruct, startMatch } from "../shared/sim/match";
+import { endMatch, selfDestruct, startMatch, type MatchRules } from "../shared/sim/match";
 import { CRUISE_POWER } from "../shared/sim/player";
 import { Simulation } from "../shared/sim/simulation";
 import type { SimEvent } from "../shared/sim/events";
@@ -65,6 +65,8 @@ import type { LostReason } from "./hud/hud";
 
 /** Au plus 4 pas de physique par image : au-delà, le jeu ralentit au lieu de s'emballer. */
 const MAX_STEPS_PER_FRAME = 4;
+/** Partie sans fin ni score, où les robots détruits réapparaissent : la bataille de la mesure du rendu. */
+const ENDLESS_BATTLE: MatchRules = { scoreToWin: 0, timeLimit: 0, respawn: 3 };
 /** Préparation d'une partie : attente au plus de cette durée (s) que la scène se dise prête (shaders compilés). */
 const READY_WAIT = 6;
 const SLOWMO_SCALE = 0.25;
@@ -169,6 +171,17 @@ function engineRegime(bot: Bot): number | null {
   return sum / engines.length;
 }
 
+/**
+ * Mesure par étape des images (`ArenaGame.frameProfile`) : le temps cumulé de chaque étape (ms), le
+ * nombre d'images mesurées, et le temps de calcul de chacune (code du jeu et préparation de l'image par
+ * Babylon, sans l'attente de la carte graphique).
+ */
+export interface FrameProfile {
+  times: Record<string, number>;
+  frames: number;
+  totals: number[];
+}
+
 export class ArenaGame {
   readonly sim: Simulation;
   readonly scene: B.Scene;
@@ -252,6 +265,13 @@ export class ArenaGame {
   private accumulator = 0;
   /** Temps de calcul moyen d'un pas de simulation (ms), affiché dans le HUD. */
   private physMs = 0;
+  /**
+   * Mesure du temps de chaque image par étape (ms cumulées), quand elle est active : la mesure du
+   * rendu (`npm run perf`, tools/browser/perf.mjs) l'active, comme `sim.profile` pour la simulation.
+   */
+  frameProfile: FrameProfile | null = null;
+  /** Robots d'une vague sans joueur imposés (la mesure du rendu : `BATTLE_ROSTER`), ou tirés au sort. */
+  private fixedRoster: readonly BotProfile[] | null = null;
   /** Des robots sont apparus (réapparitions) : la liste du HUD est à refaire. */
   private rosterChanged = false;
   /** Robot dont le HUD montre les armes (il change à chaque réapparition du joueur). */
@@ -831,6 +851,8 @@ export class ArenaGame {
     const reported = new Set<string>();
     this.engine.runRenderLoop(() => {
       if (this.suspended) return;
+      const profile = this.frameProfile;
+      const t0 = profile ? performance.now() : 0;
       try {
         this.frame(Math.min(this.engine.getDeltaTime() / 1000, 0.1));
       } catch (err) {
@@ -839,7 +861,11 @@ export class ArenaGame {
         if (!reported.has(text)) console.error(err);
         reported.add(text);
       }
-      this.scene.render();
+      this.measure("rendu", () => this.scene.render());
+      if (profile) {
+        profile.frames++;
+        profile.totals.push(performance.now() - t0);
+      }
     });
     window.addEventListener("resize", () => {
       // Le zoom du navigateur change le rapport de pixels : l'échelle de rendu en dépend
@@ -850,10 +876,12 @@ export class ArenaGame {
 
   /**
    * Commence une partie dans le mode `id` ; `pilot` : le robot du joueur, dans un mode piloté ;
-   * `arena` : l'arène (sinon, celle de la partie précédente).
+   * `arena` : l'arène (sinon, celle de la partie précédente) ; `roster` : dans un mode sans joueur,
+   * ces robots-là plutôt que des robots tirés au sort.
    */
-  startMode(id: GameModeId, pilot: BotProfile | null = null, arena: ArenaKey = this.arenaId): void {
+  startMode(id: GameModeId, pilot: BotProfile | null = null, arena: ArenaKey = this.arenaId, roster: readonly BotProfile[] | null = null): void {
     this.mode = id;
+    this.fixedRoster = roster;
     this.arenaId = arena;
     this.resetMatchStats();
     // L'IA figée et le ralenti de l'arène libre ne suivent pas dans une autre partie (en pilotant, leurs boutons sont cachés)
@@ -947,6 +975,7 @@ export class ArenaGame {
   /** Démonstration derrière le menu : une bataille que la caméra survole, sans le joueur. */
   startDemo(): void {
     this.mode = "arena";
+    this.fixedRoster = null;
     this.arenaId = randomArena();
     this.playerProfile = null;
     this.attract = true;
@@ -1027,7 +1056,7 @@ export class ArenaGame {
       this.sim.player = bots[0];
       this.finish();
     } else {
-      this.spawn(pickRoster(mode));
+      this.spawn(this.fixedRoster ?? pickRoster(mode));
     }
   }
 
@@ -1049,6 +1078,8 @@ export class ArenaGame {
   private finish(): void {
     const mode = GAME_MODES[this.mode];
     if (mode.match && this.piloting) startMatch(this.sim, mode.match);
+    // La bataille de la mesure du rendu (robots imposés) : sans fin, les robots détruits réapparaissent (la charge ne baisse pas)
+    else if (this.fixedRoster) startMatch(this.sim, ENDLESS_BATTLE);
     this.waveStart = this.sim.time;
     this.hud.setEnemies(this.sim.bots, this.sim.player);
     this.showTitle();
@@ -1236,43 +1267,68 @@ export class ArenaGame {
   }
 
   private frame(dt: number): void {
-    this.controls.updatePointer(this.piloting && this.inputEnabled && !this.frozen);
-    this.controls.poll(dt);
-    this.readInput(dt);
-    if (this.net) this.replay(dt);
-    else this.simulateFrame(dt);
+    this.measure("commandes", () => {
+      this.controls.updatePointer(this.piloting && this.inputEnabled && !this.frozen);
+      this.controls.poll(dt);
+      this.readInput(dt);
+    });
+    if (this.net) this.measure("réplique", () => this.replay(dt));
+    else this.measure("simulation", () => this.simulateFrame(dt));
 
     if (this.rosterChanged) {
       this.hud.setEnemies(this.world.bots, this.world.player);
       this.rosterChanged = false;
     }
-    this.syncViews();
-    this.locomotion.sync(dt);
-    this.showStuns(dt);
-    this.effects.update(dt);
-    this.fx.update(dt, this.rig.position, this.rig.inWeapon ? this.world.player : null);
-    this.arenaView.update(dt);
-    this.lighting.update();
-    this.zoneView.sync(this.world, performance.now() / 1000);
-    this.updateCamera(dt);
+    this.measure("vues", () => {
+      this.syncViews();
+      this.locomotion.sync(dt);
+      this.showStuns(dt);
+    });
+    this.measure("effets", () => {
+      this.effects.update(dt);
+      this.fx.update(dt, this.rig.position, this.rig.inWeapon ? this.world.player : null);
+    });
+    this.measure("arène", () => {
+      this.arenaView.update(dt);
+      this.zoneView.sync(this.world, performance.now() / 1000);
+    });
+    this.measure("lumières", () => this.lighting.update());
+    this.measure("caméra", () => this.updateCamera(dt));
     // Le balourd d'une arme de contact du joueur fait trembler la vue, et sa lame qui mord la secoue
     const pilot = this.world.player;
     if (this.piloting && !this.attract && !this.frozen && pilot?.cockpit.alive && pilot.melee.length) this.rig.shake(Math.max(vibration(pilot) * SHAKE_VIEW, biteShake(pilot)));
-    this.rig.update(dt);
-    this.showSights();
-    this.sound.update(this.rig.camera, dt);
+    this.measure("caméra", () => this.rig.update(dt));
+    this.measure("visées", () => this.showSights());
+    this.measure("son", () => this.sound.update(this.rig.camera, dt));
     const fps = this.engine.getFps();
     const stats = this.net
       ? { destroyed: this.net.replica.destroyedCount, bodies: this.net.replica.bodies, physMs: 0, fps }
       : { destroyed: this.sim.destroyedCount, bodies: this.sim.world.bodies.len(), physMs: this.physMs, fps };
-    this.feedback.update();
-    this.hud.update(dt, this.world, stats);
-    this.updateMap(dt);
-    this.showArsenal();
-    this.matchHudTimer -= dt;
-    if (this.matchHudTimer <= 0) {
-      this.matchHud.update(this.world);
-      this.matchHudTimer = MATCH_HUD_REFRESH;
+    this.measure("HUD", () => {
+      this.feedback.update();
+      this.hud.update(dt, this.world, stats);
+      this.updateMap(dt);
+      this.showArsenal();
+      this.matchHudTimer -= dt;
+      if (this.matchHudTimer <= 0) {
+        this.matchHud.update(this.world);
+        this.matchHudTimer = MATCH_HUD_REFRESH;
+      }
+    });
+  }
+
+  /** Fait `work`, et, si la mesure par étape est active (`frameProfile`), ajoute son temps à l'étape `name`. */
+  private measure(name: string, work: () => void): void {
+    const profile = this.frameProfile;
+    if (!profile) {
+      work();
+      return;
+    }
+    const t0 = performance.now();
+    try {
+      work();
+    } finally {
+      profile.times[name] = (profile.times[name] ?? 0) + performance.now() - t0;
     }
   }
 

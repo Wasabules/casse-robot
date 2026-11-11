@@ -35,8 +35,11 @@ Le multijoueur demande un serveur de jeu (`npm run server`, ou `npm run share` p
 | `npm run share` | Partage le jeu sur Internet : compile, lance le serveur et un tunnel Cloudflare, puis affiche le lien à envoyer |
 | `npm run battle` | Huit batailles entre IA sans affichage, et un bilan d'équilibrage par robot et par arme (coût d'un pas, temps où les robots sont coincés) ; une autre arène que le Dépôt : `BATTLE_ARENA=canyon npm run battle` |
 | `npm run bench` | Coût d'un pas de simulation à douze robots, étape par étape |
+| `npm run perf` | Mesure du rendu : le jeu construit dans Chrome sans fenêtre sur ta carte graphique, une bataille à douze robots, le temps d'une image étape par étape (`--compare` pour un avant/après) |
+| `npm run render:check` | Essai du rendu (aussi dans l'intégration continue) : chaque écran se dessine, sans erreur, et survit à une réinitialisation de la carte graphique |
 | `npm run map:check` | Vérifie les cartes communautaires (celles de `maps/`, ou les fichiers donnés : `npm run map:check -- ma-carte.casse-map.json`) |
 | `npm run map:terrain` | Importe un relief (PNG 16 bits, RAW 16 bits) dans une carte : voir `docs/maps.md` (en anglais) |
+| `npm run schemas` | Refait d'après le code les schémas JSON des formats des cartes et des robots (`schemas/`) |
 
 ## Langues
 
@@ -51,7 +54,7 @@ Chacun peut faire sa carte, **dans le jeu, avec l'éditeur de cartes** (menu pri
 - **L'éditeur de cartes :** on y part d'une carte vierge, d'une carte de la bibliothèque (« Modifier ») ou d'un fichier ; on importe un relief (une image) et on le sculpte au pinceau (monter, creuser, lisser, aplanir) ; on pose les éléments de jeu d'une palette (maisons, immeubles, bois, rochers, rampes, conteneurs, accessoires, décor, zones, lieux, fumerolles, cascades, lacs de lave), on trace chemins, clôtures, coulées de lave et ponts point par point ; la carte peut être de nuit (Réglages → Nuit : la lune, les étoiles, les lampadaires et les mâts d'éclairage allumés) ; on règle l'eau, le ciel, le sol, les limites, et on place librement les lignes de départ des deux équipes. Ce qu'on voit est ce qu'on joue, avec les problèmes de la carte là où ils sont ; **P** l'essaie aussitôt contre l'IA, et la pause ramène à l'éditeur, au même état. Annuler et rétablir, un brouillon gardé à chaque modification, l'enregistrement dans la bibliothèque, l'export en `.casse-map.json` et du relief en PNG 16 bits. Le détail : [`docs/maps.md` (en anglais)](docs/cartes.md#léditeur).
 - **Jouer une carte :** **Jouer → un mode → la carte** (celles de `maps/` sont livrées avec le jeu). **Cartes communautaires… → Importer une carte…** en ajoute une, gardée dans le navigateur ; on peut aussi l'exporter ou la supprimer.
 - **En multijoueur :** le serveur (`npm run server`) met les cartes de `maps/` dans sa rotation (`MAPS_DIR` pour un autre dossier, `MAPS_ONLY=1` pour ne jouer qu'elles) ; un joueur qui n'a pas la carte la reçoit une fois, et la garde.
-- **En faire une :** le guide complet (le format champ par champ, l'import d'un relief, les limites, les tests, comment proposer sa carte au jeu par une *pull request*) est dans [`docs/maps.md` (en anglais)](docs/maps.md). L'exemple : `maps/val-du-lac.casse-map.json` (« Val du Lac » : un lac, une rivière et son vieux pont, un village, une ferme, une ruine), et le script qui l'a faite, `tools/maps/example.ts`.
+- **En faire une :** le guide complet (le format champ par champ, l'import d'un relief, les limites, les tests, comment proposer sa carte au jeu par une *pull request*) est dans [`docs/maps.md` (en anglais)](docs/maps.md). L'exemple : `maps/val-du-lac.casse-map.json` (« Val du Lac » : un lac, une rivière et son vieux pont, un village, une ferme, une ruine), et le script qui l'a faite, `tools/maps/example.ts`. Un [schéma JSON](schemas/map.schema.json) donne l'autocomplétion et la vérification dans son éditeur de texte (`"$schema"` : voir le guide) ; les plans des robots ont [le leur](schemas/robot.schema.json).
 
 ## Chargement
 

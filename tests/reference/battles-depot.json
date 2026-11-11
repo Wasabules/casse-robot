@@ -1,0 +1,591 @@
+{
+  "arena": "depot",
+  "duration": 240,
+  "date": "2026-11-11",
+  "matches": [
+    {
+      "seed": 1,
+      "winner": "blue",
+      "blue": 15,
+      "red": 5,
+      "elapsed": 213
+    },
+    {
+      "seed": 2,
+      "winner": "red",
+      "blue": 13,
+      "red": 15,
+      "elapsed": 122
+    },
+    {
+      "seed": 3,
+      "winner": "blue",
+      "blue": 15,
+      "red": 5,
+      "elapsed": 123
+    },
+    {
+      "seed": 4,
+      "winner": "red",
+      "blue": 4,
+      "red": 15,
+      "elapsed": 92
+    },
+    {
+      "seed": 5,
+      "winner": "blue",
+      "blue": 15,
+      "red": 14,
+      "elapsed": 233
+    },
+    {
+      "seed": 6,
+      "winner": "red",
+      "blue": 2,
+      "red": 15,
+      "elapsed": 85
+    },
+    {
+      "seed": 7,
+      "winner": "blue",
+      "blue": 14,
+      "red": 8,
+      "elapsed": 240
+    },
+    {
+      "seed": 8,
+      "winner": "red",
+      "blue": 12,
+      "red": 15,
+      "elapsed": 188
+    }
+  ],
+  "kills": 182,
+  "causes": {
+    "blast": 7,
+    "bombs": 2,
+    "cannon": 15,
+    "drill": 1,
+    "fire": 20,
+    "flail": 2,
+    "hammer": 1,
+    "impact": 8,
+    "laser": 21,
+    "laserBlade": 2,
+    "lockon": 8,
+    "mine": 1,
+    "missile": 1,
+    "plasma": 9,
+    "rail": 1,
+    "rifle": 55,
+    "rockets": 3,
+    "self": 10,
+    "shotgun": 8,
+    "sniper": 2,
+    "spinner": 1,
+    "warhead": 4
+  },
+  "stuckShare": 18.8,
+  "modes": {
+    "charge": 3298,
+    "cover": 851,
+    "engage": 5611,
+    "falling": 24,
+    "flee": 880,
+    "flipped": 216,
+    "landing": 176,
+    "patrol": 1913,
+    "reverse": 685,
+    "stranded": 484,
+    "stunned": 95,
+    "support": 474
+  },
+  "stepMs": 3.96,
+  "robots": {
+    "Ange": {
+      "kills": 1,
+      "deaths": 3,
+      "life": 16.2,
+      "flipped": 0.5,
+      "stunned": 0,
+      "killedBy": {
+        "rifle": 3
+      }
+    },
+    "Araignée": {
+      "kills": 0,
+      "deaths": 2,
+      "life": 55.2,
+      "flipped": 35,
+      "stunned": 5.5,
+      "killedBy": {
+        "rifle": 2
+      }
+    },
+    "Avion": {
+      "kills": 4,
+      "deaths": 2,
+      "life": 109.1,
+      "flipped": 0,
+      "stunned": 0,
+      "killedBy": {
+        "impact": 2
+      }
+    },
+    "Bastion": {
+      "kills": 16,
+      "deaths": 0,
+      "life": null,
+      "flipped": 0.5,
+      "stunned": 0,
+      "killedBy": {}
+    },
+    "Batteur": {
+      "kills": 2,
+      "deaths": 3,
+      "life": 46.9,
+      "flipped": 4.5,
+      "stunned": 0,
+      "killedBy": {
+        "laser": 1,
+        "rifle": 1,
+        "warhead": 1
+      }
+    },
+    "Bélier": {
+      "kills": 5,
+      "deaths": 3,
+      "life": 69.8,
+      "flipped": 1.5,
+      "stunned": 3,
+      "killedBy": {
+        "fire": 2,
+        "impact": 1
+      }
+    },
+    "Bolide": {
+      "kills": 3,
+      "deaths": 5,
+      "life": 29.3,
+      "flipped": 4.5,
+      "stunned": 3.5,
+      "killedBy": {
+        "blast": 1,
+        "cannon": 1,
+        "rifle": 1,
+        "shotgun": 1,
+        "warhead": 1
+      }
+    },
+    "Bombardier": {
+      "kills": 3,
+      "deaths": 0,
+      "life": null,
+      "flipped": 0,
+      "stunned": 0,
+      "killedBy": {}
+    },
+    "Brasier": {
+      "kills": 11,
+      "deaths": 4,
+      "life": 56.1,
+      "flipped": 1.5,
+      "stunned": 0,
+      "killedBy": {
+        "cannon": 1,
+        "rifle": 3
+      }
+    },
+    "Broyeur": {
+      "kills": 0,
+      "deaths": 3,
+      "life": 71.2,
+      "flipped": 5,
+      "stunned": 0,
+      "killedBy": {
+        "blast": 1,
+        "cannon": 1,
+        "fire": 1
+      }
+    },
+    "Buggy": {
+      "kills": 11,
+      "deaths": 16,
+      "life": 39.5,
+      "flipped": 10,
+      "stunned": 0,
+      "killedBy": {
+        "blast": 1,
+        "fire": 2,
+        "flail": 1,
+        "lockon": 1,
+        "plasma": 3,
+        "rifle": 4,
+        "shotgun": 4
+      }
+    },
+    "Camion": {
+      "kills": 6,
+      "deaths": 0,
+      "life": null,
+      "flipped": 0,
+      "stunned": 0,
+      "killedBy": {}
+    },
+    "Char": {
+      "kills": 8,
+      "deaths": 3,
+      "life": 101.4,
+      "flipped": 0,
+      "stunned": 0,
+      "killedBy": {
+        "rifle": 2,
+        "warhead": 1
+      }
+    },
+    "Cogneur": {
+      "kills": 8,
+      "deaths": 2,
+      "life": 40.7,
+      "flipped": 1.5,
+      "stunned": 0,
+      "killedBy": {
+        "laserBlade": 1,
+        "self": 1
+      }
+    },
+    "Culbuteur": {
+      "kills": 1,
+      "deaths": 7,
+      "life": 37,
+      "flipped": 12.5,
+      "stunned": 1,
+      "killedBy": {
+        "cannon": 1,
+        "fire": 1,
+        "laser": 2,
+        "rifle": 3
+      }
+    },
+    "Drone": {
+      "kills": 5,
+      "deaths": 12,
+      "life": 20.2,
+      "flipped": 12,
+      "stunned": 0,
+      "killedBy": {
+        "cannon": 4,
+        "laser": 4,
+        "rifle": 2,
+        "self": 1,
+        "warhead": 1
+      }
+    },
+    "Duelliste": {
+      "kills": 2,
+      "deaths": 4,
+      "life": 56.7,
+      "flipped": 0,
+      "stunned": 0,
+      "killedBy": {
+        "fire": 1,
+        "rifle": 1,
+        "self": 1,
+        "shotgun": 1
+      }
+    },
+    "Échassier": {
+      "kills": 2,
+      "deaths": 0,
+      "life": null,
+      "flipped": 73,
+      "stunned": 0,
+      "killedBy": {}
+    },
+    "Essaim": {
+      "kills": 2,
+      "deaths": 2,
+      "life": 83.7,
+      "flipped": 0,
+      "stunned": 0,
+      "killedBy": {
+        "rockets": 1,
+        "self": 1
+      }
+    },
+    "Faucheuse": {
+      "kills": 3,
+      "deaths": 4,
+      "life": 63.1,
+      "flipped": 4.5,
+      "stunned": 9,
+      "killedBy": {
+        "fire": 1,
+        "rifle": 1,
+        "rockets": 1,
+        "self": 1
+      }
+    },
+    "Foreur": {
+      "kills": 2,
+      "deaths": 6,
+      "life": 86.8,
+      "flipped": 0.5,
+      "stunned": 10.5,
+      "killedBy": {
+        "fire": 1,
+        "impact": 1,
+        "laser": 2,
+        "rifle": 2
+      }
+    },
+    "Frégate": {
+      "kills": 19,
+      "deaths": 4,
+      "life": 36.7,
+      "flipped": 0,
+      "stunned": 0,
+      "killedBy": {
+        "impact": 2,
+        "rifle": 2
+      }
+    },
+    "Fusée": {
+      "kills": 1,
+      "deaths": 5,
+      "life": 57.4,
+      "flipped": 0,
+      "stunned": 9,
+      "killedBy": {
+        "bombs": 1,
+        "lockon": 2,
+        "rifle": 2
+      }
+    },
+    "Gardien": {
+      "kills": 1,
+      "deaths": 3,
+      "life": 86.7,
+      "flipped": 1,
+      "stunned": 0,
+      "killedBy": {
+        "laserBlade": 1,
+        "rifle": 2
+      }
+    },
+    "Grue": {
+      "kills": 1,
+      "deaths": 12,
+      "life": 32.7,
+      "flipped": 5,
+      "stunned": 0,
+      "killedBy": {
+        "bombs": 1,
+        "cannon": 1,
+        "fire": 1,
+        "laser": 1,
+        "plasma": 2,
+        "rifle": 3,
+        "shotgun": 2,
+        "sniper": 1
+      }
+    },
+    "Guetteur": {
+      "kills": 4,
+      "deaths": 4,
+      "life": 58.5,
+      "flipped": 0,
+      "stunned": 0,
+      "killedBy": {
+        "flail": 1,
+        "laser": 1,
+        "rifle": 1,
+        "self": 1
+      }
+    },
+    "Hexacoptère": {
+      "kills": 6,
+      "deaths": 9,
+      "life": 26.3,
+      "flipped": 1.5,
+      "stunned": 0,
+      "killedBy": {
+        "cannon": 1,
+        "fire": 2,
+        "impact": 1,
+        "laser": 2,
+        "missile": 1,
+        "rifle": 2
+      }
+    },
+    "Lancier": {
+      "kills": 2,
+      "deaths": 0,
+      "life": null,
+      "flipped": 0,
+      "stunned": 0,
+      "killedBy": {}
+    },
+    "Mécano": {
+      "kills": 1,
+      "deaths": 2,
+      "life": 105.6,
+      "flipped": 0.5,
+      "stunned": 3.5,
+      "killedBy": {
+        "lockon": 2
+      }
+    },
+    "Mille-pattes": {
+      "kills": 2,
+      "deaths": 3,
+      "life": 37,
+      "flipped": 0,
+      "stunned": 5,
+      "killedBy": {
+        "rifle": 2,
+        "self": 1
+      }
+    },
+    "Oursin": {
+      "kills": 3,
+      "deaths": 6,
+      "life": 60.3,
+      "flipped": 0.5,
+      "stunned": 0,
+      "killedBy": {
+        "fire": 2,
+        "laser": 1,
+        "lockon": 2,
+        "self": 1
+      }
+    },
+    "Pilon": {
+      "kills": 1,
+      "deaths": 7,
+      "life": 51.3,
+      "flipped": 3.5,
+      "stunned": 0,
+      "killedBy": {
+        "cannon": 1,
+        "fire": 2,
+        "laser": 1,
+        "rifle": 3
+      }
+    },
+    "Porte-ogive": {
+      "kills": 9,
+      "deaths": 3,
+      "life": 75.5,
+      "flipped": 6,
+      "stunned": 0,
+      "killedBy": {
+        "cannon": 1,
+        "drill": 1,
+        "hammer": 1
+      }
+    },
+    "Raie": {
+      "kills": 2,
+      "deaths": 7,
+      "life": 73.3,
+      "flipped": 1,
+      "stunned": 4.5,
+      "killedBy": {
+        "cannon": 1,
+        "laser": 2,
+        "lockon": 1,
+        "plasma": 1,
+        "rockets": 1,
+        "sniper": 1
+      }
+    },
+    "Rempart": {
+      "kills": 10,
+      "deaths": 5,
+      "life": 79.1,
+      "flipped": 11.5,
+      "stunned": 2,
+      "killedBy": {
+        "cannon": 1,
+        "fire": 2,
+        "rifle": 2
+      }
+    },
+    "Sapeur": {
+      "kills": 9,
+      "deaths": 3,
+      "life": 95,
+      "flipped": 2,
+      "stunned": 20.5,
+      "killedBy": {
+        "fire": 1,
+        "rifle": 1,
+        "spinner": 1
+      }
+    },
+    "Scieur": {
+      "kills": 0,
+      "deaths": 5,
+      "life": 80.3,
+      "flipped": 3,
+      "stunned": 15,
+      "killedBy": {
+        "plasma": 1,
+        "rifle": 2,
+        "self": 2
+      }
+    },
+    "Tambourin": {
+      "kills": 0,
+      "deaths": 4,
+      "life": 27,
+      "flipped": 0,
+      "stunned": 0,
+      "killedBy": {
+        "laser": 2,
+        "plasma": 1,
+        "rail": 1
+      }
+    },
+    "Tourbillon": {
+      "kills": 1,
+      "deaths": 4,
+      "life": 62,
+      "flipped": 13.5,
+      "stunned": 0,
+      "killedBy": {
+        "blast": 1,
+        "plasma": 1,
+        "rifle": 2
+      }
+    },
+    "Traqueur": {
+      "kills": 8,
+      "deaths": 7,
+      "life": 60.5,
+      "flipped": 0,
+      "stunned": 3,
+      "killedBy": {
+        "blast": 1,
+        "cannon": 1,
+        "impact": 1,
+        "mine": 1,
+        "rifle": 3
+      }
+    },
+    "Tricycle": {
+      "kills": 6,
+      "deaths": 8,
+      "life": 32.5,
+      "flipped": 0,
+      "stunned": 0,
+      "killedBy": {
+        "blast": 2,
+        "fire": 1,
+        "laser": 2,
+        "rifle": 3
+      }
+    }
+  }
+}

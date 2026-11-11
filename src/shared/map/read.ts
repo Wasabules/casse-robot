@@ -45,10 +45,88 @@ const ROOFS: Record<RoofMaterial, true> = { roof: true, sheet: true, concrete: t
 const TREES: Record<TreeType, true> = { pine: true, oak: true, palm: true, kapok: true, cactus: true };
 const FACADES = { facade: true, tenement: true, brick: true, concrete: true } as const;
 const SIDES = { n: true, s: true, w: true, e: true } as const;
+const ROOF_KINDS = { gable: true, flat: true } as const;
+const ROCK_LOOKS = { sandstone: true, basalt: true } as const;
+
+/**
+ * Les valeurs permises de chaque champ à choix (celles qu'accepte la lecture ; les sortes
+ * d'accessoires sont `PROP_TYPES`, les arènes `ARENA_IDS`). Le générateur des schémas JSON
+ * (tools/schemas/) en fait les `enum` du schéma des cartes.
+ */
+export const MAP_CHOICES = {
+  boxKind: STATIC_KINDS, boxLook: BOX_LOOKS, surface: PATH_SURFACES, wall: WALLS, roof: ROOFS, roofKind: ROOF_KINDS,
+  tree: TREES, facade: FACADES, side: SIDES, rockLook: ROCK_LOOKS,
+} as const;
+
+/** Les lettres des zones. */
+export const ZONE_LABELS = ["A", "B", "C", "D", "E"] as const;
 
 const COLOR = /^#[0-9a-fA-F]{6}$/;
 const LANGUAGE = /^[a-z]{2}$/;
-const ZONE_LABEL = /^[A-E]$/;
+/** Les formes que vérifie la lecture : une couleur (« #rrggbb »), un code de langue (ISO 639-1). */
+export const MAP_PATTERNS = { color: COLOR, language: LANGUAGE } as const;
+
+/** Un nombre permis : de `min` à `max` (bornes comprises), entier si `int`. */
+export interface NumberRange {
+  readonly min: number;
+  readonly max: number;
+  readonly int?: boolean;
+}
+
+const span = (min: number, max: number): NumberRange => ({ min, max });
+const whole = (min: number, max: number): NumberRange => ({ min, max, int: true });
+
+/** Un angle (degrés) : n'importe quel nombre fini dont la valeur absolue reste en deçà. */
+export const MAX_ANGLE = 1e6;
+
+/**
+ * Les bornes des nombres que vérifie la lecture, champ par champ (celles qui ne sont pas déjà dans
+ * `MAP_LIMITS`). Le générateur des schémas JSON (tools/schemas/) les reprend : le schéma dit ce que
+ * dit la lecture.
+ */
+export const MAP_RANGES = (() => {
+  const L = MAP_LIMITS;
+  return {
+    coord: span(-L.reach, L.reach),
+    height: span(L.minY, L.maxY),
+    /** Une dimension d'une boîte ou d'une dalle (m). */
+    size: span(0.01, L.maxSize),
+    seed: whole(0, 2 ** 31),
+    terrain: { cells: whole(L.minCells, L.maxCells), height: span(L.minHeight, L.maxHeight) },
+    bounds: {
+      half: span(L.minHalf, L.maxHalf), roam: span(5, L.maxHalf), spawnLine: span(5, L.maxHalf), spawnSpread: span(2, L.maxHalf),
+      circuit: span(10, L.maxHalf + 40), airFloor: span(0, 80), hoverFloor: span(0, 40),
+    },
+    limits: { bound: span(0, L.reach) },
+    sky: { fog: span(0, 0.05), dust: span(0, 200) },
+    water: { level: span(L.minHeight, L.maxHeight), deep: span(0.3, 50) },
+    nav: { cell: span(L.minNavCell, L.maxNavCell), maxSlope: span(5, 45) },
+    ground: {
+      rockLine: span(-50, 300), peakLine: span(-50, 300), beach: span(0, 10), basaltWidth: span(0, 30), strataStep: span(0.2, 50),
+      grain: span(1, 100), stains: span(0, 1), rockSpan: span(0.1, 100),
+      patchRadius: span(0.5, 200), slopeFrom: span(0, 1), slopeSpan: span(0.01, 1),
+    },
+    lava: { width: span(0.5, 60), r: span(0.5, 120) },
+    vent: { size: span(0.2, 6) },
+    fall: { width: span(0.2, 60) },
+    path: { width: span(0.5, 40) },
+    box: { approach: span(0, 100) },
+    prop: { scale: span(0.2, 4), group: whole(0, 10000) },
+    house: { width: span(2, 40), depth: span(2, 30), height: span(1.5, 12), door: span(0.5, 38) },
+    tenement: { width: span(4, 60), depth: span(4, 60), floors: whole(1, L.floors), ruin: span(0, 1), door: whole(0, 20) },
+    fence: { height: span(0.3, 6) },
+    woods: { radius: span(1, 150), count: whole(1, L.scatter), scale: span(0.3, 2.5), spacing: span(1, 40) },
+    rocks: { radius: span(1, 150), count: whole(1, L.scatter), size: span(0.3, 8) },
+    ramp: { width: span(1, 40), length: span(1, 80), rise: span(0.1, 30) },
+    bridge: { width: span(2, 30), piers: whole(0, L.piers) },
+    containers: { count: whole(1, L.containers), levels: whole(1, L.levels) },
+    zone: { radius: span(2, 30) },
+    spawn: { width: span(L.minSpawnWidth, L.maxSpawnWidth) },
+  } as const;
+})();
+
+/** Les plus longues listes, au-delà de celles de `MAP_LIMITS` : teintes des strates, taches, appuis d'un accessoire, ouvertures d'un immeuble, essences d'un bois. */
+export const MAP_LISTS = { strata: 12, patches: 32, rests: 16, doors: 16, trees: 5 } as const;
 
 type Raw = Record<string, unknown>;
 
@@ -82,18 +160,27 @@ class Reader {
     return v === undefined ? undefined : this.num(v, path, min, max, int);
   }
 
+  /** Un nombre dans ces bornes (voir `MAP_RANGES`). */
+  within(v: unknown, path: string, range: NumberRange): number {
+    return this.num(v, path, range.min, range.max, range.int);
+  }
+
+  optWithin(v: unknown, path: string, range: NumberRange): number | undefined {
+    return this.optNum(v, path, range.min, range.max, range.int);
+  }
+
   coord(v: unknown, path: string): number {
-    return this.num(v, path, -MAP_LIMITS.reach, MAP_LIMITS.reach);
+    return this.within(v, path, MAP_RANGES.coord);
   }
 
   height(v: unknown, path: string): number | undefined {
-    return this.optNum(v, path, MAP_LIMITS.minY, MAP_LIMITS.maxY);
+    return this.optWithin(v, path, MAP_RANGES.height);
   }
 
   /** Un angle (degrés) : n'importe quel nombre fini, ramené à ]-360, 360[. */
   angle(v: unknown, path: string): number | undefined {
     if (v === undefined) return undefined;
-    if (typeof v === "number" && Number.isFinite(v) && Math.abs(v) < 1e6) return v % 360;
+    if (typeof v === "number" && Number.isFinite(v) && Math.abs(v) < MAX_ANGLE) return v % 360;
     this.bad(path);
     return 0;
   }
@@ -184,19 +271,19 @@ class Reader {
 
   size(v: unknown, path: string): MapSize {
     if (Array.isArray(v) && v.length === 3) {
-      const s = (i: number): number => this.num(v[i], `${path}[${i}]`, 0.01, MAP_LIMITS.maxSize);
+      const s = (i: number): number => this.within(v[i], `${path}[${i}]`, MAP_RANGES.size);
       return [s(0), s(1), s(2)];
     }
     this.bad(path);
     return [1, 1, 1];
   }
 
-  /** Deux nombres [a, b] avec a ≤ b, dans [min, max]. */
-  range(v: unknown, path: string, min: number, max: number): readonly [number, number] | undefined {
+  /** Deux nombres [a, b] avec a ≤ b, dans ces bornes. */
+  range(v: unknown, path: string, bounds: NumberRange): readonly [number, number] | undefined {
     if (v === undefined) return undefined;
     if (Array.isArray(v) && v.length === 2) {
-      const a = this.num(v[0], `${path}[0]`, min, max);
-      const b = this.num(v[1], `${path}[1]`, min, max);
+      const a = this.within(v[0], `${path}[0]`, bounds);
+      const b = this.within(v[1], `${path}[1]`, bounds);
       if (a <= b) return [a, b];
     }
     this.bad(path);
@@ -229,14 +316,15 @@ function readTerrain(r: Reader, v: unknown): MapTerrain | undefined {
   const o = r.obj(v, "terrain");
   if (!o) return undefined;
   const L = MAP_LIMITS;
+  const R = MAP_RANGES.terrain;
   const cells = typeof o.cells === "number" ? o.cells : NaN;
   const step = typeof o.step === "number" ? o.step : NaN;
-  if (!Number.isInteger(cells) || cells < L.minCells || cells > L.maxCells || !L.steps.includes(step) || cells * step > L.maxSide) {
+  if (!Number.isInteger(cells) || cells < R.cells.min || cells > R.cells.max || !L.steps.includes(step) || cells * step > L.maxSide) {
     r.fail({ code: "terrainSize", cells: Number.isFinite(cells) ? cells : 0, step: Number.isFinite(step) ? step : 0 });
     return undefined;
   }
-  const min = r.num(o.min, "terrain.min", L.minHeight, L.maxHeight);
-  const max = r.num(o.max, "terrain.max", L.minHeight, L.maxHeight);
+  const min = r.within(o.min, "terrain.min", R.height);
+  const max = r.within(o.max, "terrain.max", R.height);
   if (max <= min) r.bad("terrain.max");
   // Les hauteurs : du base64, de la bonne longueur (vérifiée sans les décoder deux fois)
   if (typeof o.heights !== "string" || o.heights.length > L.bytes) {
@@ -253,15 +341,15 @@ function readTerrain(r: Reader, v: unknown): MapTerrain | undefined {
 
 function readBounds(r: Reader, v: unknown): MapFile["bounds"] {
   const o = r.obj(v, "bounds") ?? {};
-  const L = MAP_LIMITS;
+  const R = MAP_RANGES.bounds;
   return defined({
-    half: r.num(o.half, "bounds.half", L.minHalf, L.maxHalf),
-    roam: r.optNum(o.roam, "bounds.roam", 5, L.maxHalf),
-    spawnLine: r.optNum(o.spawnLine, "bounds.spawnLine", 5, L.maxHalf),
-    spawnSpread: r.optNum(o.spawnSpread, "bounds.spawnSpread", 2, L.maxHalf),
-    circuit: r.optNum(o.circuit, "bounds.circuit", 10, L.maxHalf + 40),
-    airFloor: r.optNum(o.airFloor, "bounds.airFloor", 0, 80),
-    hoverFloor: r.optNum(o.hoverFloor, "bounds.hoverFloor", 0, 40),
+    half: r.within(o.half, "bounds.half", R.half),
+    roam: r.optWithin(o.roam, "bounds.roam", R.roam),
+    spawnLine: r.optWithin(o.spawnLine, "bounds.spawnLine", R.spawnLine),
+    spawnSpread: r.optWithin(o.spawnSpread, "bounds.spawnSpread", R.spawnSpread),
+    circuit: r.optWithin(o.circuit, "bounds.circuit", R.circuit),
+    airFloor: r.optWithin(o.airFloor, "bounds.airFloor", R.airFloor),
+    hoverFloor: r.optWithin(o.hoverFloor, "bounds.hoverFloor", R.hoverFloor),
   });
 }
 
@@ -269,38 +357,39 @@ function readGround(r: Reader, v: unknown): MapGround | undefined {
   if (v === undefined) return undefined;
   const o = r.obj(v, "ground");
   if (!o) return undefined;
+  const R = MAP_RANGES.ground;
   const c = (k: string): string | undefined => r.optColor(o[k], `ground.${k}`);
-  const n = (k: string, min: number, max: number): number | undefined => r.optNum(o[k], `ground.${k}`, min, max);
+  const n = (k: keyof typeof R): number | undefined => r.optWithin(o[k], `ground.${k}`, R[k]);
   let base: readonly [string, string] | undefined;
   if (o.base !== undefined) {
     base = Array.isArray(o.base) && o.base.length === 2 ? [r.color(o.base[0], "ground.base[0]"), r.color(o.base[1], "ground.base[1]")] : undefined;
     if (!base) r.bad("ground.base");
   }
-  const strata = o.strata === undefined ? undefined : r.list(o.strata, "ground.strata", 12, "points").map((s, i) => r.color(s, `ground.strata[${i}]`));
-  const patches = o.patches === undefined ? undefined : r.list(o.patches, "ground.patches", 32, "points").map((p, i) => {
+  const strata = o.strata === undefined ? undefined : r.list(o.strata, "ground.strata", MAP_LISTS.strata, "points").map((s, i) => r.color(s, `ground.strata[${i}]`));
+  const patches = o.patches === undefined ? undefined : r.list(o.patches, "ground.patches", MAP_LISTS.patches, "points").map((p, i) => {
     const q = r.obj(p, `ground.patches[${i}]`) ?? {};
-    return { x: r.coord(q.x, `ground.patches[${i}].x`), z: r.coord(q.z, `ground.patches[${i}].z`), r: r.num(q.r, `ground.patches[${i}].r`, 0.5, 200), color: r.color(q.color, `ground.patches[${i}].color`) };
+    return { x: r.coord(q.x, `ground.patches[${i}].x`), z: r.coord(q.z, `ground.patches[${i}].z`), r: r.within(q.r, `ground.patches[${i}].r`, R.patchRadius), color: r.color(q.color, `ground.patches[${i}].color`) };
   });
   let slope: MapGround["slope"];
   if (o.slope !== undefined) {
     const s = r.obj(o.slope, "ground.slope") ?? {};
-    slope = defined({ color: r.optColor(s.color, "ground.slope.color"), from: r.num(s.from, "ground.slope.from", 0, 1), span: r.num(s.span, "ground.slope.span", 0.01, 1) });
+    slope = defined({ color: r.optColor(s.color, "ground.slope.color"), from: r.within(s.from, "ground.slope.from", R.slopeFrom), span: r.within(s.span, "ground.slope.span", R.slopeSpan) });
   }
   return defined({
     preset: o.preset === undefined ? undefined : r.oneOf<ArenaId>(o.preset, "ground.preset", Object.fromEntries(ARENA_IDS.map((id) => [id, true])) as Record<ArenaId, true>),
     base, dirt: c("dirt"), sand: c("sand"), mud: c("mud"), rock: c("rock"), peak: c("peak"),
-    rockLine: n("rockLine", -50, 300), peakLine: n("peakLine", -50, 300), beach: n("beach", 0, 10),
-    basalt: c("basalt"), basaltWidth: n("basaltWidth", 0, 30), strata, strataStep: n("strataStep", 0.2, 50), patches,
-    grain: n("grain", 1, 100), stains: n("stains", 0, 1), slope, rockSpan: n("rockSpan", 0.1, 100), lawn: c("lawn"),
+    rockLine: n("rockLine"), peakLine: n("peakLine"), beach: n("beach"),
+    basalt: c("basalt"), basaltWidth: n("basaltWidth"), strata, strataStep: n("strataStep"), patches,
+    grain: n("grain"), stains: n("stains"), slope, rockSpan: n("rockSpan"), lawn: c("lawn"),
   });
 }
 
 function readLava(r: Reader, v: unknown, i: number): MapLava {
   const path = `lava[${i}]`;
   const o = r.obj(v, path) ?? {};
-  if (o.kind === "pool") return { kind: "pool", x: r.coord(o.x, `${path}.x`), z: r.coord(o.z, `${path}.z`), r: r.num(o.r, `${path}.r`, 0.5, 120) };
+  if (o.kind === "pool") return { kind: "pool", x: r.coord(o.x, `${path}.x`), z: r.coord(o.z, `${path}.z`), r: r.within(o.r, `${path}.r`, MAP_RANGES.lava.r) };
   if (o.kind !== "flow") r.bad(`${path}.kind`);
-  return { kind: "flow", width: r.num(o.width, `${path}.width`, 0.5, 60), points: r.points(o.points, `${path}.points`, 2) };
+  return { kind: "flow", width: r.within(o.width, `${path}.width`, MAP_RANGES.lava.width), points: r.points(o.points, `${path}.points`, 2) };
 }
 
 function readVent(r: Reader, v: unknown, i: number): MapVent {
@@ -308,19 +397,19 @@ function readVent(r: Reader, v: unknown, i: number): MapVent {
   const o = r.obj(v, path) ?? {};
   return defined({
     x: r.coord(o.x, `${path}.x`), z: r.coord(o.z, `${path}.z`), y: r.height(o.y, `${path}.y`),
-    size: r.num(o.size, `${path}.size`, 0.2, 6), steam: r.bool(o.steam, `${path}.steam`),
+    size: r.within(o.size, `${path}.size`, MAP_RANGES.vent.size), steam: r.bool(o.steam, `${path}.steam`),
   });
 }
 
 function readFall(r: Reader, v: unknown, i: number): MapFall {
   const path = `falls[${i}]`;
   const o = r.obj(v, path) ?? {};
-  const top = r.num(o.top, `${path}.top`, MAP_LIMITS.minY, MAP_LIMITS.maxY);
-  const bottom = r.num(o.bottom, `${path}.bottom`, MAP_LIMITS.minY, MAP_LIMITS.maxY);
+  const top = r.within(o.top, `${path}.top`, MAP_RANGES.height);
+  const bottom = r.within(o.bottom, `${path}.bottom`, MAP_RANGES.height);
   if (bottom >= top) r.bad(`${path}.bottom`);
   return {
     x: r.coord(o.x, `${path}.x`), z: r.coord(o.z, `${path}.z`), top, bottom,
-    width: r.num(o.width, `${path}.width`, 0.2, 60), dir: r.angle(o.dir, `${path}.dir`) ?? 0,
+    width: r.within(o.width, `${path}.width`, MAP_RANGES.fall.width), dir: r.angle(o.dir, `${path}.dir`) ?? 0,
   };
 }
 
@@ -328,7 +417,7 @@ function readPath(r: Reader, v: unknown, i: number): MapPath {
   const path = `paths[${i}]`;
   const o = r.obj(v, path) ?? {};
   return defined({
-    width: r.num(o.width, `${path}.width`, 0.5, 40),
+    width: r.within(o.width, `${path}.width`, MAP_RANGES.path.width),
     points: r.points(o.points, `${path}.points`, 2),
     surface: o.surface === undefined ? undefined : r.oneOf(o.surface, `${path}.surface`, PATH_SURFACES),
   });
@@ -349,22 +438,22 @@ function readBox(r: Reader, v: unknown, i: number): MapBox {
     look: o.look === undefined ? undefined : r.oneOf(o.look, `${path}.look`, BOX_LOOKS),
     round: r.bool(o.round, `${path}.round`),
     underpass: r.bool(o.underpass, `${path}.underpass`),
-    approach: r.optNum(o.approach, `${path}.approach`, 0, 100),
+    approach: r.optWithin(o.approach, `${path}.approach`, MAP_RANGES.box.approach),
   });
 }
 
 function readProp(r: Reader, v: unknown, i: number, count: number): MapProp {
   const path = `props[${i}]`;
   const o = r.obj(v, path) ?? {};
-  const rests = o.rests === undefined ? undefined : r.list(o.rests, `${path}.rests`, 16, "points").map((k, j) => r.num(k, `${path}.rests[${j}]`, 0, Math.max(0, count - 1), true));
+  const rests = o.rests === undefined ? undefined : r.list(o.rests, `${path}.rests`, MAP_LISTS.rests, "points").map((k, j) => r.num(k, `${path}.rests[${j}]`, 0, Math.max(0, count - 1), true));
   return defined({
     type: r.oneOf<PropType>(o.type, `${path}.type`, PROP_TYPES) ?? "crate",
     x: r.coord(o.x, `${path}.x`), z: r.coord(o.z, `${path}.z`), y: r.height(o.y, `${path}.y`),
     ...readTurn(r, o, path),
     size: o.size === undefined ? undefined : r.size(o.size, `${path}.size`),
-    scale: r.optNum(o.scale, `${path}.scale`, 0.2, 4),
+    scale: r.optWithin(o.scale, `${path}.scale`, MAP_RANGES.prop.scale),
     rests,
-    group: r.optNum(o.group, `${path}.group`, 0, 10000, true),
+    group: r.optWithin(o.group, `${path}.group`, MAP_RANGES.prop.group),
   });
 }
 
@@ -372,64 +461,64 @@ function readPrefab(r: Reader, v: unknown, i: number): MapPrefab | null {
   const path = `prefabs[${i}]`;
   const o = r.obj(v, path);
   if (!o) return null;
-  const L = MAP_LIMITS;
+  const R = MAP_RANGES;
   const at = (): { x: number; z: number } => ({ x: r.coord(o.x, `${path}.x`), z: r.coord(o.z, `${path}.z`) });
-  const len = (k: string, min: number, max: number): number => r.num(o[k], `${path}.${k}`, min, max);
-  const seed = (): number | undefined => r.optNum(o.seed, `${path}.seed`, 0, 2 ** 31, true);
+  const len = (k: string, range: NumberRange): number => r.within(o[k], `${path}.${k}`, range);
+  const seed = (): number | undefined => r.optWithin(o.seed, `${path}.seed`, R.seed);
   switch (o.kind) {
     case "house":
       return defined({
         kind: "house" as const, ...at(), y: r.height(o.y, `${path}.y`), yaw: r.angle(o.yaw, `${path}.yaw`),
-        width: len("width", 2, 40), depth: len("depth", 2, 30), height: len("height", 1.5, 12),
+        width: len("width", R.house.width), depth: len("depth", R.house.depth), height: len("height", R.house.height),
         wall: r.oneOf(o.wall, `${path}.wall`, WALLS) ?? "brick", roof: r.oneOf(o.roof, `${path}.roof`, ROOFS) ?? "roof",
-        roofKind: o.roofKind === undefined ? undefined : r.oneOf(o.roofKind, `${path}.roofKind`, { gable: true, flat: true }),
-        door: r.optNum(o.door, `${path}.door`, 0.5, 38), through: r.bool(o.through, `${path}.through`),
+        roofKind: o.roofKind === undefined ? undefined : r.oneOf(o.roofKind, `${path}.roofKind`, ROOF_KINDS),
+        door: r.optWithin(o.door, `${path}.door`, R.house.door), through: r.bool(o.through, `${path}.through`),
       });
     case "tenement": {
-      const doors = o.doors === undefined ? undefined : r.list(o.doors, `${path}.doors`, 16, "points").map((d, j) => {
+      const doors = o.doors === undefined ? undefined : r.list(o.doors, `${path}.doors`, MAP_LISTS.doors, "points").map((d, j) => {
         const ok = Array.isArray(d) && d.length === 2;
         if (!ok) r.bad(`${path}.doors[${j}]`);
-        return [r.oneOf(ok ? d[0] : undefined, `${path}.doors[${j}][0]`, SIDES) ?? "s", r.num(ok ? d[1] : undefined, `${path}.doors[${j}][1]`, 0, 20, true)] as const;
+        return [r.oneOf(ok ? d[0] : undefined, `${path}.doors[${j}][0]`, SIDES) ?? "s", r.within(ok ? d[1] : undefined, `${path}.doors[${j}][1]`, R.tenement.door)] as const;
       });
       return defined({
         kind: "tenement" as const, ...at(), y: r.height(o.y, `${path}.y`), yaw: r.angle(o.yaw, `${path}.yaw`),
-        width: len("width", 4, 60), depth: len("depth", 4, 60), floors: r.num(o.floors, `${path}.floors`, 1, L.floors, true),
+        width: len("width", R.tenement.width), depth: len("depth", R.tenement.depth), floors: r.within(o.floors, `${path}.floors`, R.tenement.floors),
         wall: r.oneOf(o.wall, `${path}.wall`, FACADES) ?? "facade", doors,
-        ruin: r.optNum(o.ruin, `${path}.ruin`, 0, 1), seed: seed(),
+        ruin: r.optWithin(o.ruin, `${path}.ruin`, R.tenement.ruin), seed: seed(),
       });
     }
     case "fence":
       return defined({
-        kind: "fence" as const, points: r.points(o.points, `${path}.points`, 2), height: r.optNum(o.height, `${path}.height`, 0.3, 6),
+        kind: "fence" as const, points: r.points(o.points, `${path}.points`, 2), height: r.optWithin(o.height, `${path}.height`, R.fence.height),
         material: o.material === undefined ? undefined : r.oneOf(o.material, `${path}.material`, WALLS),
       });
     case "woods":
       return defined({
-        kind: "woods" as const, ...at(), radius: len("radius", 1, 150), count: r.num(o.count, `${path}.count`, 1, L.scatter, true),
-        trees: o.trees === undefined ? undefined : r.list(o.trees, `${path}.trees`, 5, "points").map((t, j) => r.oneOf(t, `${path}.trees[${j}]`, TREES) ?? "pine"),
-        scale: r.range(o.scale, `${path}.scale`, 0.3, 2.5), spacing: r.optNum(o.spacing, `${path}.spacing`, 1, 40), seed: seed(),
+        kind: "woods" as const, ...at(), radius: len("radius", R.woods.radius), count: r.within(o.count, `${path}.count`, R.woods.count),
+        trees: o.trees === undefined ? undefined : r.list(o.trees, `${path}.trees`, MAP_LISTS.trees, "points").map((t, j) => r.oneOf(t, `${path}.trees[${j}]`, TREES) ?? "pine"),
+        scale: r.range(o.scale, `${path}.scale`, R.woods.scale), spacing: r.optWithin(o.spacing, `${path}.spacing`, R.woods.spacing), seed: seed(),
       });
     case "rocks":
       return defined({
-        kind: "rocks" as const, ...at(), radius: len("radius", 1, 150), count: r.num(o.count, `${path}.count`, 1, L.scatter, true),
-        size: r.range(o.size, `${path}.size`, 0.3, 8),
-        look: o.look === undefined ? undefined : r.oneOf(o.look, `${path}.look`, { sandstone: true, basalt: true }), seed: seed(),
+        kind: "rocks" as const, ...at(), radius: len("radius", R.rocks.radius), count: r.within(o.count, `${path}.count`, R.rocks.count),
+        size: r.range(o.size, `${path}.size`, R.rocks.size),
+        look: o.look === undefined ? undefined : r.oneOf(o.look, `${path}.look`, ROCK_LOOKS), seed: seed(),
       });
     case "ramp":
       return defined({
         kind: "ramp" as const, ...at(), yaw: r.angle(o.yaw, `${path}.yaw`),
-        width: len("width", 1, 40), length: len("length", 1, 80), rise: len("rise", 0.1, 30), base: r.height(o.base, `${path}.base`),
+        width: len("width", R.ramp.width), length: len("length", R.ramp.length), rise: len("rise", R.ramp.rise), base: r.height(o.base, `${path}.base`),
       });
     case "bridge":
       return defined({
-        kind: "bridge" as const, from: r.point(o.from, `${path}.from`), to: r.point(o.to, `${path}.to`), width: len("width", 2, 30),
+        kind: "bridge" as const, from: r.point(o.from, `${path}.from`), to: r.point(o.to, `${path}.to`), width: len("width", R.bridge.width),
         y: r.height(o.y, `${path}.y`), parapets: r.bool(o.parapets, `${path}.parapets`),
-        piers: r.optNum(o.piers, `${path}.piers`, 0, L.piers, true), look: o.look === undefined ? undefined : r.oneOf(o.look, `${path}.look`, BOX_LOOKS),
+        piers: r.optWithin(o.piers, `${path}.piers`, R.bridge.piers), look: o.look === undefined ? undefined : r.oneOf(o.look, `${path}.look`, BOX_LOOKS),
       });
     case "containers":
       return defined({
         kind: "containers" as const, ...at(), y: r.height(o.y, `${path}.y`), yaw: r.angle(o.yaw, `${path}.yaw`),
-        count: r.optNum(o.count, `${path}.count`, 1, L.containers, true), levels: r.optNum(o.levels, `${path}.levels`, 1, L.levels, true),
+        count: r.optWithin(o.count, `${path}.count`, R.containers.count), levels: r.optWithin(o.levels, `${path}.levels`, R.containers.levels),
       });
     default:
       r.bad(`${path}.kind`);
@@ -440,9 +529,9 @@ function readPrefab(r: Reader, v: unknown, i: number): MapPrefab | null {
 function readZone(r: Reader, v: unknown, i: number): MapZone {
   const path = `zones[${i}]`;
   const o = r.obj(v, path) ?? {};
-  const label = typeof o.label === "string" && ZONE_LABEL.test(o.label) ? o.label : "";
+  const label = typeof o.label === "string" && (ZONE_LABELS as readonly string[]).includes(o.label) ? o.label : "";
   if (!label) r.bad(`${path}.label`);
-  return defined({ label, x: r.coord(o.x, `${path}.x`), z: r.coord(o.z, `${path}.z`), y: r.height(o.y, `${path}.y`), radius: r.num(o.radius, `${path}.radius`, 2, 30) });
+  return defined({ label, x: r.coord(o.x, `${path}.x`), z: r.coord(o.z, `${path}.z`), y: r.height(o.y, `${path}.y`), radius: r.within(o.radius, `${path}.radius`, MAP_RANGES.zone.radius) });
 }
 
 function readPlace(r: Reader, v: unknown, i: number): MapPlace {
@@ -460,7 +549,7 @@ function readSpawn(r: Reader, v: unknown, team: "blue" | "red"): MapSpawn {
   const o = r.obj(v, path) ?? {};
   return {
     x: r.coord(o.x, `${path}.x`), z: r.coord(o.z, `${path}.z`), facing: r.angle(o.facing, `${path}.facing`) ?? 0,
-    width: r.num(o.width, `${path}.width`, MAP_LIMITS.minSpawnWidth, MAP_LIMITS.maxSpawnWidth),
+    width: r.within(o.width, `${path}.width`, MAP_RANGES.spawn.width),
   };
 }
 
@@ -523,29 +612,30 @@ export function readMapText(text: string, migrations?: Readonly<Record<number, M
 function readCurrent(o: Raw): ReadResult {
   const r = new Reader();
   const L = MAP_LIMITS;
+  const R = MAP_RANGES;
   const meta = readMeta(r, o.meta);
   const terrain = readTerrain(r, o.terrain);
   const bounds = readBounds(r, o.bounds);
   let limits: MapFile["limits"];
   if (o.limits !== undefined) {
     const l = r.obj(o.limits, "limits") ?? {};
-    limits = defined({ walls: r.bool(l.walls, "limits.walls"), bound: r.optNum(l.bound, "limits.bound", 0, L.reach) });
+    limits = defined({ walls: r.bool(l.walls, "limits.walls"), bound: r.optWithin(l.bound, "limits.bound", R.limits.bound) });
   }
   let sky: MapFile["sky"];
   if (o.sky !== undefined) {
     const s = r.obj(o.sky, "sky") ?? {};
-    sky = defined({ color: r.color(s.color, "sky.color"), fog: r.num(s.fog, "sky.fog", 0, 0.05), dust: r.optNum(s.dust, "sky.dust", 0, 200), night: r.bool(s.night, "sky.night") || undefined });
+    sky = defined({ color: r.color(s.color, "sky.color"), fog: r.within(s.fog, "sky.fog", R.sky.fog), dust: r.optWithin(s.dust, "sky.dust", R.sky.dust), night: r.bool(s.night, "sky.night") || undefined });
   }
   let water: MapFile["water"];
   if (o.water !== undefined) {
     const w = r.obj(o.water, "water") ?? {};
-    water = defined({ level: r.num(w.level, "water.level", L.minHeight, L.maxHeight), deep: r.optNum(w.deep, "water.deep", 0.3, 50), color: r.optColor(w.color, "water.color") });
+    water = defined({ level: r.within(w.level, "water.level", R.water.level), deep: r.optWithin(w.deep, "water.deep", R.water.deep), color: r.optColor(w.color, "water.color") });
   }
   let nav: MapFile["nav"];
   if (o.nav === false) nav = false;
   else if (o.nav !== undefined) {
     const n = r.obj(o.nav, "nav") ?? {};
-    nav = defined({ cell: r.optNum(n.cell, "nav.cell", L.minNavCell, L.maxNavCell), maxSlope: r.optNum(n.maxSlope, "nav.maxSlope", 5, 45) });
+    nav = defined({ cell: r.optWithin(n.cell, "nav.cell", R.nav.cell), maxSlope: r.optWithin(n.maxSlope, "nav.maxSlope", R.nav.maxSlope) });
   }
   const rawProps = r.list(o.props, "props", L.props, "props");
   const map: MapFile = defined({

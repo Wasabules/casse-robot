@@ -11,3 +11,6 @@ casse-robot-progress.json.tmp
 # Sons bruts générés (tools/sounds/build.mjs en fait les fichiers du jeu, dans public/sounds)
 tools/sounds/raw/
 
+
+# Captures des outils de navigateur (npm run render:check)
+artifacts/

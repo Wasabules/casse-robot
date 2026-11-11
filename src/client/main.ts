@@ -4,6 +4,7 @@ import { installDebugApi } from "./debug";
 import { byId, errorMessage } from "./dom";
 import { App } from "./app";
 import { ArenaGame } from "./game";
+import { watchGpu } from "./hud/gpuNotice";
 import { hideOverlay, showError } from "./hud/overlay";
 import { LoadingScreen, nextPaint } from "./menu/loading";
 import { applyDom } from "./i18n/dom";
@@ -38,6 +39,7 @@ async function start(): Promise<void> {
   await nextPaint();
   const canvas = byId<HTMLCanvasElement>("c");
   const game = new ArenaGame(canvas);
+  watchGpu(game.engine);
   const app = new App(game, canvas, loading);
   canvas.tabIndex = 0;
   app.showTitle();

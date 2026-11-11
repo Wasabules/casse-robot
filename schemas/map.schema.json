@@ -1,0 +1,1677 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Wasabules/casse-robot/main/schemas/map.schema.json",
+  "title": "Casse-Robot community map",
+  "description": "A community map (.casse-map.json), format 1: meters and degrees, north = +z, west = +x, up = +y. Generated from the game's code (npm run schemas); the guide is docs/maps.md. Unknown fields are ignored. The game checks more than a schema can say: consistent dimensions, the terrain covering the play area, nothing off the map, zones with different letters that the AI reaches, clear and safe spawn lines at least 24 m apart, at most 400 boxes and 900 props (120 movable) once the prefabs are unfolded, 1200 scattered trees and rocks, 1024 points for all paths, 512 for all lava; a [min, max] pair needs min ≤ max, a waterfall's bottom below its top, a prop's rests below the number of props. Texts are measured once trimmed. Run npm run map:check.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "description": "The URL of this schema, for editor autocompletion; the game ignores it.",
+      "type": "string"
+    },
+    "format": {
+      "description": "The format version.",
+      "const": 1
+    },
+    "meta": {
+      "$ref": "#/$defs/meta"
+    },
+    "terrain": {
+      "$ref": "#/$defs/terrain"
+    },
+    "bounds": {
+      "$ref": "#/$defs/bounds"
+    },
+    "limits": {
+      "$ref": "#/$defs/limits"
+    },
+    "sky": {
+      "$ref": "#/$defs/sky"
+    },
+    "ground": {
+      "$ref": "#/$defs/ground"
+    },
+    "water": {
+      "$ref": "#/$defs/water"
+    },
+    "lava": {
+      "description": "Lava flows and lakes.",
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/lavaFlow"
+          },
+          {
+            "$ref": "#/$defs/lavaPool"
+          }
+        ]
+      }
+    },
+    "vents": {
+      "description": "Fumaroles.",
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/vent"
+      }
+    },
+    "falls": {
+      "description": "Waterfalls.",
+      "type": "array",
+      "maxItems": 16,
+      "items": {
+        "$ref": "#/$defs/fall"
+      }
+    },
+    "paths": {
+      "description": "Paths drawn on the terrain.",
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "$ref": "#/$defs/path"
+      }
+    },
+    "urban": {
+      "description": "A city: the AI doesn't take a point inside a building as a destination.",
+      "type": "boolean"
+    },
+    "ambience": {
+      "description": "The ambient sound of one of the game's arenas (valley by default).",
+      "type": "string",
+      "enum": [
+        "depot",
+        "fort",
+        "trenches",
+        "yard",
+        "valley",
+        "canyon",
+        "island",
+        "city",
+        "cityNight",
+        "port"
+      ]
+    },
+    "nav": {
+      "description": "The AI's nav grid, computed by default on a map with terrain, deep water or lava; false: none (the AI goes straight).",
+      "anyOf": [
+        {
+          "const": false
+        },
+        {
+          "description": "Its settings.",
+          "type": "object",
+          "properties": {
+            "cell": {
+              "description": "Size of a cell (m; 2.5 by default).",
+              "type": "number",
+              "minimum": 2,
+              "maximum": 6
+            },
+            "maxSlope": {
+              "description": "Steepest slope the AI takes (degrees; 26 by default).",
+              "type": "number",
+              "minimum": 5,
+              "maximum": 45
+            }
+          }
+        }
+      ]
+    },
+    "boxes": {
+      "description": "The static scenery: indestructible boxes.",
+      "type": "array",
+      "maxItems": 400,
+      "items": {
+        "$ref": "#/$defs/box"
+      }
+    },
+    "props": {
+      "description": "The props.",
+      "type": "array",
+      "maxItems": 900,
+      "items": {
+        "$ref": "#/$defs/prop"
+      }
+    },
+    "prefabs": {
+      "description": "Prefabricated elements, unfolded into props and boxes.",
+      "type": "array",
+      "maxItems": 300,
+      "items": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/house"
+          },
+          {
+            "$ref": "#/$defs/tenement"
+          },
+          {
+            "$ref": "#/$defs/fence"
+          },
+          {
+            "$ref": "#/$defs/woods"
+          },
+          {
+            "$ref": "#/$defs/rocks"
+          },
+          {
+            "$ref": "#/$defs/ramp"
+          },
+          {
+            "$ref": "#/$defs/bridge"
+          },
+          {
+            "$ref": "#/$defs/containers"
+          }
+        ]
+      }
+    },
+    "zones": {
+      "description": "One to 5 capture zones.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "items": {
+        "$ref": "#/$defs/zone"
+      }
+    },
+    "places": {
+      "description": "Named places for the full map (M).",
+      "type": "array",
+      "maxItems": 24,
+      "items": {
+        "$ref": "#/$defs/place"
+      }
+    },
+    "spawns": {
+      "description": "Spawn lines placed freely, both teams together; without them, reds to the north and blues to the south.",
+      "type": "object",
+      "properties": {
+        "blue": {
+          "$ref": "#/$defs/spawn"
+        },
+        "red": {
+          "$ref": "#/$defs/spawn"
+        }
+      },
+      "required": [
+        "blue",
+        "red"
+      ]
+    }
+  },
+  "required": [
+    "format",
+    "meta",
+    "bounds",
+    "zones"
+  ],
+  "$defs": {
+    "coord": {
+      "description": "A horizontal coordinate (m), from the center of the map.",
+      "type": "number",
+      "minimum": -220,
+      "maximum": 220
+    },
+    "height": {
+      "description": "An absolute height (m).",
+      "type": "number",
+      "minimum": -10,
+      "maximum": 300
+    },
+    "angle": {
+      "description": "An angle in degrees (any finite number, taken modulo 360).",
+      "type": "number",
+      "exclusiveMinimum": -1000000,
+      "exclusiveMaximum": 1000000
+    },
+    "color": {
+      "description": "A color, #rrggbb.",
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "point": {
+      "description": "A point on the plane: [x, z] (m).",
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "$ref": "#/$defs/coord"
+      }
+    },
+    "polyline": {
+      "description": "A polyline: [[x, z], …], 2 to 128 points.",
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 128,
+      "items": {
+        "$ref": "#/$defs/point"
+      }
+    },
+    "size": {
+      "description": "Dimensions: [width (x), height (y), depth (z)] (m).",
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "number",
+        "minimum": 0.01,
+        "maximum": 200
+      }
+    },
+    "seed": {
+      "description": "Seed of the scattering: the same seed always gives the same result.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2147483648
+    },
+    "meta": {
+      "description": "What the author says about the map: shown as is, in every language.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The map's name.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "[^\\s\\u0000-\\u001f\\u007f]",
+          "maxLength": 48
+        },
+        "names": {
+          "description": "The name in other languages: { \"en\": \"Lake Vale\" } (ISO 639-1 codes).",
+          "type": "object",
+          "maxProperties": 8,
+          "propertyNames": {
+            "pattern": "^[a-z]{2}$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "[^\\s\\u0000-\\u001f\\u007f]",
+            "maxLength": 48
+          }
+        },
+        "author": {
+          "description": "Who made it.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "[^\\s\\u0000-\\u001f\\u007f]",
+          "maxLength": 48
+        },
+        "description": {
+          "description": "A sentence for the menu.",
+          "type": "string",
+          "maxLength": 400
+        },
+        "descriptions": {
+          "description": "The description in other languages.",
+          "type": "object",
+          "maxProperties": 8,
+          "propertyNames": {
+            "pattern": "^[a-z]{2}$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "[^\\s\\u0000-\\u001f\\u007f]",
+            "maxLength": 400
+          }
+        },
+        "license": {
+          "description": "The map's license: an SPDX identifier (CC-BY-4.0, CC0-1.0, CC-BY-SA-4.0…).",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "[^\\s\\u0000-\\u001f\\u007f]",
+          "maxLength": 48
+        }
+      },
+      "required": [
+        "name",
+        "author",
+        "license"
+      ]
+    },
+    "terrain": {
+      "description": "The terrain: a square grid of heights centered on the origin, cells × step m per side (at most 440 m). Without it, the map is flat (ground at y = 0). The game also checks that the heights hold (cells + 1)² values and that max > min.",
+      "type": "object",
+      "properties": {
+        "cells": {
+          "description": "Cells per side (cells + 1 vertices per side).",
+          "type": "integer",
+          "minimum": 16,
+          "maximum": 440
+        },
+        "step": {
+          "description": "Grid step (m).",
+          "enum": [
+            1,
+            2
+          ]
+        },
+        "min": {
+          "description": "Height (m) of the lowest code (0).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 250
+        },
+        "max": {
+          "description": "Height (m) of the highest code (65535).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 250
+        },
+        "heights": {
+          "description": "The heights as little-endian Uint16 codes, in base64: one column per x from east (-x) to west (+x), and within each column increasing z; the index of vertex (ix, iz) is ix × (cells + 1) + iz.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/\\s]*(=\\s*){0,2}$",
+          "maxLength": 4194304
+        }
+      },
+      "required": [
+        "cells",
+        "step",
+        "min",
+        "max",
+        "heights"
+      ],
+      "anyOf": [
+        {
+          "properties": {
+            "step": {
+              "const": 1
+            },
+            "cells": {
+              "maximum": 440
+            }
+          }
+        },
+        {
+          "properties": {
+            "step": {
+              "const": 2
+            },
+            "cells": {
+              "maximum": 220
+            }
+          }
+        }
+      ]
+    },
+    "bounds": {
+      "description": "The play dimensions (m). Only half is required: the rest follows from it.",
+      "type": "object",
+      "properties": {
+        "half": {
+          "description": "Half-side of the play area: it runs from -half to +half in x and in z.",
+          "type": "number",
+          "minimum": 20,
+          "maximum": 200
+        },
+        "roam": {
+          "description": "Where the AI picks its random destinations (86% of half by default).",
+          "type": "number",
+          "minimum": 5,
+          "maximum": 200
+        },
+        "spawnLine": {
+          "description": "Distance from the center to the spawn lines: reds to the north, blues to the south (80% of half by default).",
+          "type": "number",
+          "minimum": 5,
+          "maximum": 200
+        },
+        "spawnSpread": {
+          "description": "Half-width of the spawn lines (30% of half by default, 30 at most).",
+          "type": "number",
+          "minimum": 2,
+          "maximum": 200
+        },
+        "circuit": {
+          "description": "Radius of the aircraft circuit (70% of half by default).",
+          "type": "number",
+          "minimum": 10,
+          "maximum": 240
+        },
+        "airFloor": {
+          "description": "Altitude above the terrain below which the AI doesn't fly its planes (by default, the highest scenery + 4 m).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 80
+        },
+        "hoverFloor": {
+          "description": "Floor altitude of the AI's flying robots (0 by default).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 40
+        }
+      },
+      "required": [
+        "half"
+      ]
+    },
+    "limits": {
+      "description": "The edges of the map.",
+      "type": "object",
+      "properties": {
+        "walls": {
+          "description": "Visible perimeter walls at ±half, that follow the terrain.",
+          "type": "boolean"
+        },
+        "bound": {
+          "description": "An invisible limit at ±bound m (half + 35 by default); 0: none.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 220
+        }
+      }
+    },
+    "sky": {
+      "description": "The sky and the fog (the Valley's by default).",
+      "type": "object",
+      "properties": {
+        "color": {
+          "description": "Color of the sky and the fog.",
+          "$ref": "#/$defs/color"
+        },
+        "fog": {
+          "description": "Fog density.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.05
+        },
+        "dust": {
+          "description": "Dust in the air (grains per second: a ruined city).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 200
+        },
+        "night": {
+          "description": "Night: the moon, a starry sky, lampposts, floodlights and headlights lit.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "color",
+        "fog"
+      ]
+    },
+    "ground": {
+      "description": "The ground palette: that of one of the game's arenas (preset), with any field changed.",
+      "type": "object",
+      "properties": {
+        "preset": {
+          "description": "Start from the palette of one of the game's arenas (valley by default).",
+          "type": "string",
+          "enum": [
+            "depot",
+            "fort",
+            "trenches",
+            "yard",
+            "valley",
+            "canyon",
+            "island",
+            "city",
+            "cityNight",
+            "port"
+          ]
+        },
+        "base": {
+          "description": "The two tints of the ground, mixed by noise.",
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "$ref": "#/$defs/color"
+          }
+        },
+        "dirt": {
+          "description": "Dirt patches and paths.",
+          "$ref": "#/$defs/color"
+        },
+        "sand": {
+          "description": "Banks.",
+          "$ref": "#/$defs/color"
+        },
+        "mud": {
+          "description": "Bottom of the water.",
+          "$ref": "#/$defs/color"
+        },
+        "rock": {
+          "description": "Steep slopes and heights.",
+          "$ref": "#/$defs/color"
+        },
+        "peak": {
+          "description": "Summits (snow, ash).",
+          "$ref": "#/$defs/color"
+        },
+        "rockLine": {
+          "description": "Height where rock begins (m).",
+          "type": "number",
+          "minimum": -50,
+          "maximum": 300
+        },
+        "peakLine": {
+          "description": "Height where the summit begins (m).",
+          "type": "number",
+          "minimum": -50,
+          "maximum": 300
+        },
+        "beach": {
+          "description": "Width of the beach above the water (m of height).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "basalt": {
+          "description": "Solidified ground around lava.",
+          "$ref": "#/$defs/color"
+        },
+        "basaltWidth": {
+          "description": "Width of the solidified ground around lava (m).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 30
+        },
+        "strata": {
+          "description": "Color bands of the cliffs.",
+          "type": "array",
+          "maxItems": 12,
+          "items": {
+            "$ref": "#/$defs/color"
+          }
+        },
+        "strataStep": {
+          "description": "Height of each band of the cliffs (m).",
+          "type": "number",
+          "minimum": 0.2,
+          "maximum": 50
+        },
+        "patches": {
+          "description": "Patches of color: a disc where the ground takes this tint.",
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "description": "A patch of color.",
+            "type": "object",
+            "properties": {
+              "x": {
+                "description": "X of the patch (m; +x is west).",
+                "$ref": "#/$defs/coord"
+              },
+              "z": {
+                "description": "Z of the patch (m; +z is north).",
+                "$ref": "#/$defs/coord"
+              },
+              "r": {
+                "description": "Its radius (m).",
+                "type": "number",
+                "minimum": 0.5,
+                "maximum": 200
+              },
+              "color": {
+                "$ref": "#/$defs/color"
+              }
+            },
+            "required": [
+              "x",
+              "z",
+              "r",
+              "color"
+            ]
+          }
+        },
+        "grain": {
+          "description": "Size of the pattern of the two tints (m).",
+          "type": "number",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "stains": {
+          "description": "Share of dirt patches.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "slope": {
+          "description": "The tint of slopes.",
+          "type": "object",
+          "properties": {
+            "color": {
+              "description": "Their tint (the rock by default).",
+              "$ref": "#/$defs/color"
+            },
+            "from": {
+              "description": "From which vertical component of the normal.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "span": {
+              "description": "Over which span.",
+              "type": "number",
+              "minimum": 0.01,
+              "maximum": 1
+            }
+          },
+          "required": [
+            "from",
+            "span"
+          ]
+        },
+        "rockSpan": {
+          "description": "Height span over which the ground turns to rock above rockLine (m).",
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 100
+        },
+        "lawn": {
+          "description": "Grass paths.",
+          "$ref": "#/$defs/color"
+        }
+      }
+    },
+    "water": {
+      "description": "The water: drawn wherever the terrain is below its level; you can cross it, except where it's deep.",
+      "type": "object",
+      "properties": {
+        "level": {
+          "description": "Its level (m).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 250
+        },
+        "deep": {
+          "description": "Beyond this depth (m), you drown in it; without it, you cross it everywhere.",
+          "type": "number",
+          "minimum": 0.3,
+          "maximum": 50
+        },
+        "color": {
+          "$ref": "#/$defs/color"
+        }
+      },
+      "required": [
+        "level"
+      ]
+    },
+    "lavaFlow": {
+      "description": "A lava flow along a polyline. Its surface is the terrain; it burns whatever stands in it.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "flow"
+        },
+        "width": {
+          "description": "Its width (m).",
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 60
+        },
+        "points": {
+          "$ref": "#/$defs/polyline"
+        }
+      },
+      "required": [
+        "kind",
+        "width",
+        "points"
+      ]
+    },
+    "lavaPool": {
+      "description": "A lava lake (a disc).",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "pool"
+        },
+        "x": {
+          "description": "X of its center (m; +x is west).",
+          "$ref": "#/$defs/coord"
+        },
+        "z": {
+          "description": "Z of its center (m; +z is north).",
+          "$ref": "#/$defs/coord"
+        },
+        "r": {
+          "description": "Its radius (m).",
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 120
+        }
+      },
+      "required": [
+        "kind",
+        "x",
+        "z",
+        "r"
+      ]
+    },
+    "vent": {
+      "description": "A fumarole.",
+      "type": "object",
+      "properties": {
+        "x": {
+          "description": "X of the vent (m; +x is west).",
+          "$ref": "#/$defs/coord"
+        },
+        "z": {
+          "description": "Z of the vent (m; +z is north).",
+          "$ref": "#/$defs/coord"
+        },
+        "y": {
+          "description": "Absolute height of the vent (m); without it, on the ground.",
+          "$ref": "#/$defs/height"
+        },
+        "size": {
+          "description": "Its size.",
+          "type": "number",
+          "minimum": 0.2,
+          "maximum": 6
+        },
+        "steam": {
+          "description": "White steam.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "x",
+        "z",
+        "size"
+      ]
+    },
+    "fall": {
+      "description": "A waterfall.",
+      "type": "object",
+      "properties": {
+        "x": {
+          "description": "X of the waterfall (m; +x is west).",
+          "$ref": "#/$defs/coord"
+        },
+        "z": {
+          "description": "Z of the waterfall (m; +z is north).",
+          "$ref": "#/$defs/coord"
+        },
+        "top": {
+          "description": "Height of its top (m).",
+          "$ref": "#/$defs/height"
+        },
+        "bottom": {
+          "description": "Height of its bottom (m), below its top.",
+          "$ref": "#/$defs/height"
+        },
+        "width": {
+          "description": "Its width (m).",
+          "type": "number",
+          "minimum": 0.2,
+          "maximum": 60
+        },
+        "dir": {
+          "description": "Where the water falls (degrees: 0 toward north, 90 toward west); 0 by default.",
+          "$ref": "#/$defs/angle"
+        }
+      },
+      "required": [
+        "x",
+        "z",
+        "top",
+        "bottom",
+        "width"
+      ]
+    },
+    "path": {
+      "description": "A path drawn on the terrain.",
+      "type": "object",
+      "properties": {
+        "width": {
+          "description": "Its width (m).",
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 40
+        },
+        "points": {
+          "$ref": "#/$defs/polyline"
+        },
+        "surface": {
+          "description": "Its surface (dirt by default).",
+          "type": "string",
+          "enum": [
+            "dirt",
+            "grass",
+            "sand",
+            "road",
+            "gravel",
+            "ballast",
+            "asphalt"
+          ]
+        }
+      },
+      "required": [
+        "width",
+        "points"
+      ]
+    },
+    "box": {
+      "description": "An indestructible scenery box. Without y, it's placed on the ground (a rock, half buried).",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "What it is: wall, pillar, platform, barrier (low wall), rock, container, deck, road, track, ramp, tower, bound (invisible).",
+          "type": "string",
+          "enum": [
+            "wall",
+            "ramp",
+            "pillar",
+            "platform",
+            "barrier",
+            "rock",
+            "container",
+            "deck",
+            "road",
+            "bound",
+            "tower",
+            "track"
+          ]
+        },
+        "x": {
+          "description": "X of its center (m; +x is west).",
+          "$ref": "#/$defs/coord"
+        },
+        "z": {
+          "description": "Z of its center (m; +z is north).",
+          "$ref": "#/$defs/coord"
+        },
+        "y": {
+          "description": "Height of its center (m); without it, on the ground.",
+          "$ref": "#/$defs/height"
+        },
+        "size": {
+          "$ref": "#/$defs/size"
+        },
+        "yaw": {
+          "description": "Rotation around the vertical (degrees; 90 turns north toward west).",
+          "$ref": "#/$defs/angle"
+        },
+        "pitch": {
+          "description": "Rotation around x (degrees), after the yaw.",
+          "$ref": "#/$defs/angle"
+        },
+        "roll": {
+          "description": "Rotation around z (degrees), after the pitch.",
+          "$ref": "#/$defs/angle"
+        },
+        "look": {
+          "description": "Its appearance, other than its kind's own.",
+          "type": "string",
+          "enum": [
+            "sandstone",
+            "timber",
+            "rail",
+            "wagon",
+            "wood",
+            "basalt",
+            "rust",
+            "quay",
+            "steel",
+            "hull",
+            "superstructure",
+            "hatch",
+            "funnel",
+            "lighthouse",
+            "lamp",
+            "silo",
+            "container"
+          ]
+        },
+        "round": {
+          "description": "An upright cylinder inscribed in the box (a silo, a lighthouse).",
+          "type": "boolean"
+        },
+        "underpass": {
+          "description": "A deck you pass under (an elevated road).",
+          "type": "boolean"
+        },
+        "approach": {
+          "description": "Where to approach the deck beyond its ends (m).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        }
+      },
+      "required": [
+        "kind",
+        "x",
+        "z",
+        "size"
+      ]
+    },
+    "prop": {
+      "description": "A prop: what breaks, burns, explodes or falls. A slab (brick, concrete, plank, sheet, roof, facade, tenement) needs its size.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "description": "What it is.",
+          "type": "string",
+          "enum": [
+            "crate",
+            "barrel",
+            "gas",
+            "brick",
+            "concrete",
+            "plank",
+            "sheet",
+            "roof",
+            "pine",
+            "oak",
+            "palm",
+            "kapok",
+            "cactus",
+            "watertank",
+            "tank",
+            "facade",
+            "tenement",
+            "car",
+            "wreck",
+            "lamppost",
+            "floodlight"
+          ]
+        },
+        "x": {
+          "description": "X of its base (m; +x is west).",
+          "$ref": "#/$defs/coord"
+        },
+        "z": {
+          "description": "Z of its base (m; +z is north).",
+          "$ref": "#/$defs/coord"
+        },
+        "y": {
+          "description": "Absolute height of its base (m); without it, on the ground.",
+          "$ref": "#/$defs/height"
+        },
+        "yaw": {
+          "description": "Rotation around the vertical (degrees; 90 turns north toward west).",
+          "$ref": "#/$defs/angle"
+        },
+        "pitch": {
+          "description": "Rotation around x (degrees), after the yaw.",
+          "$ref": "#/$defs/angle"
+        },
+        "roll": {
+          "description": "Rotation around z (degrees), after the pitch.",
+          "$ref": "#/$defs/angle"
+        },
+        "size": {
+          "description": "Dimensions of a slab.",
+          "$ref": "#/$defs/size"
+        },
+        "scale": {
+          "description": "Enlarges a cylinder or a crate.",
+          "type": "number",
+          "minimum": 0.2,
+          "maximum": 4
+        },
+        "rests": {
+          "description": "The props (their indices in props) it rests on: when they're all gone, it falls.",
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 899
+          }
+        },
+        "group": {
+          "description": "A building number: the AI goes around a building as one piece.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        }
+      },
+      "required": [
+        "type",
+        "x",
+        "z"
+      ],
+      "if": {
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "brick",
+              "concrete",
+              "plank",
+              "sheet",
+              "roof",
+              "facade",
+              "tenement"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "size"
+        ]
+      }
+    },
+    "house": {
+      "description": "A house, a hangar: four walls in panels and a roof; the opening is in the middle of the long front side (south before rotation).",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "house"
+        },
+        "x": {
+          "description": "X of its center (m; +x is west).",
+          "$ref": "#/$defs/coord"
+        },
+        "z": {
+          "description": "Z of its center (m; +z is north).",
+          "$ref": "#/$defs/coord"
+        },
+        "y": {
+          "description": "Absolute height of its floor (m); without it, on the ground.",
+          "$ref": "#/$defs/height"
+        },
+        "yaw": {
+          "description": "Rotation around the vertical (degrees; 90 turns north toward west).",
+          "$ref": "#/$defs/angle"
+        },
+        "width": {
+          "description": "Along the ridge (x before rotation, m).",
+          "type": "number",
+          "minimum": 2,
+          "maximum": 40
+        },
+        "depth": {
+          "description": "Crosswise (m).",
+          "type": "number",
+          "minimum": 2,
+          "maximum": 30
+        },
+        "height": {
+          "description": "Height of the walls (m).",
+          "type": "number",
+          "minimum": 1.5,
+          "maximum": 12
+        },
+        "wall": {
+          "description": "Material of the walls.",
+          "type": "string",
+          "enum": [
+            "brick",
+            "concrete",
+            "plank",
+            "sheet"
+          ]
+        },
+        "roof": {
+          "description": "Material of the roof.",
+          "type": "string",
+          "enum": [
+            "roof",
+            "sheet",
+            "concrete",
+            "plank"
+          ]
+        },
+        "roofKind": {
+          "description": "Gable (by default) or flat roof.",
+          "type": "string",
+          "enum": [
+            "gable",
+            "flat"
+          ]
+        },
+        "door": {
+          "description": "Width of the opening (m).",
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 38
+        },
+        "through": {
+          "description": "Repeats the opening at the back (you drive through).",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "x",
+        "z",
+        "width",
+        "depth",
+        "height",
+        "wall",
+        "roof"
+      ]
+    },
+    "tenement": {
+      "description": "An apartment block: one facade panel per floor and a flat roof; it collapses floor by floor.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "tenement"
+        },
+        "x": {
+          "description": "X of its center (m; +x is west).",
+          "$ref": "#/$defs/coord"
+        },
+        "z": {
+          "description": "Z of its center (m; +z is north).",
+          "$ref": "#/$defs/coord"
+        },
+        "y": {
+          "description": "Absolute height of its floor (m); without it, on the ground.",
+          "$ref": "#/$defs/height"
+        },
+        "yaw": {
+          "description": "Rotation around the vertical (degrees; 90 turns north toward west).",
+          "$ref": "#/$defs/angle"
+        },
+        "width": {
+          "description": "Width (m).",
+          "type": "number",
+          "minimum": 4,
+          "maximum": 60
+        },
+        "depth": {
+          "description": "Depth (m).",
+          "type": "number",
+          "minimum": 4,
+          "maximum": 60
+        },
+        "floors": {
+          "description": "Number of floors.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        },
+        "wall": {
+          "description": "Material of the facade.",
+          "type": "string",
+          "enum": [
+            "facade",
+            "tenement",
+            "brick",
+            "concrete"
+          ]
+        },
+        "doors": {
+          "description": "Openings on the ground floor: [side before rotation (n, s, w, e), panel index].",
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "prefixItems": [
+              {
+                "type": "string",
+                "enum": [
+                  "n",
+                  "s",
+                  "w",
+                  "e"
+                ]
+              },
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 20
+              }
+            ]
+          }
+        },
+        "ruin": {
+          "description": "Share of columns that lost their top.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "seed": {
+          "$ref": "#/$defs/seed"
+        }
+      },
+      "required": [
+        "kind",
+        "x",
+        "z",
+        "width",
+        "depth",
+        "floors",
+        "wall"
+      ]
+    },
+    "fence": {
+      "description": "A fence or a low wall along a polyline, in panels of 2.5 m at most.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "fence"
+        },
+        "points": {
+          "$ref": "#/$defs/polyline"
+        },
+        "height": {
+          "description": "Its height (m).",
+          "type": "number",
+          "minimum": 0.3,
+          "maximum": 6
+        },
+        "material": {
+          "description": "Its material.",
+          "type": "string",
+          "enum": [
+            "brick",
+            "concrete",
+            "plank",
+            "sheet"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "points"
+      ]
+    },
+    "woods": {
+      "description": "A wood: trees scattered in a disc, away from paths, zones, spawn lines, water, lava and scenery.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "woods"
+        },
+        "x": {
+          "description": "X of its center (m; +x is west).",
+          "$ref": "#/$defs/coord"
+        },
+        "z": {
+          "description": "Z of its center (m; +z is north).",
+          "$ref": "#/$defs/coord"
+        },
+        "radius": {
+          "description": "Radius of the disc (m).",
+          "type": "number",
+          "minimum": 1,
+          "maximum": 150
+        },
+        "count": {
+          "description": "Number of trees.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "trees": {
+          "description": "The species to pick from.",
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "string",
+            "enum": [
+              "pine",
+              "oak",
+              "palm",
+              "kapok",
+              "cactus"
+            ]
+          }
+        },
+        "scale": {
+          "description": "Size of the trees: [min, max].",
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "number",
+            "minimum": 0.3,
+            "maximum": 2.5
+          }
+        },
+        "spacing": {
+          "description": "Spacing between trees (m).",
+          "type": "number",
+          "minimum": 1,
+          "maximum": 40
+        },
+        "seed": {
+          "$ref": "#/$defs/seed"
+        }
+      },
+      "required": [
+        "kind",
+        "x",
+        "z",
+        "radius",
+        "count"
+      ]
+    },
+    "rocks": {
+      "description": "Rocks scattered in a disc.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "rocks"
+        },
+        "x": {
+          "description": "X of its center (m; +x is west).",
+          "$ref": "#/$defs/coord"
+        },
+        "z": {
+          "description": "Z of its center (m; +z is north).",
+          "$ref": "#/$defs/coord"
+        },
+        "radius": {
+          "description": "Radius of the disc (m).",
+          "type": "number",
+          "minimum": 1,
+          "maximum": 150
+        },
+        "count": {
+          "description": "Number of rocks.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "size": {
+          "description": "Size of the rocks: [min, max] (m).",
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "number",
+            "minimum": 0.3,
+            "maximum": 8
+          }
+        },
+        "look": {
+          "description": "Their stone.",
+          "type": "string",
+          "enum": [
+            "sandstone",
+            "basalt"
+          ]
+        },
+        "seed": {
+          "$ref": "#/$defs/seed"
+        }
+      },
+      "required": [
+        "kind",
+        "x",
+        "z",
+        "radius",
+        "count"
+      ]
+    },
+    "ramp": {
+      "description": "A ramp that climbs rise m over length m toward its front (north before rotation).",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "ramp"
+        },
+        "x": {
+          "description": "X of its center (m; +x is west).",
+          "$ref": "#/$defs/coord"
+        },
+        "z": {
+          "description": "Z of its center (m; +z is north).",
+          "$ref": "#/$defs/coord"
+        },
+        "yaw": {
+          "description": "Rotation around the vertical (degrees; 90 turns north toward west).",
+          "$ref": "#/$defs/angle"
+        },
+        "width": {
+          "description": "Width (m).",
+          "type": "number",
+          "minimum": 1,
+          "maximum": 40
+        },
+        "length": {
+          "description": "Length (m).",
+          "type": "number",
+          "minimum": 1,
+          "maximum": 80
+        },
+        "rise": {
+          "description": "Height it climbs (m).",
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 30
+        },
+        "base": {
+          "description": "Height of its foot (m); without it, the ground.",
+          "$ref": "#/$defs/height"
+        }
+      },
+      "required": [
+        "kind",
+        "x",
+        "z",
+        "width",
+        "length",
+        "rise"
+      ]
+    },
+    "bridge": {
+      "description": "A bridge from one end to the other; for the AI, along the north-south or east-west axis, its ends on ground at deck height.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "bridge"
+        },
+        "from": {
+          "description": "One end: [x, z].",
+          "$ref": "#/$defs/point"
+        },
+        "to": {
+          "description": "The other end: [x, z].",
+          "$ref": "#/$defs/point"
+        },
+        "width": {
+          "description": "Width (m).",
+          "type": "number",
+          "minimum": 2,
+          "maximum": 30
+        },
+        "y": {
+          "description": "Top of the deck (m); without it, the highest ground at its ends.",
+          "$ref": "#/$defs/height"
+        },
+        "parapets": {
+          "description": "Parapets (yes by default).",
+          "type": "boolean"
+        },
+        "piers": {
+          "description": "Number of piers.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16
+        },
+        "look": {
+          "description": "Appearance of the deck.",
+          "type": "string",
+          "enum": [
+            "sandstone",
+            "timber",
+            "rail",
+            "wagon",
+            "wood",
+            "basalt",
+            "rust",
+            "quay",
+            "steel",
+            "hull",
+            "superstructure",
+            "hatch",
+            "funnel",
+            "lighthouse",
+            "lamp",
+            "silo",
+            "container"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "from",
+        "to",
+        "width"
+      ]
+    },
+    "containers": {
+      "description": "A row of containers, possibly stacked.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "containers"
+        },
+        "x": {
+          "description": "X of its center (m; +x is west).",
+          "$ref": "#/$defs/coord"
+        },
+        "z": {
+          "description": "Z of its center (m; +z is north).",
+          "$ref": "#/$defs/coord"
+        },
+        "y": {
+          "description": "Absolute height of the row (m); without it, on the ground.",
+          "$ref": "#/$defs/height"
+        },
+        "yaw": {
+          "description": "Rotation around the vertical (degrees; 90 turns north toward west).",
+          "$ref": "#/$defs/angle"
+        },
+        "count": {
+          "description": "Containers in the row.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12
+        },
+        "levels": {
+          "description": "Levels of the stack.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4
+        }
+      },
+      "required": [
+        "kind",
+        "x",
+        "z"
+      ]
+    },
+    "zone": {
+      "description": "A capture zone.",
+      "type": "object",
+      "properties": {
+        "label": {
+          "description": "Its letter (each zone has its own).",
+          "type": "string",
+          "enum": [
+            "A",
+            "B",
+            "C",
+            "D",
+            "E"
+          ]
+        },
+        "x": {
+          "description": "X of its center (m; +x is west).",
+          "$ref": "#/$defs/coord"
+        },
+        "z": {
+          "description": "Z of its center (m; +z is north).",
+          "$ref": "#/$defs/coord"
+        },
+        "y": {
+          "description": "Height (m) of what it's on (a bridge, a platform); without it, on the ground.",
+          "$ref": "#/$defs/height"
+        },
+        "radius": {
+          "description": "Its radius (m).",
+          "type": "number",
+          "minimum": 2,
+          "maximum": 30
+        }
+      },
+      "required": [
+        "label",
+        "x",
+        "z",
+        "radius"
+      ]
+    },
+    "place": {
+      "description": "A named place for the full map (M).",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Its name.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "[^\\s\\u0000-\\u001f\\u007f]",
+          "maxLength": 32
+        },
+        "names": {
+          "description": "Its name in other languages.",
+          "type": "object",
+          "maxProperties": 8,
+          "propertyNames": {
+            "pattern": "^[a-z]{2}$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "[^\\s\\u0000-\\u001f\\u007f]",
+            "maxLength": 32
+          }
+        },
+        "x": {
+          "description": "X of the place (m; +x is west).",
+          "$ref": "#/$defs/coord"
+        },
+        "z": {
+          "description": "Z of the place (m; +z is north).",
+          "$ref": "#/$defs/coord"
+        }
+      },
+      "required": [
+        "name",
+        "x",
+        "z"
+      ]
+    },
+    "spawn": {
+      "description": "A team's spawn line.",
+      "type": "object",
+      "properties": {
+        "x": {
+          "description": "X of its middle (m; +x is west).",
+          "$ref": "#/$defs/coord"
+        },
+        "z": {
+          "description": "Z of its middle (m; +z is north).",
+          "$ref": "#/$defs/coord"
+        },
+        "facing": {
+          "description": "Where the team faces when starting (degrees: 0 toward north, 90 toward west); 0 by default.",
+          "$ref": "#/$defs/angle"
+        },
+        "width": {
+          "description": "Its length (m).",
+          "type": "number",
+          "minimum": 4,
+          "maximum": 160
+        }
+      },
+      "required": [
+        "x",
+        "z",
+        "width"
+      ]
+    }
+  }
+}

@@ -7,9 +7,12 @@
 export * from "./format";
 export { encodeTerrain, decodeTerrain, fromBase64, toBase64 } from "./codec";
 export { canonicalJson, mapKey } from "./key";
-export { MAP_MIGRATIONS, readMap, readMapText, upgradeMap, type MapMigration, type ReadResult } from "./read";
+export {
+  MAP_CHOICES, MAP_LISTS, MAP_MIGRATIONS, MAP_PATTERNS, MAP_RANGES, MAX_ANGLE, readMap, readMapText, upgradeMap, ZONE_LABELS,
+  type MapMigration, type NumberRange, type ReadResult,
+} from "./read";
 export { arenaFromMap, boundAt, groundStyle, mapBounds, turnQuat, type ArenaOrigins, type ElementOrigin } from "./build";
-export { checkMap, checkMapText, validateMap, validateArena, type MapCheck } from "./validate";
+export { checkMap, checkMapText, needsSize, validateMap, validateArena, type MapCheck } from "./validate";
 export {
   decodePng, decodeRaw16, heightsFromImage, imageFromBytes, imageFromHeights, isHeightmapError, MAX_IMAGE_SIDE, sampleImage, smoothImage, terrainFromImage,
   type HeightImage, type HeightmapError, type HeightmapErrorCode, type Inflate, type TerrainImport,

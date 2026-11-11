@@ -1,7 +1,7 @@
 import { lavaAt } from "../arena/features";
 import { deepWaterAt, GROUND_HALF, groundLevel, spawnLineOf, spawnLocal, spawnPoint, type ArenaLayout, type MapKey, type StaticBox } from "../arena/layout";
 import { isOpen, navGrid } from "../arena/navgrid";
-import { propDef, propHalf } from "../catalog/props";
+import { propDef, propHalf, type PropType } from "../catalog/props";
 import { qrot, vec3 } from "../math/vec";
 import { arenaFromMap, boundAt, mapBounds, wallCount } from "./build";
 import { MAP_LIMITS, type MapFile, type MapIssue, type MapTeam } from "./format";
@@ -78,6 +78,9 @@ function footprint(b: StaticBox): { x: number; z: number } {
   return { x: Math.abs(ax.x) + Math.abs(ay.x) + Math.abs(az.x), z: Math.abs(ax.z) + Math.abs(ay.z) + Math.abs(az.z) };
 }
 
+/** Un accessoire de cette sorte doit-il donner ses dimensions (`size`) ? Une dalle (pan de mur, toit), sauf une voiture et sa carcasse : elles ont les leurs par défaut. */
+export const needsSize = (type: PropType): boolean => propDef(type).shape.kind === "slab" && type !== "car" && type !== "wreck";
+
 /** Ce qu'on ne traverse pas au sol (pas une piste, un pont, une voie, une limite). */
 const solid = (b: StaticBox): boolean => b.kind !== "road" && b.kind !== "deck" && b.kind !== "track" && b.kind !== "bound" && b.kind !== "ramp";
 
@@ -99,7 +102,7 @@ export function validateArena(map: MapFile, arena: ArenaLayout): MapIssue[] {
   if (dynamic > L.dynamicProps) fail({ code: "tooMany", what: "dynamicProps", count: dynamic, max: L.dynamicProps });
   // Une dalle (pan de mur, toit) a ses dimensions ; une voiture a les siennes par défaut
   (map.props ?? []).forEach((p, i) => {
-    if (propDef(p.type).shape.kind === "slab" && !p.size && p.type !== "car" && p.type !== "wreck") fail({ code: "field", path: `props[${i}].size` });
+    if (needsSize(p.type) && !p.size) fail({ code: "field", path: `props[${i}].size` });
   });
 
   // Le relief couvre la zone de jeu et la limite invisible

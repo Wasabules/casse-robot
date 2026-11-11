@@ -1,3 +1,4 @@
+import { writeFileSync } from "node:fs";
 import { beforeAll, expect, it } from "vitest";
 import { isArenaId, type ArenaKey } from "../src/shared/arena/layout";
 import { checkMapText, registerMap } from "../src/shared/map";
@@ -18,6 +19,8 @@ import { botName } from "../src/client/i18n/names";
  * coût d'un pas, part du temps où les robots au sol sont coincés, et, par robot, destructions,
  * morts, durée de vie, temps passé renversé ou paralysé. L'arène se choisit par la variable
  * d'environnement BATTLE_ARENA (le Dépôt par défaut ; `BATTLE_ARENA=canyon npm run battle`).
+ * BATTLE_RECORD=<fichier> garde aussi le bilan en JSON : les batailles de référence
+ * (tests/reference/), auxquelles comparer une simulation déplacée ou réécrite (mêmes graines).
  */
 
 interface RobotStats {
@@ -32,6 +35,8 @@ interface RobotStats {
 
 interface Report {
   matches: string[];
+  /** Chaque partie : sa graine, son vainqueur, son score, sa durée (s). */
+  results: { seed: number; winner: string | null; blue: number; red: number; elapsed: number }[];
   kills: number;
   causes: Map<string, number>;
   robots: Map<string, RobotStats>;
@@ -59,7 +64,7 @@ function battleArena(name: string | undefined): ArenaKey {
 const ARENA: ArenaKey = battleArena(env.BATTLE_ARENA);
 
 function playBattles(seeds: readonly number[], duration: number): Report {
-  const report: Report = { matches: [], kills: 0, causes: new Map(), robots: new Map(), modes: new Map(), ground: 0, stuck: 0, cost: 0, steps: 0 };
+  const report: Report = { matches: [], results: [], kills: 0, causes: new Map(), robots: new Map(), modes: new Map(), ground: 0, stuck: 0, cost: 0, steps: 0 };
   const stats = (bot: Bot): RobotStats => {
     const name = botName(bot.profile);
     let s = report.robots.get(name);
@@ -105,9 +110,31 @@ function playBattles(seeds: readonly number[], duration: number): Report {
       }
     }
     report.matches.push(`graine ${seed} : ${match.winner ?? "en cours"}, ${match.score.blue} à ${match.score.red} en ${match.elapsed.toFixed(0)} s`);
+    report.results.push({ seed, winner: match.winner ?? null, blue: match.score.blue, red: match.score.red, elapsed: Math.round(match.elapsed) });
     sim.dispose();
   }
   return report;
+}
+
+/** Le bilan en JSON (BATTLE_RECORD) : les batailles de référence. Le coût d'un pas dépend de la machine. */
+function recordReport(report: Report, file: string, duration: number): void {
+  const round = (x: number, d = 1): number => Math.round(x * 10 ** d) / 10 ** d;
+  const robots = Object.fromEntries([...report.robots].sort((a, b) => a[0].localeCompare(b[0])).map(([name, s]) => [name, {
+    kills: s.kills, deaths: s.deaths, life: s.deaths ? round(s.life / s.deaths) : null, flipped: round(s.flipped), stunned: round(s.stunned),
+    killedBy: Object.fromEntries([...s.killedBy].sort()),
+  }]));
+  const json = {
+    arena: ARENA, duration, date: new Date().toISOString().slice(0, 10),
+    matches: report.results,
+    kills: report.kills,
+    causes: Object.fromEntries([...report.causes].sort()),
+    stuckShare: round((100 * report.stuck) / Math.max(1, report.ground)),
+    modes: Object.fromEntries([...report.modes].sort().map(([m, t]) => [m, Math.round(t)])),
+    stepMs: round(report.cost / Math.max(1, report.steps), 2),
+    robots,
+  };
+  writeFileSync(file, `${JSON.stringify(json, null, 2)}\n`);
+  console.log(`Bilan gardé dans ${file}`);
 }
 
 function printReport(report: Report): void {
@@ -141,5 +168,7 @@ it("des batailles entre IA se jouent sans erreur, et des robots y sont détruits
 });
 
 it.runIf(fullReport)("bilan d'équilibrage sur huit batailles", { timeout: 1_800_000 }, () => {
-  printReport(playBattles([1, 2, 3, 4, 5, 6, 7, 8], 240));
+  const report = playBattles([1, 2, 3, 4, 5, 6, 7, 8], 240);
+  printReport(report);
+  if (env.BATTLE_RECORD) recordReport(report, env.BATTLE_RECORD, 240);
 });

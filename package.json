@@ -18,12 +18,15 @@
     "check": "npm run typecheck && npm run test",
     "bench": "vitest run tests/perf.test.ts --silent=false",
     "battle": "vitest run tests/battle.test.ts --silent=false",
+    "perf": "node tools/browser/perf.mjs",
+    "render:check": "node tools/browser/render-check.mjs",
     "server": "vite build --ssr src/server/main.ts --outDir dist-server --emptyOutDir && node dist-server/main.js",
     "sounds": "node tools/sounds/build.mjs",
     "map:build": "vite build --ssr tools/maps/cli.ts --outDir dist-tools --emptyOutDir --logLevel warn",
     "map:check": "npm run map:build && node dist-tools/cli.js check",
     "map:terrain": "npm run map:build && node dist-tools/cli.js terrain",
     "map:example": "npm run map:build && node dist-tools/cli.js example",
+    "schemas": "vite build --ssr tools/schemas/build.ts --outDir dist-tools/schemas --emptyOutDir --logLevel warn && node dist-tools/schemas/build.js",
     "share": "node tools/share.mjs"
   },
   "dependencies": {

@@ -218,4 +218,8 @@ export const hud = {
   "hud.page.lockHintRelease": "pour la rendre",
   "hud.page.garage": "Garage",
   "hud.page.inventory": "Inventaire des pièces",
+  // La carte graphique réinitialisée (client/hud/gpuNotice.ts)
+  "hud.gpu.lost": "La carte graphique s'est réinitialisée : l'image revient…",
+  "hud.gpu.stuck": "L'image ne revient pas : le navigateur n'a pas rendu la carte graphique au jeu. Recharger la page le relance (la partie en cours est perdue).",
+  "hud.gpu.reload": "Recharger la page",
 } as const;

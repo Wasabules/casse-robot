@@ -82,6 +82,26 @@ A minimal map:
 
 All other fields are optional. Unknown fields are ignored.
 
+### The JSON Schema: autocompletion and checking in your editor
+
+The format is also published as a [JSON Schema](https://json-schema.org/) (draft 2020-12): [`schemas/map.schema.json`](../schemas/map.schema.json). It is generated from the game's code (its catalogs and the bounds the game reads a map with), so it always lists what the game accepts: the prop types, box kinds and looks, prefab kinds, path surfaces, ground presets, ambiences, zone letters, and the bounds and lengths of every field. Reference it at the top of your map, and your editor (VS Code, the JetBrains IDEs, any editor with a JSON language server) completes the field names, lists the allowed values, shows each field's description and underlines what's wrong while you type:
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/Wasabules/casse-robot/main/schemas/map.schema.json",
+  "format": 1,
+  "meta": { "name": "My map", "author": "Me", "license": "CC-BY-4.0" },
+  "bounds": { "half": 60 },
+  "zones": [{ "label": "A", "x": 0, "z": 0, "radius": 6 }]
+}
+```
+
+The game ignores the `$schema` key: with or without it, it's the same map, with the same identifier (the server and the players' caches see no difference). Any JSON Schema validator can check a map with it, from a script or another tool (`jsonschema` in Python, `ajv` in JavaScript…).
+
+A schema only says what a schema can say: types, required fields, bounds, lengths, allowed values. The game checks more (see [Limits and checks](#limits-and-checks)): the terrain's data and coverage, consistent dimensions, zones with different letters that the AI reaches, clear and safe spawn lines, the counts once the prefabs are unfolded. `npm run map:check` has the last word.
+
+A robot design (the blocks and wheels the garage saves) has its schema too: [`schemas/robot.schema.json`](../schemas/robot.schema.json).
+
 ### `format` and `meta`
 
 | Field | | |
@@ -323,5 +343,7 @@ The engine is in `src/shared/map/` (no DOM: it also runs on the server); everyth
 | `FORMS`, `withField` | fields.ts | The fields of each kind of element, with their bounds (those used when reading). |
 
 On the browser side: `MapLibrary` (`src/client/maps/library.ts`: shipped, imported and received maps; `save`, `replace`, `remove`, `importText`, `list`, `arena`), the files (`src/client/maps/files.ts`: `pickFile`, `downloadMap`, `heightImageFromFile`, `downloadHeightPng`), `App.testMap(carte)` (a test match) and the editor (`src/client/editor/`: `MapEditor`, its view `EditorView`, its panels `EditorUi`, the checking in a Worker, the draft). The texts to translate are in `src/client/i18n/locales/<langue>/maps.ts` (`MapIssue`, map menus) and `editor.ts` (the editor). In the console: `__casse.editor` (its map, its history, `lastRebuild` and `lastCheck` in ms).
+
+The JSON Schemas of the open formats (`schemas/map.schema.json`, `schemas/robot.schema.json`) are written by `npm run schemas` (`tools/schemas/`) from the catalogs and from the reader's bounds (`MAP_LIMITS`, and `MAP_RANGES`, `MAP_LISTS`, `MAP_CHOICES` in read.ts); `tests/schemas.test.ts` fails when they are out of date, and checks that the map schema accepts and rejects like `readMap`. After changing a field, a bound or a catalog, run `npm run schemas`.
 
 A new format version: `MAP_FORMAT` goes to 2, and `MAP_MIGRATIONS[1]` turns a format 1 map into a format 2 map (on the raw JSON); existing maps stay readable.

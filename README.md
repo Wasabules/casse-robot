@@ -35,8 +35,11 @@ Multiplayer needs a game server (`npm run server`, or `npm run share` to share i
 | `npm run share` | Shares the game on the Internet: builds, starts the server and a Cloudflare tunnel, then shows the link to send |
 | `npm run battle` | Eight AI-versus-AI battles without display, and a balance report per robot and per weapon (cost of a step, time robots spend stuck); an arena other than the Depot: `BATTLE_ARENA=canyon npm run battle` |
 | `npm run bench` | Cost of a simulation step with twelve robots, stage by stage |
+| `npm run perf` | Rendering measurement: the built game in headless Chrome on your graphics card, a twelve-robot battle, frame time stage by stage (`--compare` for a before/after) |
+| `npm run render:check` | Rendering check (also in CI): every screen draws, without errors, and survives a graphics card reset |
 | `npm run map:check` | Checks the community maps (those in `maps/`, or the given files: `npm run map:check -- ma-carte.casse-map.json`) |
 | `npm run map:terrain` | Imports a terrain (16-bit PNG, 16-bit RAW) into a map: see `docs/maps.md` |
+| `npm run schemas` | Regenerates the JSON Schemas of the map and robot formats (`schemas/`) from the code |
 
 ## Languages
 
@@ -51,7 +54,7 @@ Anyone can make their own map, **in the game, with the map editor** (main menu �
 - **The map editor:** you start from a blank map, a map from the library ("Edit") or a file; you import a terrain (an image) and sculpt it with a brush (raise, dig, smooth, flatten); you place the game elements from a palette (houses, apartment blocks, woods, rocks, ramps, containers, props, scenery, zones, places, fumaroles, waterfalls, lava lakes), you trace paths, fences, lava flows and bridges point by point; the map can be set at night (Settings → Night: the moon, the stars, the lampposts and floodlight masts lit); you set the water, the sky, the ground, the limits, and you freely place both teams' spawn lines. What you see is what you play, with the map's problems shown where they are; **P** tries it out right away against the AI, and the pause menu takes you back to the editor, in the same state. Undo and redo, a draft kept on every change, saving to the library, export to `.casse-map.json` and of the terrain to 16-bit PNG. The details: [`docs/maps.md`](docs/maps.md#the-editor).
 - **Playing a map:** **Play → a mode → the map** (those in `maps/` ship with the game). **Community maps… → Import a map…** adds one, kept in the browser; you can also export or delete it.
 - **In multiplayer:** the server (`npm run server`) puts the maps in `maps/` into its rotation (`MAPS_DIR` for another folder, `MAPS_ONLY=1` to play only them); a player who doesn't have the map receives it once, and keeps it.
-- **Making one:** the complete guide (the format field by field, importing a terrain, the limits, the tests, how to submit your map to the game through a *pull request*) is in [`docs/maps.md`](docs/maps.md). The example: `maps/val-du-lac.casse-map.json` ("Lake Vale": a lake, a river and its old bridge, a village, a farm, a ruin), and the script that made it, `tools/maps/example.ts`.
+- **Making one:** the complete guide (the format field by field, importing a terrain, the limits, the tests, how to submit your map to the game through a *pull request*) is in [`docs/maps.md`](docs/maps.md). The example: `maps/val-du-lac.casse-map.json` ("Lake Vale": a lake, a river and its old bridge, a village, a farm, a ruin), and the script that made it, `tools/maps/example.ts`. A [JSON Schema](schemas/map.schema.json) gives autocompletion and checking in your editor (`"$schema"`: see the guide); robot designs have [theirs](schemas/robot.schema.json).
 
 ## Loading
 

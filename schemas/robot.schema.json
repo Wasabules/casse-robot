@@ -1,0 +1,451 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Wasabules/casse-robot/main/schemas/robot.schema.json",
+  "title": "Casse-Robot robot design",
+  "description": "A robot design: blocks on a grid of 0.5 m cells, and wheels mounted on their faces. Frame: +z forward, +x left, +y up. Generated from the game's code (npm run schemas). Unknown fields are ignored. The game also checks what a schema can't say (validateDesign): one block per cell, all blocks connected by their faces, each wheel on an existing block, a free cell under a wheel mounted underneath, no overlapping wheels, and a cost within the budget (600). The garage keeps a robot as { name, color, design }: this schema describes the design.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "description": "The URL of this schema, for editor autocompletion; the game ignores it.",
+      "type": "string"
+    },
+    "blocks": {
+      "description": "The blocks, exactly one of them a cockpit.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/block"
+      },
+      "contains": {
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "const": "cockpit"
+          }
+        }
+      },
+      "minContains": 1,
+      "maxContains": 1
+    },
+    "wheels": {
+      "description": "The wheels and track rollers.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/wheel"
+      }
+    }
+  },
+  "required": [
+    "blocks",
+    "wheels"
+  ],
+  "$defs": {
+    "axis": {
+      "description": "One of the robot's six axes.",
+      "type": "string",
+      "enum": [
+        "+x",
+        "-x",
+        "+y",
+        "-y",
+        "+z",
+        "-z"
+      ]
+    },
+    "facing": {
+      "description": "Where the block's top and front point, in the robot's frame (two perpendicular axes); without it, up +y and forward +z. An engine pushes toward its top; a wing lifts toward its top, the air meets its front.",
+      "type": "object",
+      "properties": {
+        "up": {
+          "$ref": "#/$defs/axis"
+        },
+        "forward": {
+          "$ref": "#/$defs/axis"
+        }
+      },
+      "required": [
+        "up",
+        "forward"
+      ],
+      "anyOf": [
+        {
+          "properties": {
+            "up": {
+              "const": "+x"
+            },
+            "forward": {
+              "enum": [
+                "+y",
+                "-y",
+                "+z",
+                "-z"
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            "up": {
+              "const": "-x"
+            },
+            "forward": {
+              "enum": [
+                "+y",
+                "-y",
+                "+z",
+                "-z"
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            "up": {
+              "const": "+y"
+            },
+            "forward": {
+              "enum": [
+                "+x",
+                "-x",
+                "+z",
+                "-z"
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            "up": {
+              "const": "-y"
+            },
+            "forward": {
+              "enum": [
+                "+x",
+                "-x",
+                "+z",
+                "-z"
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            "up": {
+              "const": "+z"
+            },
+            "forward": {
+              "enum": [
+                "+x",
+                "-x",
+                "+y",
+                "-y"
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            "up": {
+              "const": "-z"
+            },
+            "forward": {
+              "enum": [
+                "+x",
+                "-x",
+                "+y",
+                "-y"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "block": {
+      "description": "A block on the grid.",
+      "type": "object",
+      "properties": {
+        "x": {
+          "description": "X of its cell (an integer; one cell is 0.5 m).",
+          "type": "integer"
+        },
+        "y": {
+          "description": "Y of its cell.",
+          "type": "integer"
+        },
+        "z": {
+          "description": "Z of its cell.",
+          "type": "integer"
+        },
+        "type": {
+          "description": "The block type.",
+          "type": "string",
+          "enum": [
+            "frame",
+            "armorLight",
+            "armor",
+            "armorHeavy",
+            "wedgeLight",
+            "wedge",
+            "wedgeHeavy",
+            "cornerLight",
+            "corner",
+            "cornerHeavy",
+            "innerCornerLight",
+            "innerCorner",
+            "roundLight",
+            "round",
+            "roundCornerLight",
+            "roundCorner",
+            "slopeLowLight",
+            "slopeLow",
+            "slopeHighLight",
+            "slopeHigh",
+            "slabLight",
+            "slab",
+            "armorReactive",
+            "cockpit",
+            "thruster",
+            "engine",
+            "wing",
+            "flap",
+            "gunTurret",
+            "sniperTurret",
+            "cannonTurret",
+            "missileLauncher",
+            "flakLauncher",
+            "mineLayer",
+            "empMineLayer",
+            "fireMineLayer",
+            "smokeMineLayer",
+            "bounceMineLayer",
+            "aaMineLayer",
+            "remoteMineLayer",
+            "sensorMineLayer",
+            "stickyMineLayer",
+            "repairTurret",
+            "naniteLauncher",
+            "barrierProjector",
+            "bombBay",
+            "rotor",
+            "propeller",
+            "jet",
+            "hoverPad",
+            "leg",
+            "battery",
+            "repairModule",
+            "flareLauncher",
+            "radar",
+            "headlight",
+            "beacon",
+            "navLight",
+            "strobe",
+            "antiCollision",
+            "rotatingLight",
+            "policeBar",
+            "jammer",
+            "flamerTurret",
+            "empTurret",
+            "smokeLauncher",
+            "laserTurret",
+            "railTurret",
+            "shotgunTurret",
+            "rocketPod",
+            "warheadLauncher",
+            "lockonLauncher",
+            "plasmaTurret",
+            "spinner",
+            "hammer",
+            "verticalSpinner",
+            "drum",
+            "shellSpinner",
+            "flipper",
+            "flail",
+            "jaw",
+            "laserBlade",
+            "plasmaWhip",
+            "shockLance",
+            "crusherField",
+            "saw",
+            "drill",
+            "shield"
+          ]
+        },
+        "facing": {
+          "$ref": "#/$defs/facing"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "z",
+        "type"
+      ]
+    },
+    "wheel": {
+      "description": "A wheel mounted on a face of its supporting block (x, y, z): on the left or right side (dx = ±1), the front or back face (dz = ±1), or underneath (dy = -1). Its axle always runs along x.",
+      "type": "object",
+      "properties": {
+        "x": {
+          "description": "X of the supporting block's cell.",
+          "type": "integer"
+        },
+        "y": {
+          "description": "Y of the supporting block's cell.",
+          "type": "integer"
+        },
+        "z": {
+          "description": "Z of the supporting block's cell.",
+          "type": "integer"
+        },
+        "dx": {
+          "description": "1: on the left side (+x); -1: on the right side; 0 otherwise.",
+          "enum": [
+            -1,
+            0,
+            1
+          ]
+        },
+        "dz": {
+          "description": "1: on the front face (+z); -1: on the back face; 0 otherwise.",
+          "enum": [
+            -1,
+            0,
+            1
+          ]
+        },
+        "dy": {
+          "description": "-1: under the block; absent (or 0): on a side or face.",
+          "enum": [
+            -1,
+            0
+          ]
+        },
+        "type": {
+          "description": "The wheel type.",
+          "type": "string",
+          "enum": [
+            "standard",
+            "steered",
+            "small",
+            "smallSteered",
+            "heavy",
+            "heavySteered",
+            "caster",
+            "track"
+          ]
+        },
+        "shift": {
+          "description": "Offset along the face, in half cells.",
+          "type": "integer",
+          "minimum": -1,
+          "maximum": 1
+        },
+        "rise": {
+          "description": "A track roller on the left or right side: raised or lowered by this many cells.",
+          "type": "integer",
+          "minimum": -2,
+          "maximum": 2
+        },
+        "layer": {
+          "description": "A track roller on the left or right side: laid on this many rollers outward (a wider track).",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "steer": {
+          "description": "Former format: a steered wheel was a fixed wheel with steer: true. The game upgrades it to the steered type.",
+          "type": "boolean",
+          "deprecated": true
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "z",
+        "dx",
+        "dz",
+        "type"
+      ],
+      "anyOf": [
+        {
+          "properties": {
+            "dx": {
+              "enum": [
+                -1,
+                1
+              ]
+            },
+            "dz": {
+              "const": 0
+            },
+            "dy": {
+              "const": 0
+            }
+          }
+        },
+        {
+          "properties": {
+            "dx": {
+              "const": 0
+            },
+            "dz": {
+              "enum": [
+                -1,
+                1
+              ]
+            },
+            "dy": {
+              "const": 0
+            }
+          }
+        },
+        {
+          "required": [
+            "dy"
+          ],
+          "properties": {
+            "dx": {
+              "const": 0
+            },
+            "dz": {
+              "const": 0
+            },
+            "dy": {
+              "const": -1
+            }
+          }
+        }
+      ],
+      "if": {
+        "anyOf": [
+          {
+            "required": [
+              "rise"
+            ]
+          },
+          {
+            "required": [
+              "layer"
+            ]
+          }
+        ]
+      },
+      "then": {
+        "properties": {
+          "type": {
+            "enum": [
+              "track"
+            ]
+          },
+          "dx": {
+            "enum": [
+              -1,
+              1
+            ]
+          }
+        }
+      }
+    }
+  }
+}

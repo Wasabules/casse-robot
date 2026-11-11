@@ -3,8 +3,10 @@ import { PRESET_BOTS } from "../shared/design/presets";
 import { applyDamage } from "../shared/combat/damage";
 import type { Vec3 } from "../shared/math/vec";
 import type { HitTarget } from "../shared/sim/entities";
+import type { ArenaKey } from "../shared/arena/layout";
 import type { MapFile } from "../shared/map/format";
 import type { App } from "./app";
+import type { GraphicsPreset } from "./settings";
 import type { ArenaGame } from "./game";
 import type { Garage } from "./garage/garage";
 
@@ -20,6 +22,18 @@ function debugApi(game: ArenaGame, garage: Garage, app: App | null) {
     /** L'éditeur de cartes : sa carte (`editor.map`), son historique, ses mesures (`lastRebuild`, `lastCheck`, en ms). */
     editor: app?.editor,
     testMap: (map: MapFile) => app?.testMap(map),
+    /**
+     * Les écrans, sans passer par les menus (outils de tools/browser/) : l'écran titre, le garage,
+     * l'éditeur de cartes (une carte vierge), la bataille de la mesure du rendu dans une arène.
+     */
+    screens: {
+      title: () => app?.showTitle(),
+      garage: () => app?.showGarage(),
+      editor: () => app?.showEditor(),
+      benchmark: (arena: ArenaKey) => app?.benchmark(arena),
+    },
+    /** Passe à un préréglage graphique : "low", "medium", "high". */
+    graphics: (preset: GraphicsPreset) => app?.useGraphicsPreset(preset),
     get world() { return game.sim.world; },
     get bots() { return game.sim.bots; },
     get camera() { return game.rig.camera; },

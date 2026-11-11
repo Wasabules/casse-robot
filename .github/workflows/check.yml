@@ -22,3 +22,22 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run map:check
+
+  # Le rendu : le jeu construit, dans Chrome sans carte graphique (SwiftShader) ; chaque écran se
+  # dessine sans erreur ni shader qui ne compile pas, et survit à une perte du contexte WebGL
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run render:check
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: render-check
+          path: artifacts/render-check/

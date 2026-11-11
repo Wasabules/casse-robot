@@ -5,7 +5,7 @@ import { MAP_LIMITS, type MapFile, type MapIssue } from "../shared/map/format";
 import { registerMap } from "../shared/map/load";
 import { checkMap } from "../shared/map/validate";
 import { profileFromDesign } from "../shared/design/custom";
-import { PRESET_BOTS, type BotProfile } from "../shared/design/presets";
+import { BATTLE_ROSTER, PRESET_BOTS, type BotProfile } from "../shared/design/presets";
 import { validateDesign } from "../shared/design/robotDesign";
 import { GAME_MODES, PILOTABLE, type GameModeId } from "../shared/modes";
 import { DEFAULT_PORT, PROTOCOL_VERSION, type RobotChoice } from "../shared/net/protocol";
@@ -497,7 +497,7 @@ export class App {
    * partie reste figée pendant qu'on prépare ce qu'elle montrera (effets, shaders) et sa musique ;
    * elle ne commence (sirène, compte à rebours, commandes) qu'une fois tout prêt.
    */
-  private play(mode: GameModeId, pilot: BotProfile | null, arena?: ArenaKey): void {
+  private play(mode: GameModeId, pilot: BotProfile | null, arena?: ArenaKey, roster: readonly BotProfile[] | null = null): void {
     const ticket = ++this.loadTicket;
     this.enter("loading");
     this.menu.hide();
@@ -510,7 +510,7 @@ export class App {
       // L'écran de chargement s'affiche avant la construction (un travail d'un bloc)
       await nextPaint();
       if (ticket !== this.loadTicket) return;
-      this.game.startMode(mode, pilot, arena);
+      this.game.startMode(mode, pilot, arena, roster);
       this.game.hold();
       if (!(await this.prepareMatch(ticket, theme))) return;
       this.beginMatch(theme);
@@ -730,6 +730,37 @@ export class App {
       this.showMultiplayer();
     };
     this.menu.show({ id: "connecting", title: t("menu.multi.connecting"), subtitle: url, entries: [{ label: t("common.cancel"), onSelect: cancel }], back: cancel });
+  }
+
+  // --- Pour les outils qui pilotent le jeu dans un navigateur ---
+
+  /*
+   * La mesure du rendu et l'essai du rendu (tools/browser/) passent par la console (`__casse.screens`)
+   * plutôt que par les menus, dont les libellés changent avec la langue.
+   */
+
+  /**
+   * La bataille de la mesure du rendu (`npm run perf`) : les douze robots de `BATTLE_ROSTER` (ceux de
+   * `npm run bench`), sans joueur, à la caméra libre, dans cette arène ; chargée comme une partie.
+   */
+  benchmark(arena: ArenaKey): void {
+    this.play("arena", null, arena, BATTLE_ROSTER);
+  }
+
+  /** Ouvre le garage sur un robot de départ. */
+  showGarage(): void {
+    this.openGarage(null);
+  }
+
+  /** Ouvre l'éditeur de cartes sur une carte vierge. */
+  showEditor(): Promise<void> {
+    return this.openEditor({ kind: "new" });
+  }
+
+  /** Passe à ce préréglage graphique (enregistré et appliqué comme depuis les paramètres). */
+  useGraphicsPreset(id: GraphicsPreset): void {
+    Object.assign(this.settings, GRAPHICS_PRESETS[id]);
+    this.commitSettings();
   }
 
   // --- Éditeur de cartes ---
