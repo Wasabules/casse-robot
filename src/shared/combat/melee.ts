@@ -26,6 +26,7 @@ import { burnable, flammability, ignite, igniteProp } from "./burning";
 import { DamageBatch, inflict, resistance } from "./damage";
 import { organStunned, stunOrgans } from "./emp";
 import { dropMechanics, stepFlail, stepFlip, stepJaw } from "./mechanics";
+import { dcos, dpow, dsin } from "../math/det";
 
 /*
  * Armes de contact (catalog/melee.ts), une étape du pas (« contact », après les chocs). Le socle
@@ -113,7 +114,7 @@ const BLOCK_REACH = 0.28;
 /** Une roue vue comme une boule de cette part de son rayon. */
 const WHEEL_REACH = 0.85;
 /** Incidence (cosinus) sous laquelle une lame glisse tout à fait sur une pente (70°). */
-export const RICOCHET_COS = Math.cos((70 * Math.PI) / 180);
+export const RICOCHET_COS = dcos((70 * Math.PI) / 180);
 /** Le décor et les accessoires se cherchent tous les SCENERY_EVERY pas, le décor sur SCENERY_RAYS rayons du moyeu au bord de la lame. */
 const SCENERY_EVERY = 3;
 /** Marge (m) au-delà de laquelle un robot est trop loin d'une lame pour qu'on lise ses morceaux. */
@@ -207,7 +208,7 @@ export function vibration(bot: Bot): number {
   for (const arm of bot.melee) {
     const spin = meleeDef(arm.weapon).spin;
     if (!spin || !arm.block.alive || arm.spin <= 0) continue;
-    v = Math.max(v, unbalanceShare(arm) * (arm.spin / spin.speed) ** 2);
+    v = Math.max(v, unbalanceShare(arm) * dpow(arm.spin / spin.speed, 2));
   }
   return Math.min(1, v);
 }
@@ -237,7 +238,7 @@ export function meleeFrame(arm: MeleeArm): MeleeFrame {
 }
 
 /** Direction du bras à l'angle `angle` (monde, unitaire), du pivot vers la tête. */
-const armDir = (f: MeleeFrame, angle: number): Vec3 => add(scale(f.e1, Math.cos(angle)), scale(f.e2, -Math.sin(angle)));
+const armDir = (f: MeleeFrame, angle: number): Vec3 => add(scale(f.e1, dcos(angle)), scale(f.e2, -dsin(angle)));
 
 /** Centre de la tête d'un bras à l'angle `angle` (monde). */
 export function headAt(frame: MeleeFrame, swing: SwingSpec, angle: number): Vec3 {
@@ -467,10 +468,10 @@ function stepRegime(sim: Simulation, bot: Bot, arm: MeleeArm, spec: MeleeSpec, g
   // Balourd : une force qui tourne avec le rotor, au moyeu ; et la fatigue qu'il impose à l'arme
   const unbalance = unbalanceShare(arm);
   if (unbalance > 0 && spin.unbalance > 0) {
-    const force = Math.min(MAX_UNBALANCE, spin.mass * spin.unbalance * unbalance * arm.spin ** 2);
-    const out = add(scale(frame.e1, Math.cos(arm.angle)), scale(frame.e2, Math.sin(arm.angle)));
+    const force = Math.min(MAX_UNBALANCE, spin.mass * spin.unbalance * unbalance * dpow(arm.spin, 2));
+    const out = add(scale(frame.e1, dcos(arm.angle)), scale(frame.e2, dsin(arm.angle)));
     part.rb.applyImpulseAtPoint(scale(out, force * STEP), frame.hub, true);
-    arm.fatigue += FATIGUE * unbalance * (arm.spin / spin.speed) ** 2 * BLOCK_TYPES[arm.block.type].hp * STEP;
+    arm.fatigue += FATIGUE * unbalance * dpow(arm.spin / spin.speed, 2) * BLOCK_TYPES[arm.block.type].hp * STEP;
   }
   return { energy, frame, sense };
 }
@@ -793,7 +794,7 @@ function sceneryContact(sim: Simulation, f: MeleeFrame, blade: SweptRing): Conta
   const near = arena.boxes.filter((box) => box.kind !== "bound" && distance(box.pos, f.hub) <= blade.outer + len(box.half));
   for (let i = 0; i < SCENERY_RAYS; i++) {
     const a = (i / SCENERY_RAYS) * Math.PI * 2;
-    const out = add(scale(f.e1, Math.cos(a)), scale(f.e2, Math.sin(a)));
+    const out = add(scale(f.e1, dcos(a)), scale(f.e2, dsin(a)));
     const hit = near.length || arena.terrain ? rayArena(arena, f.hub, out, blade.outer, near) : null;
     const reach = hit ?? blade.outer;
     const rim = add(f.hub, scale(out, reach));
@@ -883,7 +884,7 @@ function stepSwing(sim: Simulation, bot: Bot, arm: MeleeArm, spec: MeleeSpec, pl
         arm.swing = angle;
         const energy = swing.energy * clamp((swing.rest - angle) / arc, 0, 1);
         // Sens de la tête à cet angle (l'angle décroît : elle descend), vers l'extérieur le long du bras, le long du pivot
-        const motion = norm(add(scale(frame.e1, Math.sin(angle)), scale(frame.e2, Math.cos(angle))));
+        const motion = norm(add(scale(frame.e1, dsin(angle)), scale(frame.e2, dcos(angle))));
         const outward = armDir(frame, angle);
         const p = spec.hit.push;
         const dir = norm(add(add(add(scale(motion, p.tangent), scale(outward, p.radial)), scale(frame.axis, p.axial)), vec3(0, p.lift, 0)));

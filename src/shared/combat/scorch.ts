@@ -11,6 +11,7 @@ import type { Simulation } from "../sim/simulation";
 import { burnable, flammability, ignite, igniteProp } from "./burning";
 import { DamageBatch, inflict } from "./damage";
 import { isStunned } from "./emp";
+import { dcos, dsin } from "../math/det";
 
 /*
  * Ce que brûle le jet de flamme d'un moteur (voir robot/exhaust.ts) : derrière la tuyère d'un
@@ -82,7 +83,7 @@ function rayDirections(jet: Jet, turn: number): Vec3[] {
   const offset = (jetRadius(jet, length) * RIM) / length;
   const out = [dir];
   for (const a of [angle, angle + Math.PI]) {
-    const radial = add(scale(side, Math.cos(a)), scale(other, Math.sin(a)));
+    const radial = add(scale(side, dcos(a)), scale(other, dsin(a)));
     out.push(norm(add(dir, scale(radial, offset))));
   }
   return out;

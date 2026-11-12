@@ -2,10 +2,12 @@ import type { PropType } from "../catalog/props";
 import { propHalf } from "../catalog/props";
 import { axisAngle, qmul, vec3, type Quat } from "../math/vec";
 import { box, zone } from "./builders";
+import { NO_PEAK } from "./features";
 import type { ArenaLayout, BoxLook, CaptureZone, NavGraph, PropSpot, StaticBox, StaticKind, TerrainPath } from "./layout";
 import { linkNav, walkable } from "./navGraph";
 import { makeTerrain, noise2, smoothstep, terrainHeight } from "./terrain";
 import { house, PropList, seeded } from "./valley";
+import { dcos, dpow, dsin } from "../math/det";
 
 /*
  * Le Canyon : une grande carte de désert rouge (±105 m de terrain de jeu, des montagnes tout
@@ -38,13 +40,13 @@ const MOUNTAIN_FOOT = 112;
 const MOUNTAIN_TOP = 150;
 
 /** Ligne médiane du canyon (z selon x), et sa pente : elle passe par le centre, symétrique par rapport à lui. */
-const canyonZ = (x: number): number => 10 * Math.sin(x / 34) + 3 * Math.sin(x / 12);
-const canyonSlope = (x: number): number => (10 / 34) * Math.cos(x / 34) + (3 / 12) * Math.cos(x / 12);
+const canyonZ = (x: number): number => 10 * dsin(x / 34) + 3 * dsin(x / 12);
+const canyonSlope = (x: number): number => (10 / 34) * dcos(x / 34) + (3 / 12) * dcos(x / 12);
 const bump = (u: number): number => Math.exp(-u * u);
 /** Demi-largeur du lit (m) : il s'évase à l'est en un bassin (l'oasis) et se resserre à l'ouest dans la gorge de la Table. */
 const floorHalf = (x: number): number => 9.5 + 16 * bump((x + 72) / 16) - 3.5 * bump((x - 72) / 12);
 /** Distance à la ligne médiane, à peu près perpendiculaire (m). */
-const canyonDistance = (x: number, z: number): number => Math.abs(z - canyonZ(x)) / Math.sqrt(1 + canyonSlope(x) ** 2);
+const canyonDistance = (x: number, z: number): number => Math.abs(z - canyonZ(x)) / Math.sqrt(1 + dpow(canyonSlope(x), 2));
 /** Point à `d` m de la ligne médiane, au nord (`side` = 1) ou au sud (-1). */
 const besideCanyon = (x: number, side: number, d: number): [number, number] => [x, canyonZ(x) + side * d * Math.hypot(1, canyonSlope(x))];
 
@@ -188,7 +190,7 @@ function graded(points: readonly Point[], from: number, to: number): [number, nu
   const e = Math.min(EASE, total / 3);
   const slope = 1 / (total - e);
   const part = (s: number): number =>
-    s < e ? (slope * s * s) / (2 * e) : s > total - e ? 1 - (slope * (total - s) ** 2) / (2 * e) : slope * (s - e / 2);
+    s < e ? (slope * s * s) / (2 * e) : s > total - e ? 1 - (slope * dpow(total - s, 2)) / (2 * e) : slope * (s - e / 2);
   return points.map(([x, z], i) => [x, z, from + (to - from) * part(lengths[i])]);
 }
 
@@ -224,7 +226,7 @@ function ledgeTrail(mirror: boolean): Trail & { nodes: readonly Point[] } {
   const along: [number, number][] = [[140, 1.06], [118, 1.05], [96, 1.03], [74, 0.9]];
   const line: Point[] = along.map(([deg, k]) => {
     const a = (deg * Math.PI) / 180;
-    return [TABLE.x + TABLE.ax * k * Math.cos(a), TABLE.z + TABLE.az * k * Math.sin(a)];
+    return [TABLE.x + TABLE.ax * k * dcos(a), TABLE.z + TABLE.az * k * dsin(a)];
   });
   return makeTrail(6.5, 2.5, line.map(([x, z]) => [x, mirror ? 2 * TABLE.z - z : z]), PLATEAU, MESA_TOP);
 }
@@ -709,7 +711,7 @@ export const CANYON: ArenaLayout = {
     strataStep: 1.7,
     rockLine: 34,
     peak: "#eef1f3",
-    peakLine: Infinity,
+    peakLine: NO_PEAK,
     patches: [{ x: POND.x, z: POND.z, r: 15, color: "#7f8f45" }, { x: -66, z: -4, r: 8, color: "#a99a5a" }],
   },
   get nav() {

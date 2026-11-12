@@ -10,6 +10,7 @@
 //   npm run perf -- --json=avant.json             garde le résultat…
 //   npm run perf -- --compare=avant.json          … et compare un nouveau résultat à lui
 //   npm run perf -- --no-build                    sans reconstruire la page
+//   npm run perf -- --renderer=webgpu             sous WebGPU (WebGL par défaut)
 //
 // La machine doit être au repos : un autre calcul fausse tout (la mesure se fait par fenêtres de
 // quelques secondes, et en donne l'écart). La carte graphique utilisée est donnée en tête du bilan.
@@ -17,21 +18,45 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { build, launchChrome, MATCH_STARTED, openGame, parseArgs, ROOT, SEED_RANDOM, serve, sleep } from "./chrome.mjs";
 
-const options = parseArgs({ arena: "depot", size: "1920x1080", seconds: 30, window: 5, warmup: 8, preset: "medium", renderOnly: false, noBuild: false, json: "", compare: "", software: false });
+const options = parseArgs({ arena: "depot", size: "1920x1080", seconds: 30, window: 5, warmup: 8, preset: "medium", renderOnly: false, noBuild: false, json: "", compare: "", software: false, renderer: "webgl", query: "" });
+if (options.renderer !== "webgl" && options.renderer !== "webgpu") throw new Error(`--renderer : webgl ou webgpu, pas ${options.renderer}`);
 const [width, height] = options.size.split("x").map(Number);
 
-/** Ce qu'on relève dans la page : intervalles entre images, appels de dessin, temps de la carte graphique. */
-const INSTRUMENT = `(() => {
-  const g = window.__casse.game, engine = g.engine, gl = engine._gl;
+/**
+ * Ce qu'on relève dans la page : intervalles entre images, appels de dessin, temps de la carte
+ * graphique. En WebGL, les appels de `WebGL2RenderingContext` et son minuteur ; en WebGPU, ceux des
+ * passes de rendu et le minuteur de Babylon (`timestamp-query`, render/engine.ts).
+ */
+const INSTRUMENT = `(async () => {
+  const g = window.__casse.game, engine = g.engine;
   const M = (window.__perf = { intervals: [], draws: [], gpu: [], drawCount: 0, queries: [] });
   let last = 0;
   const tick = (t) => { if (last) M.intervals.push(t - last); last = t; requestAnimationFrame(tick); };
   requestAnimationFrame(tick);
-  const P = WebGL2RenderingContext.prototype;
-  for (const n of ["drawElements", "drawArrays", "drawElementsInstanced", "drawArraysInstanced"]) {
-    const f = P[n];
-    P[n] = function (...a) { M.drawCount++; return f.apply(this, a); };
+  const count = (P, names) => {
+    for (const n of names) {
+      const f = P[n];
+      if (f) P[n] = function (...a) { M.drawCount++; return f.apply(this, a); };
+    }
+  };
+  if (engine.isWebGPU) {
+    count(GPURenderPassEncoder.prototype, ["draw", "drawIndexed", "drawIndirect", "drawIndexedIndirect"]);
+    count(GPURenderBundleEncoder.prototype, ["draw", "drawIndexed", "drawIndirect", "drawIndexedIndirect"]);
+    engine.enableGPUTimingMeasurements = true;
+    const timer = engine.getGPUFrameTimeCounter?.();
+    let seen = 0;
+    engine.onBeginFrameObservable.add(() => { M.drawCount = 0; });
+    engine.onEndFrameObservable.add(() => {
+      M.draws.push(M.drawCount);
+      // (le temps d'une image arrive quelques images plus tard, en nanosecondes)
+      if (timer && timer.count !== seen) { seen = timer.count; M.gpu.push(timer.current / 1e6); }
+    });
+    const info = engine._adapterInfo ?? {};
+    const timed = engine.getCaps().timerQuery === true;
+    return { gpu: "WebGPU · " + [info.vendor, info.architecture, info.description].filter(Boolean).join(" "), timer: timed, render: [engine.getRenderWidth(), engine.getRenderHeight()] };
   }
+  const gl = engine._gl;
+  count(WebGL2RenderingContext.prototype, ["drawElements", "drawArrays", "drawElementsInstanced", "drawArraysInstanced"]);
   // Temps de la carte graphique (s'il y a le minuteur) : de son point de vue, du début à la fin de l'image
   const tq = gl.getExtension("EXT_disjoint_timer_query_webgl2");
   let query = null;
@@ -51,7 +76,7 @@ const INSTRUMENT = `(() => {
     }
   });
   const dbg = gl.getExtension("WEBGL_debug_renderer_info");
-  return { gpu: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER), timer: !!tq, render: [engine.getRenderWidth(), engine.getRenderHeight()] };
+  return { gpu: "WebGL 2 · " + (dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)), timer: !!tq, render: [engine.getRenderWidth(), engine.getRenderHeight()] };
 })()`;
 
 /** Remet les relevés à zéro (début d'une fenêtre). */
@@ -59,8 +84,15 @@ const RESET = `(() => {
   const g = window.__casse.game, M = window.__perf;
   M.intervals.length = 0; M.draws.length = 0; M.gpu.length = 0;
   g.frameProfile = { times: {}, frames: 0, totals: [] };
-  g.sim.profile = { now: () => performance.now(), times: {} };
-  M.simStart = g.sim.time;
+  // La simulation dans le Worker : ses temps arrivent avec ses images ; sinon, dans la page
+  const link = g.local && g.net === g.local ? g.local : null;
+  if (link) {
+    link.command({ t: "profile", on: true });
+    link.replica.simProfile.times = {};
+    link.replica.simProfile.steps = 0;
+  } else g.sim.profile = { now: () => performance.now(), times: {} };
+  M.worker = !!link;
+  M.simStart = g.world.time;
   M.start = performance.now();
   return 1;
 })()`;
@@ -72,7 +104,8 @@ const COLLECT = `(() => {
     seconds: (performance.now() - M.start) / 1000,
     intervals: [...M.intervals], draws: [...M.draws], gpu: [...M.gpu],
     frames: f.frames, totals: [...f.totals], times: { ...f.times },
-    simTimes: { ...(g.sim.profile?.times ?? {}) }, steps: Math.round((g.sim.time - M.simStart) * 60),
+    simTimes: M.worker ? { ...g.local.replica.simProfile.times } : { ...(g.sim.profile?.times ?? {}) },
+    steps: M.worker ? g.local.replica.simProfile.steps : Math.round((g.world.time - M.simStart) * 60), worker: M.worker,
     bots: g.world.bots.filter((b) => b.cockpit.alive).length, particles: g.fx.particleCount,
     meshes: g.scene.getActiveMeshes().length, heap: performance.memory ? performance.memory.usedJSHeapSize / 1048576 : null,
   };
@@ -113,6 +146,7 @@ function summarize(windows) {
     sim,
     gpu: gpu.length ? { mean: mean(gpu), p95: quantile(gpu, 0.95) } : null,
     draws: mean(windows.flatMap((w) => w.draws)),
+    worker: windows.some((w) => w.worker),
     bots: last.bots, particles: last.particles, meshes: last.meshes, heap: last.heap,
   };
 }
@@ -121,7 +155,7 @@ function print(result) {
   const r = result.summary;
   const lines = [
     "",
-    `Mesure du rendu · ${result.arena} · ${result.size} · préréglage ${result.preset}${result.renderOnly ? " · simulation figée" : ""} · ${result.commit}`,
+    `Mesure du rendu · ${result.arena} · ${result.size} · préréglage ${result.preset}${result.renderOnly ? " · simulation figée" : ""} · simulation ${r.worker ? "dans un Worker" : "dans la page"} · ${result.commit}`,
     `${result.gpu} · ${result.browser}`,
     "",
     `Images par seconde : ${fmt(r.fps)} (par fenêtre : ${r.fpsByWindow.map((x) => fmt(x, 0)).join(", ")})`,
@@ -133,7 +167,7 @@ function print(result) {
     "",
     "Par image (ms) :",
     ...Object.entries(r.stages).sort((a, b) => b[1] - a[1]).map(([k, t]) => `  ${k.padEnd(14)} ${fmt(t, 2).padStart(6)}`),
-    `Pas de simulation : ${fmt(r.simStep, 2)} ms`,
+    `Pas de simulation : ${fmt(r.simStep, 2)} ms${r.worker ? " (dans le Worker, hors du fil de l'image)" : ""}`,
     ...Object.entries(r.sim).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, t]) => `  ${k.padEnd(22)} ${fmt(t, 3).padStart(7)}`),
   ];
   console.log(lines.join("\n"));
@@ -161,14 +195,16 @@ function compare(before, after) {
 
 if (!options.noBuild) build();
 const server = await serve();
-const chrome = await launchChrome({ width, height, software: options.software });
+const chrome = await launchChrome({ width, height, software: options.software, extraArgs: options.renderer === "webgpu" ? ["--enable-unsafe-webgpu"] : [] });
 const { page } = chrome;
 try {
   await page.send("Page.addScriptToEvaluateOnNewDocument", { source: SEED_RANDOM });
   console.log(`» ${chrome.version} : démarrage du jeu`);
-  await openGame(page, server.url);
+  await openGame(page, `${server.url}?renderer=${options.renderer}${options.query ? "&" + options.query : ""}`);
+  if (options.renderer === "webgpu" && !(await page.evaluate(`window.__casse.game.engine.isWebGPU`))) throw new Error("WebGPU demandé : le navigateur ne l'offre pas");
   await page.evaluate(`window.__casse.graphics(${JSON.stringify(options.preset)})`);
-  await page.evaluate(`window.__casse.screens.benchmark(${JSON.stringify(options.arena)})`);
+  // (la graine du hasard de la partie dans le Worker : la bataille se rejoue presque pareil)
+  await page.evaluate(`(window.__casse.game.seed = 7, window.__casse.screens.benchmark(${JSON.stringify(options.arena)}))`);
   await page.waitFor(MATCH_STARTED, 120_000, "début de la bataille");
   await page.evaluate(`(() => { const g = window.__casse.game; g.setFollow(0); g.rig.setZoom(16); return 1; })()`);
   const info = await page.evaluate(INSTRUMENT);

@@ -6,6 +6,7 @@ import { house, PropList, seeded } from "../arena/valley";
 import { propDef, propHalf, type PropType } from "../catalog/props";
 import { axisAngle, NO_ROTATION, qmul, qrot, vec3, type Quat, type Vec3 } from "../math/vec";
 import { MAP_LIMITS, type MapPath, type MapPrefab, type MapZone, type TreeType } from "./format";
+import { dcos, dpow, dsin } from "../math/det";
 
 /*
  * Éléments préfabriqués d'une carte (`MapPrefab`) : quelques champs qui se déplient en accessoires
@@ -57,8 +58,8 @@ function placeBoxes(boxes: StaticBox[], from: number, x: number, z: number, yaw:
 
 /** Le plus bas du sol sous un rectangle (demi-côtés `hw`, `hd`) tourné de `yaw` degrés : un bâtiment n'y flotte pas. */
 export function lowestUnder(site: Pick<Site, "ground">, x: number, z: number, hw: number, hd: number, yaw = 0): number {
-  const c = Math.cos(yaw * DEG);
-  const s = Math.sin(yaw * DEG);
+  const c = dcos(yaw * DEG);
+  const s = dsin(yaw * DEG);
   let low = site.ground(x, z);
   for (const [u, v] of [[-1, -1], [1, -1], [-1, 1], [1, 1], [0, -1], [0, 1], [-1, 0], [1, 0]]) {
     const lx = u * hw;
@@ -135,7 +136,7 @@ function pathBounds(p: MapPath): { minX: number; maxX: number; minZ: number; max
 function onPath(p: MapPath, x: number, z: number, margin: number): boolean {
   const b = pathBounds(p);
   if (x < b.minX - margin || x > b.maxX + margin || z < b.minZ - margin || z > b.maxZ + margin) return false;
-  const reach = (p.width / 2 + margin) ** 2;
+  const reach = dpow(p.width / 2 + margin, 2);
   for (let i = 1; i < p.points.length; i++) {
     const [ax, az] = p.points[i - 1];
     const dx = p.points[i][0] - ax;
@@ -156,7 +157,7 @@ function onPath(p: MapPath, x: number, z: number, margin: number): boolean {
 export function spawnGuard(bounds: ArenaBounds): (x: number, z: number) => boolean {
   const { spawnLine, spawnSpread, spawns } = bounds;
   if (!spawns) return (x, z) => Math.abs(x) < spawnSpread + 8 && Math.abs(Math.abs(z) - spawnLine) < 8;
-  const lines = [spawns.blue, spawns.red].map((l) => ({ x: l.x, z: l.z, c: Math.cos(l.facing), s: Math.sin(l.facing), reach: l.spread + 8 }));
+  const lines = [spawns.blue, spawns.red].map((l) => ({ x: l.x, z: l.z, c: dcos(l.facing), s: dsin(l.facing), reach: l.spread + 8 }));
   return (x, z) => {
     for (const l of lines) {
       const dx = x - l.x;
@@ -258,8 +259,8 @@ export function expandPrefab(site: Site, p: MapPrefab): void {
       for (let k = 0; k < p.count * 8 && placed < p.count; k++) {
         const angle = random() * Math.PI * 2;
         const r = Math.sqrt(random()) * p.radius;
-        const x = p.x + Math.cos(angle) * r;
-        const z = p.z + Math.sin(angle) * r;
+        const x = p.x + dcos(angle) * r;
+        const z = p.z + dsin(angle) * r;
         const type = kinds[Math.floor(random() * kinds.length)] as PropType & TreeType;
         const scale = lo + random() * (hi - lo);
         if (!sowable(site, x, z, 1.5) || !taken.clear(x, z, spacing)) continue;
@@ -277,8 +278,8 @@ export function expandPrefab(site: Site, p: MapPrefab): void {
       for (let k = 0; k < p.count * 8 && placed < p.count; k++) {
         const angle = random() * Math.PI * 2;
         const r = Math.sqrt(random()) * p.radius;
-        const x = p.x + Math.cos(angle) * r;
-        const z = p.z + Math.sin(angle) * r;
+        const x = p.x + dcos(angle) * r;
+        const z = p.z + dsin(angle) * r;
         const size = lo + random() * (hi - lo);
         if (!sowable(site, x, z, size) || !taken.clear(x, z, size * 2)) continue;
         const half = vec3(size * (0.9 + random() * 0.5), size * (0.55 + random() * 0.3), size * (0.8 + random() * 0.4));
@@ -292,8 +293,8 @@ export function expandPrefab(site: Site, p: MapPrefab): void {
     case "ramp": {
       const yaw = p.yaw ?? 0;
       // Le pied de la rampe : au sud de son centre avant rotation (elle monte vers +z)
-      const c = Math.cos(yaw * DEG);
-      const s = Math.sin(yaw * DEG);
+      const c = dcos(yaw * DEG);
+      const s = dsin(yaw * DEG);
       const footX = p.x + (-p.length / 2) * s;
       const footZ = p.z + (-p.length / 2) * c;
       const base = p.base ?? site.ground(footX, footZ);

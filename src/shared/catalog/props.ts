@@ -1,5 +1,6 @@
 import { vec3, type Vec3 } from "../math/vec";
 import type { DamageType, Explosion } from "./weapons";
+import { dpow } from "../math/det";
 
 /**
  * Accessoires du décor : des corps physiques qu'on pousse, qu'on casse, et qui réagissent.
@@ -203,7 +204,7 @@ export function propMass(type: PropType, half: Vec3): number {
   const shape = def.shape;
   if (shape.kind === "slab") return def.mass * propVolume(type, half);
   const nominal = shape.kind === "box" ? shape.half : shape.radius;
-  return def.mass * (half.x / nominal) ** 3;
+  return def.mass * dpow(half.x / nominal, 3);
 }
 
 /** Points de structure de départ d'un accessoire de ces demi-dimensions. */
@@ -215,5 +216,5 @@ export function propHp(type: PropType, half: Vec3): number {
     return Math.round(def.hp * 4 * a * b);
   }
   const nominal = shape.kind === "box" ? shape.half : shape.radius;
-  return Math.round(def.hp * (half.x / nominal) ** 2);
+  return Math.round(def.hp * dpow(half.x / nominal, 2));
 }

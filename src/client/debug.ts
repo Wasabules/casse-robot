@@ -34,8 +34,9 @@ function debugApi(game: ArenaGame, garage: Garage, app: App | null) {
     },
     /** Passe à un préréglage graphique : "low", "medium", "high". */
     graphics: (preset: GraphicsPreset) => app?.useGraphicsPreset(preset),
-    get world() { return game.sim.world; },
-    get bots() { return game.sim.bots; },
+    /** Le monde affiché : la simulation de la page, ou la réplique de la partie (solo dans un Worker, en réseau). */
+    get world() { return game.world; },
+    get bots() { return game.world.bots; },
     get camera() { return game.rig.camera; },
     get scene() { return game.scene; },
     WEAPONS,
@@ -49,7 +50,7 @@ function debugApi(game: ArenaGame, garage: Garage, app: App | null) {
     fireAt: (x: number, y: number) => game.fireAt(x, y, true),
     /** Impact en `point`, comme si le tir venait de la caméra. */
     applyDamage: (point: Vec3, dir: Vec3, weapon: Weapon, target?: HitTarget) =>
-      applyDamage(game.sim, point, dir, weapon, target, game.rig.position),
+      game.debugDamage(point, dir, weapon, target ?? null, (sim) => applyDamage(sim, point, dir, weapon, target, game.rig.position)),
   };
 }
 

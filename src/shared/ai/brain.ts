@@ -26,6 +26,7 @@ import { avoidMines, insideObstacle, navigate } from "./navigation";
 import { thinkPlane } from "./pilot";
 import { thinkPlayer } from "../sim/player";
 import { clampToRoam, coverSpot, createTactics, objectiveZone, planCombat } from "./tactics";
+import { dcos, dsin } from "../math/det";
 
 /** Modes où le robot ne peut plus rien faire. */
 const DISABLED_MODES: ReadonlySet<AiMode> = new Set(["flipped", "stranded", "falling", "dead"]);
@@ -142,7 +143,7 @@ function pickPatrolTarget(sim: Simulation, bot: Bot, from: Vec3): void {
   const { pos, radius } = objective.zone;
   const a = rand(0, Math.PI * 2);
   const r = rand(0, radius * 0.6);
-  bot.ai.target = vec3(pos.x + Math.cos(a) * r, pos.y, pos.z + Math.sin(a) * r);
+  bot.ai.target = vec3(pos.x + dcos(a) * r, pos.y, pos.z + dsin(a) * r);
   bot.ai.timer = rand(6, 10);
 }
 
@@ -309,7 +310,7 @@ function thinkGround(sim: Simulation, bot: Bot, dt: number, paused: boolean, pos
   if (ai.mode === "charge") {
     // (une scie qui mord longe sa cible : `meleeSkim`, ai/brawl.ts)
     const bearing = (meleeBearing(bot) ?? 0) + meleeSkim(bot);
-    if (bearing !== 0) ang = Math.atan2(Math.sin(ang - bearing), Math.cos(ang - bearing));
+    if (bearing !== 0) ang = Math.atan2(dsin(ang - bearing), dcos(ang - bearing));
   }
 
   const { maxCurvature } = steeringGeometry(bot);
@@ -387,8 +388,8 @@ function avoidObstacles(
   const from = vec3(pos.x, groundUnder(bot, pos) + PROBE_HEIGHT, pos.z);
   const ramming = bot.ai.mode === "charge";
   const probe = (angle: number): number => {
-    const c = Math.cos(angle);
-    const s = Math.sin(angle);
+    const c = dcos(angle);
+    const s = dsin(angle);
     const dir = vec3(forward.x * c + forward.z * s, 0, -forward.x * s + forward.z * c);
     const hit = sim.world.castRayAndGetNormal(
       new RAPIER.Ray(from, dir), reach, true, undefined, undefined, undefined, undefined,

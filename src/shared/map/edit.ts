@@ -3,6 +3,7 @@ import {
   MAP_LIMITS, type MapBox, type MapFall, type MapFile, type MapIssue, type MapLava, type MapPath, type MapPlace, type MapPoint, type MapPrefab,
   type MapProp, type MapSpawn, type MapSpawns, type MapVent, type MapZone,
 } from "./format";
+import { dcos, dsin } from "../math/det";
 
 /*
  * Opérations d'édition sur une carte (l'éditeur de cartes) : désigner un élément (`ElementRef` :
@@ -130,8 +131,8 @@ export const normalAngle = (deg: number): number => {
 /** Un point tourné de `deg` degrés autour de (cx, cz), dans le sens du lacet (90 tourne le nord vers l'ouest). */
 export function turnPoint([x, z]: MapPoint, deg: number, cx: number, cz: number): MapPoint {
   const a = (deg * Math.PI) / 180;
-  const c = Math.cos(a);
-  const s = Math.sin(a);
+  const c = dcos(a);
+  const s = dsin(a);
   const dx = x - cx;
   const dz = z - cz;
   // Rotation autour de y : (x, z) → (x cos + z sin, -x sin + z cos)

@@ -11,6 +11,7 @@ import { supply } from "./energy";
 import { driveSupports } from "./supports";
 import type { Simulation } from "../sim/simulation";
 import { aimWheel, cornerSpeedRatio, pitchoverAccel, steerAngle, steeringGeometry } from "./steering";
+import { dcos, dpow, dsin } from "../math/det";
 
 /**
  * Temps de réponse de l'inclinaison d'un rotor orientable (s) : le plateau cyclique réagit bien
@@ -235,7 +236,7 @@ function thrusterArms(thrusters: Thruster[], com: Vec3): ThrusterArm[] {
     const max = spec.maxThrust * t.output;
     const axes = [axis(t.block.up, 0, max, -t.spin * spec.torqueRatio)];
     if (spec.gimbal) {
-      const side = max * Math.sin(spec.gimbal);
+      const side = max * dsin(spec.gimbal);
       axes.push(axis(cross(t.block.up, t.block.forward), -side, side, 0), axis(t.block.forward, -side, side, 0));
     }
     return { t, spec, p, axes };
@@ -343,7 +344,7 @@ function allocateThrust(arms: ThrusterArm[], up: Vec3, thrust: number, tau: Vec3
   const e1 = norm(cross(up, Math.abs(up.x) < 0.9 ? vec3(1, 0, 0) : vec3(0, 0, 1)));
   const e2 = cross(up, e1);
   const cols = arms.flatMap((a) => a.axes);
-  const reach = Math.max(0.5, Math.sqrt(arms.reduce((s, a) => s + len(a.axes[0].torque) ** 2, 0) / arms.length));
+  const reach = Math.max(0.5, Math.sqrt(arms.reduce((s, a) => s + dpow(len(a.axes[0].torque), 2), 0) / arms.length));
   const kappa = Math.max(0.01, arms.reduce((s, a) => s + a.spec.torqueRatio, 0) / arms.length);
   const totalMax = arms.reduce((s, a) => s + a.axes[0].hi, 0);
   // Sans rotor de queue, le lacet ne peut déséquilibrer qu'un peu les hélices ; avec, il a toute la poussée
@@ -420,9 +421,9 @@ export function flyToward(bot: Bot, target: Vec3, yaw?: { rate: number; assist: 
 
   // Direction de poussée voulue, inclinaison limitée
   let uDes = norm(F);
-  if (uDes.y < Math.cos(MAX_TILT)) {
+  if (uDes.y < dcos(MAX_TILT)) {
     const h = norm(vec3(uDes.x, 0, uDes.z));
-    uDes = vec3(h.x * Math.sin(MAX_TILT), Math.cos(MAX_TILT), h.z * Math.sin(MAX_TILT));
+    uDes = vec3(h.x * dsin(MAX_TILT), dcos(MAX_TILT), h.z * dsin(MAX_TILT));
   }
   const thrust = Math.max(0, dot(F, up));
 

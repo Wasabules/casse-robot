@@ -1,3 +1,4 @@
+import { dcos, dsin } from "../math/det";
 /**
  * Types de roue. Le moteur est dans la roue : chaque type a son couple, sa vitesse et la
  * charge qu'il est fait pour porter. Un robot lourd a besoin de plus de roues, ou de roues
@@ -194,5 +195,5 @@ export function springTuning(def: WheelTypeDef, gravity: number): SpringTuning {
  */
 export function steerClearance(def: WheelTypeDef): number {
   const angle = def.caster ? Math.PI / 2 : def.steering?.maxAngle ?? 0;
-  return def.radius * Math.sin(angle) + (def.width / 2) * (Math.cos(angle) - 1);
+  return def.radius * dsin(angle) + (def.width / 2) * (dcos(angle) - 1);
 }

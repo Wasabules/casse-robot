@@ -41,7 +41,7 @@ export type SettingRow =
       onChange: (value: number, done: boolean) => void;
     }
   | { kind: "text"; label: string; detail?: string; value: string; placeholder?: string; onChange: (value: string) => void }
-  | { kind: "button"; label: string; detail?: string; action: string; onSelect: () => void }
+  | { kind: "button"; label: string; detail?: string; action: string; onSelect: () => void; disabled?: boolean }
   /** Une information, sans commande (la manette branchée). */
   | { kind: "note"; label: string; detail?: string }
   /**
@@ -544,6 +544,7 @@ function settingRow(row: SettingRow, key: string): HTMLElement {
       b.className = "menu-action";
       b.dataset.key = key;
       b.textContent = row.action;
+      b.disabled = !!row.disabled;
       b.addEventListener("click", row.onSelect);
       line.append(b);
       break;

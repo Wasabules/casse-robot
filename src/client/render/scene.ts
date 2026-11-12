@@ -1,5 +1,5 @@
 import * as B from "../babylon";
-import { GROUND_HALF, type ArenaLayout } from "../../shared/arena/layout";
+import { GROUND_HALF, PLAIN_SKY, type ArenaLayout } from "../../shared/arena/layout";
 import type { ShadowQuality } from "../settings";
 import { context2d } from "./materials";
 
@@ -11,7 +11,7 @@ export const SHADOW_MAPS: Record<ShadowQuality, { size: number; filtering: numbe
 };
 
 export interface SceneKit {
-  engine: B.Engine;
+  engine: B.AbstractEngine;
   scene: B.Scene;
   shadows: B.ShadowGenerator;
   /** Le soleil, ou la lune la nuit (`applyArenaLook`). */
@@ -21,9 +21,9 @@ export interface SceneKit {
   night: B.Mesh | null;
 }
 
-/** Ciel et brouillard par défaut (les petites arènes). */
-const SKY = "#c7d1d6";
-const FOG = 0.009;
+/** Ciel et brouillard par défaut (les petites arènes : `PLAIN_SKY`, que l'export en carte écrit aussi). */
+const SKY = PLAIN_SKY.color;
+const FOG = PLAIN_SKY.fog;
 
 /**
  * Éclairage du jour et de la nuit : ciel (lumière qui vient d'en haut, et d'en bas, renvoyée par le
@@ -113,9 +113,8 @@ const SMALL_SHADOWS = 110;
 /** Part de chaque cascade fondue dans la suivante : pas de marche visible entre deux cascades. */
 const CASCADE_BLEND = 0.08;
 
-/** Moteur, scène, lumières, ombres et sol. */
-export function createScene(canvas: HTMLCanvasElement): SceneKit {
-  const engine = new B.Engine(canvas, true, { stencil: false, preserveDrawingBuffer: false }, true);
+/** Scène, lumières, ombres et sol, sur le moteur du jeu (WebGL ou WebGPU : render/engine.ts). */
+export function createScene(engine: B.AbstractEngine): SceneKit {
   const scene = new B.Scene(engine);
   scene.useRightHandedSystem = true; // même repère que Rapier
   scene.fogMode = B.Scene.FOGMODE_EXP2;
@@ -135,6 +134,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneKit {
     shadows.cascadeBlendPercentage = CASCADE_BLEND;
     shadows.depthClamp = true;
     shadows.stabilizeCascades = true;
+    cullCascades(scene, shadows);
   }
   shadows.usePercentageCloserFiltering = true;
   shadows.filteringQuality = SHADOW_MAPS.medium.filtering;
@@ -143,6 +143,45 @@ export function createScene(canvas: HTMLCanvasElement): SceneKit {
 
   createGround(scene);
   return { engine, scene, shadows, sun, hemi, night: null };
+}
+
+/**
+ * Chaque cascade d'ombre ne dessine que ce qui peut y jeter une ombre : les objets dont la sphère
+ * englobante touche son cadre, vu du soleil. Babylon les dessinait tous dans chacune : un robot au
+ * loin dans la cascade proche, trois fois chaque robot dans une grande arène. Le côté du soleil n'est
+ * pas limité (un objet entre le soleil et le cadre y jette son ombre ; la profondeur est bornée,
+ * `depthClamp`). Babylon refait sa carte d'ombre quand le nombre de cascades ou sa taille changent
+ * (une autre arène, la qualité des ombres) : le tri est remis sur chaque nouvelle carte.
+ */
+function cullCascades(scene: B.Scene, shadows: B.CascadedShadowGenerator): void {
+  const lists: B.AbstractMesh[][] = [];
+  const at = new B.Vector3();
+  const cull = (layer: number, list: readonly B.AbstractMesh[] | null, length: number): B.AbstractMesh[] | null => {
+    const view = shadows.getCascadeViewMatrix(layer);
+    const projection = shadows.getCascadeProjectionMatrix(layer);
+    if (!list || !view || !projection) return null;
+    const out = (lists[layer] ??= []);
+    out.length = 0;
+    // Projection orthographique : x et y de l'écran de la cascade, de -1 à 1
+    const p = projection.m;
+    for (let i = 0; i < length; i++) {
+      const mesh = list[i];
+      const sphere = mesh.getBoundingInfo().boundingSphere;
+      B.Vector3.TransformCoordinatesToRef(sphere.centerWorld, view, at);
+      const x = p[0] * at.x + p[12], y = p[5] * at.y + p[13];
+      const rx = Math.abs(p[0]) * sphere.radiusWorld, ry = Math.abs(p[5]) * sphere.radiusWorld;
+      if (x + rx < -1 || x - rx > 1 || y + ry < -1 || y - ry > 1) continue;
+      out.push(mesh);
+    }
+    return out;
+  };
+  let tied: unknown = null;
+  scene.onBeforeRenderObservable.add(() => {
+    const map = shadows.getShadowMap();
+    if (!map || map === tied) return;
+    map.getCustomRenderList = cull;
+    tied = map;
+  });
 }
 
 /** Lumière du ciel, soleil (ou lune) et lumière ambiante, de jour ou de nuit. */

@@ -68,7 +68,7 @@ const GRID_REACH = 60;
 export class EditorView {
   readonly scene: B.Scene;
   readonly camera: B.ArcRotateCamera;
-  private readonly engine: B.Engine;
+  private readonly engine: B.AbstractEngine;
   private readonly assets: Assets;
   private readonly arenaView: ArenaView;
   private readonly shadows: B.ShadowGenerator;
@@ -99,7 +99,7 @@ export class EditorView {
   /** À chaque image, avant le rendu (l'éditeur déplace la vue au clavier). */
   onFrame: (dt: number) => void = () => {};
 
-  constructor(engine: B.Engine, labelRoot: HTMLElement) {
+  constructor(engine: B.AbstractEngine, labelRoot: HTMLElement) {
     this.engine = engine;
     this.labelRoot = labelRoot;
     const scene = new B.Scene(engine);

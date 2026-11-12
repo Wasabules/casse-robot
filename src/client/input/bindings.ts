@@ -98,6 +98,10 @@ export const ACTIONS = {
   // M : la position du M d'un clavier QWERTY (« , » en AZERTY), et celle du M d'un AZERTY (« ; » en QWERTY)
   map: { category: "interface", context: "any", keys: ["KeyM", "Semicolon"], pad: "Pad12" },
   selfDestruct: { category: "interface", context: "pilot", keys: ["Backspace", null], pad: null },
+  // Musique : Pg suiv. et Pg préc. (au garage, ce sont les étages : jamais en même temps), et « . » et « , »
+  // d'un clavier QWERTY (« : » et « ; » en AZERTY), pour les claviers sans touches de page
+  musicNext: { category: "interface", context: "any", keys: ["PageDown", "Period"], pad: null },
+  musicPrevious: { category: "interface", context: "any", keys: ["PageUp", "Comma"], pad: null },
   pause: { category: "interface", context: "any", keys: [null, null], pad: null, fixedKey: "Escape", fixedPad: "Pad9" },
   // --- Caméra libre ---
   followNext: { category: "free", context: "free", keys: ["KeyF", null], pad: "Pad3" },

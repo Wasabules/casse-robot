@@ -26,11 +26,18 @@
     "map:check": "npm run map:build && node dist-tools/cli.js check",
     "map:terrain": "npm run map:build && node dist-tools/cli.js terrain",
     "map:example": "npm run map:build && node dist-tools/cli.js example",
+    "map:export": "npm run map:build && node dist-tools/cli.js export",
+    "map:pack": "npm run map:build && node dist-tools/cli.js pack",
+    "map:unpack": "npm run map:build && node dist-tools/cli.js unpack",
     "schemas": "vite build --ssr tools/schemas/build.ts --outDir dist-tools/schemas --emptyOutDir --logLevel warn && node dist-tools/schemas/build.js",
-    "share": "node tools/share.mjs"
+    "models": "vite build --ssr tools/models/build.ts --outDir dist-tools/models --emptyOutDir --logLevel warn && node dist-tools/models/build.js",
+    "share": "node tools/share.mjs",
+    "native": "node tools/native/build.mjs",
+    "native:test": "cargo test -p casse-sim"
   },
   "dependencies": {
     "@babylonjs/core": "9.28.0",
+    "@babylonjs/loaders": "9.28.0",
     "@dimforge/rapier3d-compat": "0.21.0",
     "ws": "8.22.0"
   },

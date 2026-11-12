@@ -73,6 +73,19 @@ describe("table des actions", () => {
     expect(keys("map")).toEqual(["KeyM", "Semicolon"]);
   });
 
+  it("la musique : morceau suivant et précédent en partie, sur les touches des étages du garage (jamais en même temps)", () => {
+    expect(DEFAULT_BINDINGS.musicNext.keys).toEqual(["PageDown", "Period"]);
+    expect(DEFAULT_BINDINGS.musicPrevious.keys).toEqual(["PageUp", "Comma"]);
+    for (const id of ["musicNext", "musicPrevious"] as const) {
+      expect(actionDef(id).context, id).toBe("any");
+      expect(actionDef(id).category, id).toBe("interface");
+    }
+    expect(DEFAULT_BINDINGS.garageLayerDown.keys[0]).toBe("PageDown");
+    const playing = (c: InputContext): boolean => c === "any" || c === "pilot" || c === "ground";
+    expect(actionsFor(DEFAULT_BINDINGS, "PageDown", false, playing)).toEqual(["musicNext"]);
+    expect(actionsFor(DEFAULT_BINDINGS, "Comma", false, (c) => c === "any" || c === "free")).toEqual(["musicPrevious"]);
+  });
+
   it("les moments du jeu : au sol et en vol ne vont pas ensemble, la caméra libre non plus avec le pilotage", () => {
     const yes: [InputContext, InputContext][] = [["any", "free"], ["pilot", "ground"], ["flight", "pilot"], ["ground", "ground"]];
     const no: [InputContext, InputContext][] = [["ground", "flight"], ["free", "pilot"], ["free", "ground"]];

@@ -7,6 +7,7 @@ import { ArenaGame } from "./game";
 import { watchGpu } from "./hud/gpuNotice";
 import { hideOverlay, showError } from "./hud/overlay";
 import { LoadingScreen, nextPaint } from "./menu/loading";
+import { createEngine } from "./render/engine";
 import { applyDom } from "./i18n/dom";
 import { t } from "./i18n/i18n";
 import { onLocaleChange, setLocale } from "./i18n/state";
@@ -37,8 +38,10 @@ try {
 async function start(): Promise<void> {
   loading.progress(0.08, t("menu.loading.scene"));
   await nextPaint();
-  const canvas = byId<HTMLCanvasElement>("c");
-  const game = new ArenaGame(canvas);
+  // Le moteur : WebGPU ou WebGL 2, selon le réglage et le navigateur (render/engine.ts) ; son canvas peut être un neuf
+  const engine = await createEngine(byId<HTMLCanvasElement>("c"), loadSettings().renderer);
+  const canvas = engine.getRenderingCanvas()!;
+  const game = new ArenaGame(engine);
   watchGpu(game.engine);
   const app = new App(game, canvas, loading);
   canvas.tabIndex = 0;

@@ -16,7 +16,7 @@ Thanks for wanting to help! Casse-Robot is an open game: new weapons, robots, ma
 
    The game opens on `http://localhost:5173` and reloads every time you save a file.
 
-No engine to install and no account to create: everything runs in the browser, and the simulation (physics, robots, AI) also runs in Node, headless, for the tests.
+No engine to install and no account to create: everything runs in the browser, and the simulation (physics, robots, AI) also runs in Node, headless, for the tests. Part of the simulation is being ported to Rust (`crates/casse-sim`, compiled to WebAssembly); the built module is committed, so you only need Rust ([rustup](https://rustup.rs): it reads `rust-toolchain.toml`) if you change something under `crates/`, and then run `npm run native`.
 
 ## Before sending a change
 
@@ -25,7 +25,8 @@ No engine to install and no account to create: everything runs in the browser, a
 - **A game rule comes with its test** in `tests/` (Vitest, in Node). A test that depends on randomness calls `seedRandom(n)` (`tests/seed.ts`) to be reproducible.
 - **Balance:** `npm run battle` plays eight AI battles and prints a per-robot report; attach it if your change affects balance.
 - **Performance:** `npm run bench` measures the cost of a simulation step, `npm run perf` the time of a frame in the browser (save one with `--json=before.json` before your change, then `--compare=before.json`); a change that makes them climb must say so.
-- **Rendering:** a change to shaders, materials or screens must pass `npm run render:check` (CI runs it without a graphics card).
+- **Rendering:** a change to shaders, materials or screens must pass `npm run render:check` (CI runs it without a graphics card), and `npm run render:check -- --gpu --renderer=webgpu` if your machine has WebGPU: a shader that compiles in WebGL can be refused by WebGPU.
+- **Compiled simulation:** a change under `crates/` is followed by `npm run native` (it rebuilds the embedded module) and `npm run native:test`; a ported module must return exactly what its TypeScript returns (`tests/native.test.ts`).
 
 ## Where things go
 
@@ -36,11 +37,14 @@ A few rules we don't bend:
 - **`src/shared/` is the pure simulation:** no Babylon, no DOM. It also runs on the server.
 - **No hard-coded user-facing text:** everything goes through the message catalogs (`src/client/i18n/locales/<language>/`), in French and English; no hard-coded key names either. Tests check this.
 - **Simulation randomness goes through `rand`** (`src/shared/math/scalar.ts`), never `Math.random`.
+- **Simulation sines, cosines, logarithms and powers go through `dsin`, `dcos`, `dlog`, `dpow`** (`src/shared/math/det.ts`), never `Math.sin`, `Math.cos`, `Math.log`, `Math.pow` or `**`: their last bit depends on the JavaScript engine, and the compiled simulation must give the same bits.
 - **Every change to a robot's structure emits its event** (`SimEvent`) and its network event: rendering and multiplayer depend on them.
 
 ## Special contributions
 
-- **Maps:** the map editor is in the game (main menu → Map editor); the format, its JSON Schema (`schemas/map.schema.json`, for your editor) and how to submit a map are in [`docs/maps.md`](docs/maps.md). After changing a format field, a bound or a catalog (a block, wheel or prop type, an arena), run `npm run schemas`: the tests check that the schemas are up to date.
+- **Maps:** the map editor is in the game (main menu → Map editor); the format, its JSON Schema (`schemas/map.schema.json`, for your editor) and how to submit a map are in [`docs/maps.md`](docs/maps.md). After changing a format field, a bound or a catalog (a block, wheel or prop type, an arena), run `npm run schemas`: the tests check that the schemas, and the content catalog (`content/catalog.json`, the game's elements as open data), are up to date.
+- **3D models:** a prop (crate, barrel, tree, wall, car, lamp…) can have a glTF model made in Blender instead of the one the game draws: save it as `public/models/props/<type>.glb` and run `npm run models`. The conventions (meters, +Y up, origin at the bottom center, a `glass` material that lights up at night) are in [`docs/models.md`](docs/models.md). Contribute a model under a free license (CC0 or CC BY preferred), and say which one.
+- **The game's arenas as maps:** `content/arenas/` holds each of the game's arenas written in the map format (`npm run map:export -- all`). After changing an arena (its scenery, props, terrain, zones…) or its name, run that command again: the tests check that the files are the ones the export makes, and that each one, read back, gives the same arena to the bit.
 - **Translations:** see the "Languages" section of the [`README`](README.md) and "Languages (i18n)" in `docs/architecture.md`. To start a language, copy `src/client/i18n/locales/en/` to a new folder. An incomplete language already shows, in English where a translation is missing.
 - **Sounds and music:** the files in `public/sounds/` were generated with ElevenLabs and are not covered by the code license (see the README). Only add a sound you may publish under a free license (CC0 or CC BY preferred), and say which one. The game synthesizes a fallback for every sound: it works without the files.
 

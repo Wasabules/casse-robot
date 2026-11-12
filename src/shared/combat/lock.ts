@@ -5,6 +5,7 @@ import type { Bot, Turret } from "../sim/entities";
 import type { Simulation } from "../sim/simulation";
 import { areEnemies } from "./projectiles";
 import { sightBlocked } from "./sight";
+import { dcos } from "../math/det";
 
 /*
  * Verrouillage (arme à `lock`) : il faut garder un ennemi dans le viseur un moment avant de
@@ -50,7 +51,7 @@ export function updateLock(sim: Simulation, t: Turret, from: Vec3, dir: Vec3, dt
   if (!lock) return;
   const held = t.lockOn;
   const hold = isLocked(t) ? LOCKED_HOLD : lock.cone * HOLD_CONE;
-  if (held && lockable(sim, t, held, from) && cosTo(from, dir, held) > Math.cos(hold)) {
+  if (held && lockable(sim, t, held, from) && cosTo(from, dir, held) > dcos(hold)) {
     if (!sightBlocked(sim, from, held)) {
       t.lockHidden = 0;
       t.lockTime = Math.min(lock.time, t.lockTime + dt);
@@ -65,7 +66,7 @@ export function updateLock(sim: Simulation, t: Turret, from: Vec3, dir: Vec3, dt
     if (t.lockTime > 0) return;
   }
   // Les ennemis dans le cône, du plus proche de la visée au plus loin : le premier en vue
-  const minCos = Math.cos(lock.cone);
+  const minCos = dcos(lock.cone);
   const candidates: { bot: Bot; cos: number }[] = [];
   for (const bot of sim.bots) {
     if (!lockable(sim, t, bot, from)) continue;

@@ -6,7 +6,7 @@ import type { Ledger, Part, Reward } from "../design/progression";
 import type { BotProfile } from "../design/presets";
 import type { RobotDesign } from "../design/robotDesign";
 import type { Vec3 } from "../math/vec";
-import type { AiMode, DebrisLook, Team } from "../sim/entities";
+import type { AiMode, ArmState, DebrisLook, Team } from "../sim/entities";
 import type { ImpactSurface, MineAction } from "../sim/events";
 import type { ExplosionLook } from "../catalog/weapons";
 import type { MatchRules } from "../sim/match";
@@ -94,6 +94,12 @@ export interface FrameHeader {
   you: number | null;
   /** Verrouillage en cours d'une arme de ce client (voir combat/lock.ts), pour son HUD. */
   lock?: LockState | null;
+  /** Image d'une partie solo (net/session.ts) : un nouveau monde (une autre partie, une autre vague), la réplique oublie l'ancien. */
+  reset?: boolean;
+  /** Image d'une partie solo : l'état des armes de la caméra libre, pour son HUD. */
+  arms?: [WeaponId, ArmState][];
+  /** Image d'une partie solo : temps cumulés (ms) de chaque étape des pas mesurés, et leur nombre (la mesure du rendu). */
+  profile?: { times: Record<string, number>; steps: number };
 }
 
 /** Une tourelle (id de son bloc) qui verrouille un robot (id), et la part du verrouillage acquise (0 à 1). */

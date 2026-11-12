@@ -1,6 +1,6 @@
 import { byId } from "./dom";
 import { SoundLog } from "./hud/soundLog";
-import { ARENA_IDS, isMapKey, unregisterArena, type ArenaKey } from "../shared/arena/layout";
+import { ARENA_IDS, ARENAS, isMapKey, unregisterArena, type ArenaKey } from "../shared/arena/layout";
 import { MAP_LIMITS, type MapFile, type MapIssue } from "../shared/map/format";
 import { registerMap } from "../shared/map/load";
 import { checkMap } from "../shared/map/validate";
@@ -11,7 +11,8 @@ import { GAME_MODES, PILOTABLE, type GameModeId } from "../shared/modes";
 import { DEFAULT_PORT, PROTOCOL_VERSION, type RobotChoice } from "../shared/net/protocol";
 import type { Team } from "../shared/sim/entities";
 import type { ArenaGame } from "./game";
-import type { MusicTheme } from "./audio/music";
+import type { MusicChange, MusicNow, MusicTheme, Track } from "./audio/music";
+import { musicScreen, NowPlaying, trackTitle } from "./hud/nowPlaying";
 import { nextPaint, type LoadingScreen } from "./menu/loading";
 import { Garage, starterRobot } from "./garage/garage";
 import type { SoundScreen } from "./audio/soundScene";
@@ -24,6 +25,7 @@ import {
 } from "./input/bindings";
 import type { MenuCommand } from "./input/controls";
 import { PadBadge } from "./hud/padBadge";
+import { fullscreenSupported, isFullscreen, toggleFullscreen, TouchHud } from "./hud/touchHud";
 import { lockedParts, matchReward } from "../shared/design/progression";
 import { FpsBadge } from "./hud/fpsBadge";
 import { setLocale } from "./i18n/state";
@@ -33,15 +35,18 @@ import { playerToken, Progress } from "./progress";
 import { choiceRow, Menu, type BindingSlotView, type MenuEntry, type SettingRow } from "./menu/menu";
 import { robotCard, type RobotCard } from "./menu/robotCatalog";
 import { lastPick, rememberPick, RobotPicker, type PickerOptions } from "./menu/robotPicker";
+import { ArenaPicker, lastArena, rememberArena, type ArenaOption } from "./menu/arenaPicker";
 import { defaultServer, NetClient } from "./net/netClient";
 import {
-  DEADZONE_RANGE, DEFAULT_SETTINGS, FOV_RANGE, GRAPHICS_PRESETS, graphicsPreset, loadSettings, saveSettings, SENSITIVITY_RANGE,
+  DEADZONE_RANGE, defaultSettings, FOV_RANGE, GRAPHICS_PRESETS, graphicsPreset, loadSettings, saveSettings, SENSITIVITY_RANGE,
   type GraphicsPreset, type Settings,
+  requestedRenderer,
 } from "./settings";
 import { arenaInfo, arenaName, botName, communityInfo, mapIssueText, modeInfo, modeName, partName, rewardLineText } from "./i18n/names";
 import { downloadMap, pickFile } from "./maps/files";
 import { mapName, MapLibrary, type MapEntry } from "./maps/library";
 import { MapEditor, type EditorSource } from "./editor/editor";
+import { backendOf, type RenderBackend } from "./render/engine";
 
 /** Onglets des paramètres (leurs titres). */
 const SETTINGS_TABS = ["menu.settings.graphics", "menu.settings.controls", "menu.settings.sound", "menu.settings.profile"] as const satisfies readonly MessageKey[];
@@ -69,6 +74,8 @@ export class App {
   private loadTicket = 0;
   private readonly menu = new Menu();
   private readonly settings: Settings = loadSettings();
+  /** Le moteur de rendu demandé au chargement de la page (render/engine.ts : il ne change qu'en la rechargeant). */
+  private readonly bootRenderer = requestedRenderer(this.settings.renderer);
   private readonly fps: FpsBadge;
   private readonly soundLog: SoundLog;
   private readonly progress = new Progress();
@@ -96,6 +103,10 @@ export class App {
   /** Redessine l'écran des paramètres affiché (null : il ne l'est pas). */
   private redrawSettings: (() => void) | null = null;
   private readonly padBadge = new PadBadge();
+  /** Le lecteur de musique : le morceau en cours, et ses boutons dans les menus et au garage. */
+  private readonly nowPlaying: NowPlaying;
+  /** Au doigt : la pause et le plein écran en partie, le mot du garage et de l'éditeur. */
+  private readonly touchHud = new TouchHud();
 
   constructor(game: ArenaGame, canvas: HTMLCanvasElement, loading: LoadingScreen) {
     this.game = game;
@@ -129,6 +140,9 @@ export class App {
     this.garage.keyName = (id) => game.controls.keyName(id, "keys");
     this.fps = new FpsBadge(game.engine);
     this.soundLog = new SoundLog();
+    // La musique : ses titres, et de quoi changer de morceau (les touches en partie passent par les commandes)
+    this.nowPlaying = new NowPlaying({ previous: () => this.skipMusic(-1), next: () => this.skipMusic(1) });
+    game.sound.onMusic = (now, change, manual, track) => this.musicChanged(now, change, manual, track);
     this.applySettings();
     // Les boutons des menus : un clic, et un léger son au survol
     const menuRoot = byId("menu");
@@ -165,6 +179,10 @@ export class App {
     controls.onPadChange = (id) => {
       this.padBadge.show(id);
       this.redrawSettings?.();
+    };
+    // Au doigt, pas de touche Échap : le bouton de pause
+    this.touchHud.onPause = () => {
+      if (this.state === "playing") this.pause();
     };
     // Le clavier du joueur appris (ou la manette prise) : les noms des touches changent, au garage aussi
     const labels = controls.onLabels;
@@ -212,6 +230,22 @@ export class App {
   private enter(state: AppState): void {
     this.state = state;
     this.game.sound.setScreen(SCREEN_SOUND[state], this.game.online);
+    // Au doigt, le garage et l'éditeur disent ce qui demande une souris
+    this.touchHud.note(state === "garage" || state === "editor" ? state : null);
+  }
+
+  /**
+   * L'entrée « Plein écran » (ou « Quitter le plein écran ») d'un menu, au doigt, là où le navigateur
+   * le permet ; `redraw` redessine le menu une fois la page passée en plein écran (ou sortie).
+   */
+  private fullscreenEntry(redraw: () => void): MenuEntry[] {
+    if (!this.touchHud.active || !fullscreenSupported()) return [];
+    const on = isFullscreen();
+    return [{
+      label: on ? t("hud.page.exitFullscreen") : t("hud.page.fullscreen"),
+      detail: on ? undefined : t("menu.fullscreenDetail"),
+      onSelect: () => void toggleFullscreen().then(redraw),
+    }];
   }
 
   /**
@@ -277,6 +311,7 @@ export class App {
         },
         { label: t("editor.menu"), detail: t("editor.menuDetail"), onSelect: () => void this.openEditor({ kind: "resume" }) },
         { label: t("menu.settings.title"), detail: t("menu.title.settingsDetail"), onSelect: () => this.showSettings(() => this.renderTitle()) },
+        ...this.fullscreenEntry(() => this.state === "title" && this.renderTitle()),
       ],
       footer: t("menu.title.footer"),
     });
@@ -317,31 +352,48 @@ export class App {
       if (GAME_MODES[mode].pilot) this.pickRobot(`${label} · ${arenaName(arena)}`, (p) => this.play(mode, p, arena), () => this.pickArena(mode));
       else this.play(mode, null, arena);
     };
-    const community = this.maps.list();
-    const all: ArenaKey[] = [...ARENA_IDS, ...community.map((e) => e.key)];
+    // Les arènes du jeu, puis les cartes communautaires (leurs faits lus dans la carte : son arène ne se construit que pour son plan)
+    const arenas: ArenaOption[] = [
+      ...ARENA_IDS.map((id): ArenaOption => {
+        const layout = ARENAS[id];
+        return { key: id, name: arenaName(id), info: arenaInfo(id), half: layout.bounds.half, zones: layout.zones.length, night: !!layout.sky?.night, layout: () => layout };
+      }),
+      ...this.maps.list().map((e): ArenaOption => ({
+        key: e.key,
+        name: mapName(e.map),
+        info: communityInfo(e.map.meta),
+        community: e.map.meta,
+        half: e.map.bounds.half,
+        zones: e.map.zones.length,
+        night: !!e.map.sky?.night,
+        layout: () => this.maps.arena(e.key),
+      })),
+    ];
+    const keys = arenas.map((a) => a.key);
+    const last = lastArena();
+    const picker = new ArenaPicker({
+      arenas,
+      selected: keys.find((k) => k === last) ?? keys.find((k) => k === this.game.arenaId) ?? null,
+      last: keys.find((k) => k === last) ?? null,
+      onPick: (choice) => {
+        const arena = choice === "random" ? keys[Math.floor(Math.random() * keys.length)] : choice;
+        if (choice !== "random") rememberArena(arena);
+        go(arena);
+      },
+    });
     this.menu.show({
       id: "arena",
       title: t("menu.arena.title"),
       subtitle: label,
+      content: picker.element,
+      onClose: () => picker.dispose(),
       entries: [
-        ...ARENA_IDS.map((id): MenuEntry => ({
-          label: arenaName(id),
-          detail: arenaInfo(id),
-          primary: id === this.game.arenaId,
-          onSelect: () => go(id),
-        })),
-        ...community.map((e): MenuEntry => ({
-          label: mapName(e.map),
-          detail: communityInfo(e.map.meta),
-          primary: e.key === this.game.arenaId,
-          onSelect: () => go(e.key),
-        })),
-        { label: t("menu.arena.random"), onSelect: () => go(all[Math.floor(Math.random() * all.length)]) },
         { label: t("maps.manage"), detail: t("maps.manageDetail"), onSelect: () => this.showMaps(() => this.pickArena(mode)) },
         { label: t("common.back"), onSelect: back },
       ],
       back,
     });
+    picker.focus();
   }
 
   // --- Cartes communautaires ---
@@ -512,6 +564,9 @@ export class App {
       if (ticket !== this.loadTicket) return;
       this.game.startMode(mode, pilot, arena, roster);
       this.game.hold();
+      // La partie solo dans un Worker : son monde arrive à la première image
+      await this.game.worldReady();
+      if (ticket !== this.loadTicket) return;
       if (!(await this.prepareMatch(ticket, theme))) return;
       this.beginMatch(theme);
     })();
@@ -569,6 +624,7 @@ export class App {
         entries: [
           { label: t("menu.pause.resume"), detail: codeLabel("Escape"), primary: true, onSelect: () => this.resume() },
           { label: t("menu.settings.title"), onSelect: () => this.showSettings(() => this.pause()) },
+          ...this.fullscreenEntry(() => this.state === "paused" && this.pause()),
           { label: t("menu.pause.quit"), onSelect: () => this.showTitle() },
         ],
       });
@@ -589,6 +645,7 @@ export class App {
           ? [{ label: t("menu.pause.changeRobot"), onSelect: () => this.pickRobot(modeName(mode), (p) => this.play(mode, p), () => this.pause()) }]
           : []),
         { label: t("menu.settings.title"), onSelect: () => this.showSettings(() => this.pause()) },
+        ...this.fullscreenEntry(() => this.state === "paused" && this.pause()),
         { label: t("menu.pause.main"), onSelect: () => this.showTitle() },
       ],
     });
@@ -980,7 +1037,7 @@ export class App {
             const { name, server, language } = this.settings;
             this.stopListening();
             this.keyNote = null;
-            Object.assign(this.settings, DEFAULT_SETTINGS, { name, server, language });
+            Object.assign(this.settings, defaultSettings(), { name, server, language });
             this.commitSettings();
             redraw();
           },
@@ -988,6 +1045,28 @@ export class App {
       ],
       back: leave,
     });
+  }
+
+  /**
+   * Le moteur de rendu (render/engine.ts) : WebGPU ou WebGL. Il est pris au chargement de la page :
+   * un autre choix le dit, et propose de recharger.
+   */
+  private rendererRows(set: Setter): SettingRow[] {
+    const s = this.settings;
+    const now = backendOf(this.game.engine);
+    const names: Record<RenderBackend, string> = { webgpu: "WebGPU", webgl2: "WebGL 2", webgl1: "WebGL 1" };
+    // (l'adresse de la page peut imposer l'un ou l'autre : `?renderer=`)
+    const pending = requestedRenderer(s.renderer) !== this.bootRenderer;
+    const detail = pending
+      ? "menu.gfx.rendererPending"
+      : this.bootRenderer === "webgpu" && now !== "webgpu"
+        ? "menu.gfx.rendererRefused"
+        : "menu.gfx.rendererDetail";
+    const rows: SettingRow[] = [
+      choiceRow(t("menu.gfx.renderer"), [{ value: "webgpu", label: "WebGPU" }, { value: "webgl", label: "WebGL" }], s.renderer, set("renderer"), t(detail, { now: names[now] })),
+    ];
+    if (pending) rows.push({ kind: "button", label: t("menu.gfx.rendererReload"), action: t("menu.gfx.rendererReloadAction"), onSelect: () => location.reload() });
+    return rows;
   }
 
   private graphicsRows(set: Setter, redraw: () => void): SettingRow[] {
@@ -1010,6 +1089,7 @@ export class App {
         this.commitSettings();
         redraw();
       }, t("menu.gfx.qualityDetail")),
+      ...this.rendererRows(set),
       { kind: "toggle", label: t("menu.gfx.shadows"), detail: t("menu.gfx.shadowsDetail"), value: s.shadows, onChange: set("shadows") },
       choiceRow(
         t("menu.gfx.shadowQuality"),
@@ -1329,7 +1409,48 @@ export class App {
         format: (v) => (v === 0 ? t("menu.snd.musicOff") : pct(v / 100)),
         onChange: (v, done) => this.slide("music", v / 100, done, redraw),
       },
+      ...this.musicRows(),
     ];
+  }
+
+  /** La musique en cours, et de quoi passer au morceau suivant ou revenir au précédent (onglet Son). */
+  private musicRows(): SettingRow[] {
+    const now = this.game.sound.musicNow();
+    const shown = now?.pending ?? now?.track ?? null;
+    const title = shown ? trackTitle(shown) : "";
+    const canSkip = !!now?.canSkip;
+    return [
+      {
+        kind: "button", label: t("menu.snd.track"),
+        detail: !now || !shown ? t("menu.snd.trackNone")
+          : now.pending ? t("menu.snd.trackLoading", { title })
+          : t("menu.snd.trackDetail", { title, screen: musicScreen(now) }),
+        action: t("menu.snd.next"), disabled: !canSkip, onSelect: () => void this.game.sound.nextMusic(),
+      },
+      {
+        kind: "button", label: t("menu.snd.previousTrack"),
+        detail: now?.previous ? t("menu.snd.previousTitle", { title: trackTitle(now.previous) }) : t("menu.snd.previousNone"),
+        action: t("menu.snd.previous"), disabled: !canSkip || !now?.previous, onSelect: () => void this.game.sound.previousMusic(),
+      },
+    ];
+  }
+
+  /**
+   * La musique a changé : le lecteur l'annonce (un mot quelques secondes quand un morceau d'écran
+   * commence, ou quand le joueur a demandé autre chose ; rien si la musique est coupée : `setMuted`) ;
+   * l'onglet Son des paramètres se redessine.
+   */
+  private musicChanged(now: MusicNow, change: MusicChange, manual: boolean, track: Track | null): void {
+    const toast = manual || (change === "start" && now.theme !== null);
+    this.nowPlaying.update(now, change, toast, track);
+    if (this.settingsTab === 2) this.redrawSettings?.();
+  }
+
+  /** Les boutons du lecteur : morceau suivant (1) ou précédent (-1). */
+  private skipMusic(direction: 1 | -1): void {
+    this.game.sound.ui("click");
+    if (direction > 0) this.game.sound.nextMusic();
+    else this.game.sound.previousMusic();
   }
 
   private profileRows(set: Setter): SettingRow[] {
@@ -1396,6 +1517,7 @@ export class App {
     game.sound.setEnabled(s.sound);
     game.sound.setVolume(s.volume);
     game.sound.setMusicVolume(s.music);
+    this.nowPlaying.setMuted(!game.sound.musicAudible);
     this.soundLog.setVisible(s.soundLog);
     game.sound.setTrace(s.soundLog ? (label) => this.soundLog.push(label) : null);
     this.fps.setVisible(s.showFps);

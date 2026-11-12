@@ -1,6 +1,11 @@
+import type { MusicTheme, StingerKind, Track } from "../../../audio/music";
+import type { Message } from "../../i18n";
+import { section } from "../section";
+
 /*
  * Les écrans de l'application (client/app.ts, menu/menu.ts, menu/loading.ts, main.ts) : écran titre,
- * choix du mode et de l'arène, pause, fin de partie, multijoueur, chargement, paramètres.
+ * choix du mode et de l'arène, pause, fin de partie, multijoueur, chargement, paramètres ; et le
+ * lecteur de musique (hud/nowPlaying.ts) avec les titres des morceaux.
  */
 export const menu = {
   // --- Chargement (index.html, main.ts, menu/loading.ts, App.boot, App.play) ---
@@ -41,6 +46,20 @@ export const menu = {
   "menu.play.subtitle": "Choisis un mode de jeu.",
   "menu.arena.title": "Arène",
   "menu.arena.random": "Au hasard",
+  "menu.arena.randomInfo": "Une arène tirée au sort parmi les {n} de la liste.",
+  "menu.arena.list": "Arènes",
+  "menu.arena.choose": "Choisir cette arène",
+  "menu.arena.cardTitle": "{name} : {info}",
+  "menu.arena.plan": "Plan de l'arène {name}, vue de dessus",
+  "menu.arena.tagLast": "dernière",
+  "menu.arena.tagCommunity": "carte communautaire",
+  "menu.arena.large": "Grande carte",
+  "menu.arena.small": "Petite arène",
+  "menu.arena.side": "{side} de côté",
+  "menu.arena.zones": { one: "{n} zone à capturer", other: "{n} zones à capturer" },
+  "menu.arena.night": "De nuit",
+  "menu.arena.day": "De jour",
+  "menu.fullscreenDetail": "Le jeu occupe tout l'écran.",
   "menu.robot.title": "Ton robot",
   "menu.robot.pilot": "Piloter ce robot",
   "menu.robots.title": "Mes robots",
@@ -101,6 +120,12 @@ export const menu = {
   "menu.gfx.custom": "Perso",
   "menu.gfx.quality": "Qualité",
   "menu.gfx.qualityDetail": "Basse : sans ombres ni halo, image à 75 %, effets réduits et simples. Haute : ombres plus fines, distorsion de chaleur.",
+  "menu.gfx.renderer": "Moteur de rendu",
+  "menu.gfx.rendererDetail": "WebGPU : l'interface graphique récente des navigateurs ; WebGL : la plus répandue. Rendu actuel : {now}.",
+  "menu.gfx.rendererPending": "Prend effet au prochain chargement de la page. Rendu actuel : {now}.",
+  "menu.gfx.rendererRefused": "Ce navigateur n'offre pas WebGPU : le jeu dessine en {now}.",
+  "menu.gfx.rendererReload": "Changer de moteur de rendu",
+  "menu.gfx.rendererReloadAction": "Recharger la page",
   "menu.gfx.shadows": "Ombres",
   "menu.gfx.shadowsDetail": "Ombres portées du soleil ; les couper soulage les petites machines.",
   "menu.gfx.shadowQuality": "Finesse des ombres",
@@ -198,6 +223,16 @@ export const menu = {
   "menu.snd.logDetail": "Le nom de chaque son joué, et sa distance : pour repérer celui qui gêne.",
   "menu.snd.music": "Musique",
   "menu.snd.musicOff": "coupée",
+  /** La musique en cours et ses boutons (le lecteur : `music.*`) ; `{title}` : le titre d'un morceau, `{screen}` : son écran. */
+  "menu.snd.track": "Musique en cours",
+  "menu.snd.trackDetail": "« {title} » · {screen}",
+  "menu.snd.trackLoading": "« {title} » · chargement…",
+  "menu.snd.trackNone": "Aucune pour l'instant",
+  "menu.snd.next": "Suivant",
+  "menu.snd.previousTrack": "Morceau précédent",
+  "menu.snd.previousTitle": "« {title} »",
+  "menu.snd.previousNone": "Aucun pour l'instant",
+  "menu.snd.previous": "Revenir",
   // Profil
   /** Le libellé du réglage de la langue garde le mot anglais : on le retrouve sans lire la langue affichée. */
   "menu.prof.language": "Langue · Language",
@@ -211,4 +246,58 @@ export const menu = {
   "menu.prof.nameDetail": "Affiché aux autres joueurs en multijoueur.",
   "menu.prof.server": "Serveur multijoueur",
   "menu.prof.serverDetail": "Vide : le serveur de cette page, port {port}.",
+
+  // --- Musique : le lecteur (hud/nowPlaying.ts : un mot quand un morceau commence ; dans les menus, la musique en cours et ses boutons) ---
+  /** `{screen}` : l'écran dont c'est la musique (`music.theme.*`), ou le motif de fin de partie (`music.stinger.*`). */
+  "music.label": "Musique · {screen}",
+  /** Un morceau demandé (un précédent déjà libéré) se prépare : celui qu'on entend continue d'ici là. */
+  "music.loading": "Musique · chargement…",
+  "music.failed": "Musique · morceau illisible",
+  "music.none": "Musique · pas de morceau précédent",
+  "music.previous": "Morceau précédent",
+  "music.next": "Morceau suivant",
+  /** Le bouton du morceau précédent, au survol : `{title}`, le morceau auquel il reviendrait. */
+  "music.previousTo": "Morceau précédent : {title}",
+  ...section("music.theme", {
+    menu: "Accueil",
+    garage: "Garage",
+    battle: "Partie",
+  } as const satisfies Record<MusicTheme, Message>),
+  ...section("music.stinger", {
+    victory: "Victoire",
+    defeat: "Défaite",
+  } as const satisfies Record<StingerKind, Message>),
+  /**
+   * Titres des morceaux (audio/music.ts : un par fichier, chaque variante a le sien), d'après ce
+   * qu'ils sont (tools/sounds/catalog.json) : l'accueil, rock électronique et thème cinématique ;
+   * le garage, électro calme et downtempo à cliquets ; la partie, rock électronique, électro
+   * industrielle, hybride orchestral, drum and bass mécanique, synthwave, métal industriel, bass
+   * music ; les motifs de victoire et de défaite.
+   */
+  ...section("music.title", {
+    "music-menu-1": "Mise sous tension",
+    "music-menu-2": "Châssis d'acier",
+    "music-menu-b-1": "Aube mécanique",
+    "music-garage-1": "Atelier de nuit",
+    "music-garage-2": "Plans et boulons",
+    "music-garage-b-1": "Clé à cliquet",
+    "music-battle-a-1": "Surchauffe",
+    "music-battle-a-2": "Pleins gaz",
+    "music-battle-b-1": "Fonderie",
+    "music-battle-b-2": "Presse hydraulique",
+    "music-battle-c-1": "Titans d'acier",
+    "music-battle-d-1": "Rotor 174",
+    "music-battle-d-2": "Engrenages en fuite",
+    "music-battle-e-1": "Néon blindé",
+    "music-battle-e-2": "Chrome de minuit",
+    "music-battle-f-1": "Ferraille lourde",
+    "music-battle-f-2": "Marteau-pilon",
+    "music-battle-g-1": "Court-circuit",
+    "stinger-victory-1": "Dernier debout",
+    "stinger-victory-2": "Arène conquise",
+    "stinger-victory-b-1": "Fanfare des vainqueurs",
+    "stinger-defeat-1": "Pièces détachées",
+    "stinger-defeat-2": "Hors service",
+    "stinger-defeat-b-1": "À la casse",
+  } as const satisfies Record<Track, Message>),
 } as const;

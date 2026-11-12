@@ -8,6 +8,7 @@ import { ISLAND } from "./island";
 import { PORT } from "./port";
 import { terrainHeight, type Terrain } from "./terrain";
 import { VALLEY } from "./valley";
+import { dcos, dsin } from "../math/det";
 
 /*
  * Arènes, en données pures : la physique (arena.ts) et le rendu (client/render/arenaView.ts) les
@@ -80,8 +81,8 @@ export function spawnLineOf(bounds: ArenaBounds, team: SpawnTeam): SpawnLine {
 export function spawnPoint(bounds: ArenaBounds, team: SpawnTeam, along: number, back = 0): { x: number; z: number } {
   const placed = bounds.spawns?.[team];
   if (!placed) return { x: along, z: (team === "blue" ? -1 : 1) * (bounds.spawnLine + back) };
-  const c = Math.cos(placed.facing);
-  const s = Math.sin(placed.facing);
+  const c = dcos(placed.facing);
+  const s = dsin(placed.facing);
   // Gauche de l'équipe : (cos, -sin) ; devant elle : (sin, cos)
   return { x: placed.x + c * along - s * back, z: placed.z - s * along - c * back };
 }
@@ -90,8 +91,8 @@ export function spawnPoint(bounds: ArenaBounds, team: SpawnTeam, along: number, 
 export function spawnLocal(bounds: ArenaBounds, team: SpawnTeam, x: number, z: number): { along: number; across: number } {
   const placed = bounds.spawns?.[team];
   if (!placed) return { along: x, across: team === "blue" ? z + bounds.spawnLine : bounds.spawnLine - z };
-  const c = Math.cos(placed.facing);
-  const s = Math.sin(placed.facing);
+  const c = dcos(placed.facing);
+  const s = dsin(placed.facing);
   const dx = x - placed.x;
   const dz = z - placed.z;
   return { along: dx * c - dz * s, across: dx * s + dz * c };
@@ -250,6 +251,12 @@ export interface ArenaSky {
 }
 
 /**
+ * Le ciel d'une arène qui n'en dit rien (les petites arènes) : celui que le client leur donne
+ * (client/render/scene.ts), et celui qu'écrit l'export d'une telle arène en carte (map/export.ts).
+ */
+export const PLAIN_SKY: ArenaSky = { color: "#c7d1d6", fog: 0.009 };
+
+/**
  * Une arène, en données. Son nom et sa phrase pour le menu sont dans chaque langue (`arena.<id>`,
  * `arenaInfo.<id>` : client/i18n/locales/<langue>/world.ts) ; ceux d'une carte communautaire sont
  * dans la carte (`community`).
@@ -307,13 +314,16 @@ export interface ArenaLayout {
 /**
  * Lieux nommés des arènes, pour la carte : un identifiant (le même pour un même nom d'une arène à
  * l'autre), dont le nom est dans chaque langue (`place.<id>`, client/i18n/locales/<langue>/world.ts).
+ * Une carte communautaire peut s'en servir aussi (`MapPlace.place` : un nom traduit).
  */
-export type PlaceId =
-  | "village" | "fort" | "factory" | "airfield" | "bridge" | "sawmill" | "cabin"
-  | "town" | "mine" | "mesa" | "arch" | "oasis" | "viaduct" | "northTunnel" | "southTunnel"
-  | "station" | "tracks" | "expressway" | "offices" | "square" | "park" | "tower" | "carPark" | "northBoulevard" | "southBoulevard"
-  | "crater" | "lagoon" | "bunkers" | "airstrip" | "wreck" | "waterfall" | "lavaFlow"
-  | "freighter" | "swingBridge" | "basin" | "harbourOffice" | "silos" | "terminal" | "fuelDepot" | "warehouses" | "fishermen" | "lighthouse" | "railway";
+export const PLACE_IDS = [
+  "village", "fort", "factory", "airfield", "bridge", "sawmill", "cabin",
+  "town", "mine", "mesa", "arch", "oasis", "viaduct", "northTunnel", "southTunnel",
+  "station", "tracks", "expressway", "offices", "square", "park", "tower", "carPark", "northBoulevard", "southBoulevard",
+  "crater", "lagoon", "bunkers", "airstrip", "wreck", "waterfall", "lavaFlow",
+  "freighter", "swingBridge", "basin", "harbourOffice", "silos", "terminal", "fuelDepot", "warehouses", "fishermen", "lighthouse", "railway",
+] as const;
+export type PlaceId = (typeof PLACE_IDS)[number];
 
 /**
  * Lieu nommé d'une arène : lequel, et son centre (m). Celui d'une arène du jeu a un identifiant,

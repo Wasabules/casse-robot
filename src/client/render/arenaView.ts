@@ -194,8 +194,46 @@ export class ArenaView {
   showBoxes(layout: ArenaLayout): void {
     for (const m of this.boxes) m?.dispose();
     // Les limites invisibles de la carte ne se dessinent pas
-    this.boxes = layout.boxes.map((b, i) => (b.kind === "bound" ? null : this.box(b, i)));
+    const boxes = layout.boxes.map((b, i) => (b.kind === "bound" ? null : this.box(b, i)));
+    // L'éditeur garde une boîte par mesh (on les choisit, on les déplace) ; en jeu, rien ne les bouge
+    this.boxes = this.editable ? boxes : this.mergeBoxes(boxes);
+    for (const m of this.boxes) if (m && this.casters.has(m)) this.shadows.addShadowCaster(m);
+    this.casters.clear();
   }
+
+  /**
+   * En jeu, les boîtes du décor (immeubles du bord, piliers, rochers, tabliers…) ne bougent ni ne
+   * cèdent : celles qui ont la même matière (et la même façon de faire de l'ombre) ne font qu'un mesh.
+   * Une passe de dessin par matière dans l'image et dans chaque cascade d'ombre, au lieu d'une par
+   * boîte : dans la Cité, les 86 immeubles du bord faisaient 258 passes d'ombre par image.
+   */
+  private mergeBoxes(boxes: readonly (B.Mesh | null)[]): B.Mesh[] {
+    const groups = new Map<string, B.Mesh[]>();
+    for (const m of boxes) {
+      if (!m) continue;
+      const key = `${m.material?.uniqueId ?? "-"}|${this.casters.has(m)}|${m.getVerticesDataKinds().sort().join(",")}`;
+      const group = groups.get(key);
+      if (group) group.push(m);
+      else groups.set(key, [m]);
+    }
+    const merged: B.Mesh[] = [];
+    for (const group of groups.values()) {
+      const caster = this.casters.has(group[0]);
+      const one = group.length > 1 ? B.Mesh.MergeMeshes(group, true, true) : group[0];
+      if (!one) {
+        merged.push(...group);
+        continue;
+      }
+      one.receiveShadows = true;
+      one.freezeWorldMatrix();
+      if (caster) this.casters.add(one);
+      merged.push(one);
+    }
+    return merged;
+  }
+
+  /** Les boîtes qui font de l'ombre (le temps de les construire et de les fusionner). */
+  private readonly casters = new Set<B.Mesh>();
 
   /** Refait le sol : le relief, l'eau, la lave, les cascades. */
   showGround(layout: ArenaLayout): void {
@@ -212,7 +250,7 @@ export class ArenaView {
     this.ground.push(...this.falls);
   }
 
-  /** Les meshes des boîtes, dans l'ordre de l'arène (null : une limite invisible). */
+  /** Les meshes des boîtes, dans l'ordre de l'arène (null : une limite invisible) ; en jeu, fusionnées par matière. */
   get boxMeshes(): readonly (B.Mesh | null)[] {
     return this.boxes;
   }
@@ -311,7 +349,8 @@ export class ArenaView {
     if (turned) m.rotationQuaternion = m.rotationQuaternion.multiply(B.Quaternion.RotationAxis(B.Vector3.Up(), Math.PI / 2));
     m.receiveShadows = true;
     m.freezeWorldMatrix();
-    if (port ? port.shadow : CASTS_SHADOW[kind]) this.shadows.addShadowCaster(m);
+    // (elle fera de l'ombre une fois les boîtes fusionnées, voir `showBoxes`)
+    if (port ? port.shadow : CASTS_SHADOW[kind]) this.casters.add(m);
     return m;
   }
 

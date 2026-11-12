@@ -1,7 +1,7 @@
 import * as B from "./babylon";
 import { isOperational } from "../shared/ai/brain";
 import { blockDef } from "../shared/catalog/blocks";
-import { lobbed, weaponDef, WEAPON_IDS, WEAPONS, type WeaponId } from "../shared/catalog/weapons";
+import { lobbed, weaponDef, WEAPON_IDS, WEAPONS, type Weapon, type WeaponId } from "../shared/catalog/weapons";
 import { isMeleeId, meleeDef, meleeOffensive, type ArmId, type MeleeId } from "../shared/catalog/melee";
 import { liveMelee, meleeCharge, meleeReadiness, vibration } from "../shared/combat/melee";
 import { lobDirection, predictImpact } from "../shared/combat/ballistics";
@@ -14,17 +14,18 @@ import { BLOCK_SIZE, STEP } from "../shared/config";
 import type { BotProfile } from "../shared/design/presets";
 import { clamp } from "../shared/math/scalar";
 import { add, cross, distance, dot, len, norm, qrot, scale, sub, vec3, type Vec3 } from "../shared/math/vec";
-import { GAME_MODES, matchEntries, pickRoster, type GameModeId } from "../shared/modes";
+import { ENDLESS_MATCH, GAME_MODES, matchEntries, pickRoster, type GameModeId } from "../shared/modes";
 import { blockWorldPos, liveThrusters } from "../shared/robot/queries";
 import { isDetected } from "../shared/sim/detection";
-import type { ArmState, Bot, Projectile, Team, Turret } from "../shared/sim/entities";
-import { endMatch, selfDestruct, startMatch, type MatchRules } from "../shared/sim/match";
+import type { ArmState, Bot, HitTarget, Projectile, Team, Turret } from "../shared/sim/entities";
+import { endMatch, selfDestruct, startMatch } from "../shared/sim/match";
 import { CRUISE_POWER } from "../shared/sim/player";
 import { Simulation } from "../shared/sim/simulation";
 import type { SimEvent } from "../shared/sim/events";
 import type { World } from "../shared/sim/world";
 import { INPUT_RATE } from "../shared/net/protocol";
-import type { NetClient } from "./net/netClient";
+import { NetClient } from "./net/netClient";
+import { WorkerLink } from "./sim/workerLink";
 import { spawnTeams, spawnWave } from "../shared/sim/wave";
 import { Sound } from "./audio/sound";
 import { byId } from "./dom";
@@ -42,11 +43,14 @@ import { ACTIONS, WEAPON_SLOTS, type ActionId } from "./input/bindings";
 import { freeKeys, pilotKeys } from "./keys";
 import { ArenaView } from "./render/arenaView";
 import { ZoneView } from "./render/zoneView";
-import { ARENA_IDS, DEFAULT_ARENA, groundLevel, type ArenaId, type ArenaKey, type ArenaLayout } from "../shared/arena/layout";
+import { ARENA_IDS, DEFAULT_ARENA, groundLevel, isMapKey, type ArenaId, type ArenaKey, type ArenaLayout } from "../shared/arena/layout";
+import type { MapFile } from "../shared/map/format";
+import { mapFileOf } from "../shared/map/load";
 import { rayArena } from "../shared/arena/ray";
 import { Effects } from "./render/effects";
 import { Fx } from "./render/fx/fx";
 import { SceneLighting } from "./render/lighting";
+import { PoseInterpolation } from "./render/interpolation";
 import { firingTurret, recoilKick } from "./render/recoil";
 import type { FxLook, ShadowQuality } from "./settings";
 import { LocomotionView } from "./render/locomotionView";
@@ -65,8 +69,6 @@ import type { LostReason } from "./hud/hud";
 
 /** Au plus 4 pas de physique par image : au-delà, le jeu ralentit au lieu de s'emballer. */
 const MAX_STEPS_PER_FRAME = 4;
-/** Partie sans fin ni score, où les robots détruits réapparaissent : la bataille de la mesure du rendu. */
-const ENDLESS_BATTLE: MatchRules = { scoreToWin: 0, timeLimit: 0, respawn: 3 };
 /** Préparation d'une partie : attente au plus de cette durée (s) que la scène se dise prête (shaders compilés). */
 const READY_WAIT = 6;
 const SLOWMO_SCALE = 0.25;
@@ -77,6 +79,10 @@ const AIM_RANGE = 400;
 /** Démonstration derrière le menu : on relance une vague quand il reste si peu de robots actifs, ou au bout de ce temps (s). */
 const ATTRACT_MIN_ACTIVE = 3;
 const ATTRACT_MAX_WAVE = 120;
+/** La carte d'une arène communautaire (la partie solo dans un Worker la lui donne), ou rien pour une arène du jeu. */
+const communityMap = (key: ArenaKey): MapFile | undefined => (isMapKey(key) ? mapFileOf(key) : undefined);
+/** Démonstration : le temps (s) qu'une nouvelle vague arrive du Worker avant qu'on juge ce qu'il en reste. */
+const ATTRACT_SETTLE = 3;
 /** Une arène au hasard (démonstration derrière le menu). */
 const randomArena = (): ArenaId => ARENA_IDS[Math.floor(Math.random() * ARENA_IDS.length)];
 /** Distance de la caméra au robot piloté, au départ (m). */
@@ -211,7 +217,7 @@ export class ArenaGame {
   /** Arène en veille (le garage a l'écran) : ni simulation ni rendu. */
   suspended = false;
 
-  readonly engine: B.Engine;
+  readonly engine: B.AbstractEngine;
   private readonly shadows: B.ShadowGenerator;
   private readonly kit: SceneKit;
   private attract = false;
@@ -229,7 +235,14 @@ export class ArenaGame {
   private barriers: BarrierView;
   private locomotion: LocomotionView;
   /** Session multijoueur en cours, ou null (partie locale). */
-  private net: NetClient | null = null;
+  /**
+   * La réplique que montre le jeu et ce qui la nourrit : le serveur de jeu (une partie en réseau), ou
+   * la simulation de la partie solo dans un Worker (`local`) ; null : la simulation dans ce fil
+   * (`sim` : sans Worker, ou `?sim=page`).
+   */
+  private net: NetClient | WorkerLink | null = null;
+  /** La partie solo dans un Worker (client/sim/workerLink.ts), s'il a pu démarrer. */
+  private local: WorkerLink | null = null;
   /** Temps avant le prochain envoi des commandes au serveur (s). */
   private inputTimer = 0;
   private unbindWorld: () => void;
@@ -270,8 +283,12 @@ export class ArenaGame {
    * rendu (`npm run perf`, tools/browser/perf.mjs) l'active, comme `sim.profile` pour la simulation.
    */
   frameProfile: FrameProfile | null = null;
+  /** Graine du hasard de la partie solo dans le Worker (la mesure du rendu : une bataille rejouable), ou null. */
+  seed: number | null = null;
   /** Robots d'une vague sans joueur imposés (la mesure du rendu : `BATTLE_ROSTER`), ou tirés au sort. */
   private fixedRoster: readonly BotProfile[] | null = null;
+  /** En solo, les poses montrées au rendu, interpolées entre les deux derniers pas (render/interpolation.ts). */
+  private readonly poses = new PoseInterpolation();
   /** Des robots sont apparus (réapparitions) : la liste du HUD est à refaire. */
   private rosterChanged = false;
   /** Robot dont le HUD montre les armes (il change à chaque réapparition du joueur). */
@@ -302,10 +319,12 @@ export class ArenaGame {
   /** Part de la résolution de l'écran à laquelle l'image est calculée (réglage du joueur). */
   private renderScale = 1;
 
-  constructor(canvas: HTMLCanvasElement) {
+  /** Le jeu, sur le moteur de la page (WebGL ou WebGPU : render/engine.ts) et son canvas. */
+  constructor(engine: B.AbstractEngine) {
+    const canvas = engine.getRenderingCanvas()!;
     this.sim = new Simulation();
-    const kit = createScene(canvas);
-    const { engine, scene, shadows } = kit;
+    const kit = createScene(engine);
+    const { scene, shadows } = kit;
     this.kit = kit;
     this.engine = engine;
     this.scene = scene;
@@ -344,6 +363,40 @@ export class ArenaGame {
     this.unbindWorld = this.sim.on((e) => this.onWorldEvent(e));
     // La langue change (depuis les paramètres) : le HUD se refait dans la nouvelle langue
     onLocaleChange(() => this.refreshTexts());
+    this.startLocal();
+  }
+
+  /**
+   * La partie solo dans un Worker (client/sim/workerLink.ts) : le fil du rendu ne fait plus la
+   * simulation, il rejoue les images du Worker dans une réplique, comme en réseau. Sans Worker (ou
+   * `?sim=page` dans l'adresse), la simulation reste dans ce fil, comme avant. Si le Worker échoue,
+   * la partie en cours reprend dans ce fil.
+   */
+  private startLocal(): void {
+    if (typeof Worker === "undefined" || new URLSearchParams(location.search).get("sim") === "page") return;
+    try {
+      const link = new WorkerLink();
+      link.onFail = () => {
+        if (this.local !== link) return;
+        link.close();
+        this.local = null;
+        if (this.net === link) {
+          this.net = null;
+          this.bind(this.sim);
+          this.newWave();
+        }
+      };
+      this.local = link;
+      this.net = link;
+      this.bind(link.replica);
+    } catch (e) {
+      console.warn("La simulation reste sur la page : pas de Worker", e);
+    }
+  }
+
+  /** La partie se joue dans le Worker (la partie solo hors du fil du rendu). */
+  private get inWorker(): boolean {
+    return this.local !== null && this.net === this.local;
   }
 
   /**
@@ -366,7 +419,7 @@ export class ArenaGame {
 
   /** Une partie en réseau est-elle en cours ? */
   get online(): boolean {
-    return this.net !== null;
+    return this.net instanceof NetClient;
   }
 
   /** Effets, HUD et fin de partie, d'après les événements du monde affiché. */
@@ -475,8 +528,8 @@ export class ArenaGame {
   /** Marqueur au réticule (ou au pointeur), et son de confirmation ; un bloc détruit compte davantage. */
   private markHit(kind: MarkerKind): void {
     const p = this.controls.aimPoint();
-    const rect = this.engine.getRenderingCanvas()?.getBoundingClientRect();
-    this.feedback.showMarker(p.x + (rect?.left ?? 0), p.y + (rect?.top ?? 0), kind);
+    const box = this.controls.box;
+    this.feedback.showMarker(p.x + box.left, p.y + box.top, kind);
     this.sound.ui(kind);
   }
 
@@ -506,7 +559,7 @@ export class ArenaGame {
 
   /** Titre du tableau (Tab) : le mode et l'arène. */
   private showTitle(): void {
-    const mode = this.net ? t("hud.title.multiplayer") : modeName(this.mode);
+    const mode = this.online ? t("hud.title.multiplayer") : modeName(this.mode);
     this.hud.setTitle(`${mode} · ${arenaName(this.world.arena)}`);
   }
 
@@ -562,6 +615,8 @@ export class ArenaGame {
   startOnline(net: NetClient): void {
     endMatch(this.sim);
     this.sim.player = null;
+    // (la partie solo du Worker s'arrête là où elle en est)
+    this.local?.command({ t: "advance", dt: 0 });
     this.net = net;
     this.bind(net.replica);
     this.resetMatchStats();
@@ -582,10 +637,10 @@ export class ArenaGame {
 
   /** Fin de la partie en réseau : on se déconnecte et le rendu revient à la simulation locale. */
   stopOnline(): void {
-    if (!this.net) return;
-    this.net.close();
-    this.net = null;
-    this.bind(this.sim);
+    if (!this.online) return;
+    this.net!.close();
+    this.net = this.local;
+    this.bind(this.local?.replica ?? this.sim);
   }
 
   /** Une ligne dans le fil de la partie (crédits gagnés sur le serveur…). */
@@ -631,7 +686,7 @@ export class ArenaGame {
     const weapon = weaponDef(shown);
     if (reticle && player?.cockpit.alive && !piloted) {
       const spread = aimSpread(player, weapon, scoping);
-      const height = this.engine.getRenderingCanvas()?.clientHeight ?? 0;
+      const height = this.controls.box.height;
       spreadPx = (Math.tan(spread) / Math.tan(this.rig.camera.fov / 2)) * (height / 2);
       // Une arme de précision que le mouvement fait trembler : il faudrait s'immobiliser
       const base = weapon.spread * (scoping ? 1 : weapon.handling.hip);
@@ -799,15 +854,13 @@ export class ArenaGame {
   /** Position à l'écran (px, dans la fenêtre) d'un point du monde ; null s'il est derrière la caméra. */
   private toScreen(p: Vec3): { x: number; y: number } | null {
     const cam = this.rig.camera;
-    const canvas = this.engine.getRenderingCanvas();
-    if (!canvas) return null;
     // Matrices recalculées : la caméra a bougé depuis la dernière image dessinée
     const transform = cam.getViewMatrix(true).multiply(cam.getProjectionMatrix(true));
     const point = new B.Vector3(p.x, p.y, p.z);
     if (B.Vector3.Dot(point.subtract(cam.position), cam.target.subtract(cam.position)) <= 0) return null;
     const ndc = B.Vector3.TransformCoordinates(point, transform);
-    const rect = canvas.getBoundingClientRect();
-    return { x: rect.left + ((ndc.x + 1) / 2) * rect.width, y: rect.top + ((1 - ndc.y) / 2) * rect.height };
+    const box = this.controls.box;
+    return { x: box.left + ((ndc.x + 1) / 2) * box.width, y: box.top + ((1 - ndc.y) / 2) * box.height };
   }
 
   /** Robot volant piloté : assiette, inclinaison, altitude, vitesses et cap. */
@@ -843,7 +896,7 @@ export class ArenaGame {
 
   /** Le joueur pilote-t-il un robot ? */
   get piloting(): boolean {
-    return this.world.player !== null || this.online;
+    return this.world.player !== null || this.online || (this.inWorker && GAME_MODES[this.mode].pilot && this.playerProfile !== null);
   }
 
   /** Lance la boucle de rendu. */
@@ -862,6 +915,8 @@ export class ArenaGame {
         reported.add(text);
       }
       this.measure("rendu", () => this.scene.render());
+      // L'image dessinée, la simulation reprend ses corps (voir `simulateFrame`)
+      this.poses.end();
       if (profile) {
         profile.frames++;
         profile.totals.push(performance.now() - t0);
@@ -972,6 +1027,22 @@ export class ArenaGame {
     return !!this.world.player;
   }
 
+  /**
+   * La partie solo dans le Worker : attend que son monde soit arrivé (ses robots, et celui du joueur
+   * s'il pilote), au plus `timeout` s ; sans Worker, tout de suite.
+   */
+  async worldReady(timeout = 10): Promise<void> {
+    const link = this.local;
+    if (!link || !this.inWorker) return;
+    const end = performance.now() + timeout * 1000;
+    const pilot = GAME_MODES[this.mode].pilot && this.playerProfile !== null;
+    while (performance.now() < end) {
+      if (link.arrived && (!pilot || this.world.player)) return;
+      await this.renderedFrames(1);
+    }
+    console.warn(`Partie solo : le monde du Worker n'est pas arrivé au bout de ${timeout} s`);
+  }
+
   /** Démonstration derrière le menu : une bataille que la caméra survole, sans le joueur. */
   startDemo(): void {
     this.mode = "arena";
@@ -1005,7 +1076,8 @@ export class ArenaGame {
   }
 
   private applyRenderScale(): void {
-    const level = 1 / ((window.devicePixelRatio || 1) * this.renderScale);
+    // (au plus deux pixels par pixel CSS : un téléphone en a souvent trois, neuf fois plus d'image à calculer qu'un écran ordinaire)
+    const level = 1 / (Math.min(2, window.devicePixelRatio || 1) * this.renderScale);
     if (Math.abs(this.engine.getHardwareScalingLevel() - level) > 1e-6) this.engine.setHardwareScalingLevel(level);
   }
 
@@ -1049,6 +1121,13 @@ export class ArenaGame {
   /** Relance la vague (ou la partie) du mode en cours. */
   newWave(): void {
     const mode = GAME_MODES[this.mode];
+    if (this.inWorker) {
+      this.prepare();
+      const pilot = mode.pilot ? this.playerProfile : null;
+      this.local!.command({ t: "start", mode: this.mode, arena: this.arenaId, map: communityMap(this.arenaId), pilot, roster: pilot ? null : this.fixedRoster ?? pickRoster(mode), seed: this.seed ?? undefined });
+      this.finish();
+      return;
+    }
     if (mode.pilot && this.playerProfile) {
       this.prepare();
       const bots = spawnTeams(this.sim, matchEntries(mode, this.playerProfile));
@@ -1063,11 +1142,17 @@ export class ArenaGame {
   /** Vague composée de ces robots-là, sans joueur (débogage : `__casse.spawnWave(["tank", "heli"])`). */
   spawn(profiles: readonly BotProfile[]): void {
     this.prepare();
-    spawnWave(this.sim, profiles);
+    if (this.inWorker) this.local!.command({ t: "spawn", profiles });
+    else spawnWave(this.sim, profiles);
     this.finish();
   }
 
   private prepare(): void {
+    // (peut arriver pendant le rendu d'une image : la démonstration relance sa vague depuis la caméra)
+    this.poses.reset();
+    this.matchHud.clearFeed();
+    // Dans le Worker : la session refait l'arène et les robots (net/session.ts)
+    if (this.inWorker) return;
     endMatch(this.sim);
     this.sim.loadArena(this.arenaId);
     this.sim.player = null;
@@ -1077,11 +1162,13 @@ export class ArenaGame {
 
   private finish(): void {
     const mode = GAME_MODES[this.mode];
-    if (mode.match && this.piloting) startMatch(this.sim, mode.match);
-    // La bataille de la mesure du rendu (robots imposés) : sans fin, les robots détruits réapparaissent (la charge ne baisse pas)
-    else if (this.fixedRoster) startMatch(this.sim, ENDLESS_BATTLE);
-    this.waveStart = this.sim.time;
-    this.hud.setEnemies(this.sim.bots, this.sim.player);
+    if (!this.inWorker) {
+      if (mode.match && this.piloting) startMatch(this.sim, mode.match);
+      // La bataille de la mesure du rendu (robots imposés) : sans fin, les robots détruits réapparaissent (la charge ne baisse pas)
+      else if (this.fixedRoster) startMatch(this.sim, ENDLESS_MATCH);
+    }
+    this.waveStart = performance.now() / 1000;
+    this.hud.setEnemies(this.world.bots, this.world.player);
     this.showTitle();
     this.rosterChanged = false;
     this.setFollow(-1);
@@ -1113,8 +1200,28 @@ export class ArenaGame {
     else if (this.sim.player) selfDestruct(this.sim, this.sim.player);
   }
 
+  /**
+   * Un impact de la console (`__casse.applyDamage`) : dans la simulation de la page (`here`), ou
+   * demandé à la session du Worker (sans cible imposée : l'impact touche ce qui est au point).
+   */
+  debugDamage(point: Vec3, dir: Vec3, weapon: Weapon, target: HitTarget | null, here: (sim: Simulation) => void): void {
+    if (!this.inWorker) {
+      here(this.sim);
+      return;
+    }
+    const id = WEAPON_IDS.find((w) => WEAPONS[w] === weapon || WEAPONS[w].projectile === weapon.projectile);
+    if (!id) return;
+    if (target) console.warn("Partie solo dans le Worker : l'impact touche ce qui est au point, sans cible imposée");
+    this.local!.command({ t: "damage", point, dir, weapon: id, shooter: this.rig.position });
+  }
+
   /** Avance la simulation de `n` pas d'un coup, puis met le rendu à jour. */
   simulate(n: number): void {
+    this.poses.reset();
+    if (this.inWorker) {
+      this.local!.command({ t: "steps", n });
+      return;
+    }
     for (let i = 0; i < n; i++) this.sim.step();
     this.syncViews();
   }
@@ -1132,6 +1239,19 @@ export class ArenaGame {
       if (free) this.sim.fire(this.weapon, from, d, homing);
       else this.sim.tryFire(this.weapon, from, d, homing);
     };
+    if (this.inWorker) {
+      // La session tire, et cherche elle-même la cible d'une tête chercheuse
+      const fire = (from: Vec3, d: Vec3, homing: { from: Vec3; dir: Vec3; airOnly: boolean } | null = null): void =>
+        this.local!.command({ t: "fire", weapon: this.weapon, origin: from, dir: d, free, homing });
+      if (spec.mine) {
+        fire(add(point, vec3(0, 1, 0)), vec3(0, -1, 0));
+        return;
+      }
+      const side = norm(cross(dir, vec3(0, 1, 0)));
+      const from = add(add(origin, scale(dir, 2)), add(scale(side, -0.6), vec3(0, -0.5, 0)));
+      fire(from, norm(sub(point, from)), spec.guidance?.mode === "homing" ? { from: origin, dir, airOnly: !!spec.guidance.airOnly } : null);
+      return;
+    }
     if (spec.mine) {
       shoot(add(point, vec3(0, 1, 0)), vec3(0, -1, 0));
       return;
@@ -1193,6 +1313,7 @@ export class ArenaGame {
 
   setPaused(paused: boolean): void {
     this.sim.aiPaused = paused;
+    if (this.inWorker) this.local!.command({ t: "pause", ai: paused });
     this.hud.showPaused(paused);
   }
 
@@ -1272,7 +1393,8 @@ export class ArenaGame {
       this.controls.poll(dt);
       this.readInput(dt);
     });
-    if (this.net) this.measure("réplique", () => this.replay(dt));
+    if (this.inWorker) this.measure("réplique", () => this.replayLocal(dt));
+    else if (this.net) this.measure("réplique", () => this.replay(dt));
     else this.measure("simulation", () => this.simulateFrame(dt));
 
     if (this.rosterChanged) {
@@ -1354,6 +1476,23 @@ export class ArenaGame {
     }
   }
 
+  /**
+   * La partie solo dans le Worker : ses commandes et le temps qui passe (au ralenti, ou rien pendant
+   * la pause) partent à chaque image ; la réplique rejoue les images reçues ; le tir continu de la
+   * caméra libre.
+   */
+  private replayLocal(dt: number): void {
+    const step = this.frozen ? 0 : dt * this.timeScale;
+    const link = this.local!;
+    link.command({ t: "input", input: this.sim.input, aim: this.sim.playerAim });
+    link.command({ t: "advance", dt: step });
+    link.replica.advance(step);
+    if (this.inputEnabled && !this.frozen && !this.piloting && this.controls.freeTrigger && WEAPONS[this.weapon].automatic) {
+      const p = this.controls.aimPoint();
+      this.tryFire(p.x, p.y);
+    }
+  }
+
   /** En local : la physique à pas fixe (rien pendant la pause), et le tir continu de la caméra libre. */
   private simulateFrame(dt: number): void {
     if (!this.frozen) this.accumulator += dt * this.timeScale;
@@ -1361,11 +1500,15 @@ export class ArenaGame {
     const t0 = performance.now();
     while (this.accumulator >= STEP && steps < MAX_STEPS_PER_FRAME) {
       this.sim.step();
+      this.poses.capture(this.sim);
       this.accumulator -= STEP;
       steps++;
     }
     if (steps === MAX_STEPS_PER_FRAME) this.accumulator = 0;
     if (steps) this.physMs = this.physMs * 0.85 + ((performance.now() - t0) / steps) * 0.15;
+    // Jusqu'à la fin de l'image, le rendu voit les poses entre les deux derniers pas, à la part du
+    // pas suivant déjà écoulée : tout glisse, quel que soit le rythme de l'écran (120, 144 Hz…)
+    this.poses.begin(this.accumulator / STEP);
 
     // Caméra libre, arme automatique : tir continu tant que le bouton (ou la touche de tir) est maintenu
     if (this.inputEnabled && !this.frozen && !this.piloting && this.controls.freeTrigger && WEAPONS[this.weapon].automatic) {
@@ -1514,6 +1657,7 @@ export class ArenaGame {
     if (!player) {
       if (this.armedBot) this.resetArsenal();
       if (!this.net) this.hud.showArsenal(this.sim.playerArms);
+      else if (this.inWorker && this.local!.replica.freeArms) this.hud.showArsenal(this.local!.replica.freeArms);
       return;
     }
     if (player !== this.armedBot) {
@@ -1679,8 +1823,10 @@ export class ArenaGame {
     this.locomotion.hidden = hidden;
     if (this.attract) {
       this.rig.drift(dt);
-      const active = this.sim.bots.filter(isOperational).length;
-      if (active < ATTRACT_MIN_ACTIVE || this.sim.time - this.waveStart > ATTRACT_MAX_WAVE) {
+      const active = this.world.bots.filter(isOperational).length;
+      const age = performance.now() / 1000 - this.waveStart;
+      // (une partie qui vient de partir pour le Worker n'a pas encore ses robots)
+      if (age > ATTRACT_SETTLE && (active < ATTRACT_MIN_ACTIVE || age > ATTRACT_MAX_WAVE)) {
         this.arenaId = randomArena();
         this.newWave();
       }

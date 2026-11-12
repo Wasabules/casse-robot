@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/Wasabules/casse-robot/main/schemas/map.schema.json",
   "title": "Casse-Robot community map",
-  "description": "A community map (.casse-map.json), format 1: meters and degrees, north = +z, west = +x, up = +y. Generated from the game's code (npm run schemas); the guide is docs/maps.md. Unknown fields are ignored. The game checks more than a schema can say: consistent dimensions, the terrain covering the play area, nothing off the map, zones with different letters that the AI reaches, clear and safe spawn lines at least 24 m apart, at most 400 boxes and 900 props (120 movable) once the prefabs are unfolded, 1200 scattered trees and rocks, 1024 points for all paths, 512 for all lava; a [min, max] pair needs min ≤ max, a waterfall's bottom below its top, a prop's rests below the number of props. Texts are measured once trimmed. Run npm run map:check.",
+  "description": "A community map (.casse-map.json), format 1: meters and degrees, north = +z, west = +x, up = +y. Generated from the game's code (npm run schemas); the guide is docs/maps.md. Unknown fields are ignored. The game checks more than a schema can say: consistent dimensions, the terrain covering the play area, nothing off the map, zones with different letters that the AI reaches, clear and safe spawn lines at least 24 m apart, at most 400 boxes and 900 props (120 movable) once the prefabs are unfolded, 1200 scattered trees and rocks, 1024 points for all paths, 512 for all lava; a [min, max] pair needs min ≤ max, a waterfall's bottom below its top, a prop's rests below the number of props, a quaternion of norm 1, a nav graph's links below its number of points. Texts are measured once trimmed. Run npm run map:check.",
   "type": "object",
   "properties": {
     "$schema": {
@@ -118,6 +118,9 @@
           }
         }
       ]
+    },
+    "navGraph": {
+      "$ref": "#/$defs/navGraph"
     },
     "boxes": {
       "description": "The static scenery: indestructible boxes.",
@@ -258,7 +261,18 @@
       "items": {
         "type": "number",
         "minimum": 0.01,
-        "maximum": 200
+        "maximum": 440
+      }
+    },
+    "quat": {
+      "description": "A unit quaternion [x, y, z, w] (the game checks that its norm is 1, within 0.01).",
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "number",
+        "minimum": -1,
+        "maximum": 1
       }
     },
     "seed": {
@@ -346,6 +360,7 @@
           "description": "Grid step (m).",
           "enum": [
             1,
+            1.25,
             2
           ]
         },
@@ -383,6 +398,16 @@
             },
             "cells": {
               "maximum": 440
+            }
+          }
+        },
+        {
+          "properties": {
+            "step": {
+              "const": 1.25
+            },
+            "cells": {
+              "maximum": 352
             }
           }
         },
@@ -899,6 +924,10 @@
           "description": "Rotation around z (degrees), after the pitch.",
           "$ref": "#/$defs/angle"
         },
+        "quat": {
+          "description": "An exact orientation, as a unit quaternion [x, y, z, w]; yaw, pitch and roll turn it further. Written by the export of the game's arenas when degrees don't give a rotation back to the bit.",
+          "$ref": "#/$defs/quat"
+        },
         "look": {
           "description": "Its appearance, other than its kind's own.",
           "type": "string",
@@ -999,6 +1028,10 @@
           "description": "Rotation around z (degrees), after the pitch.",
           "$ref": "#/$defs/angle"
         },
+        "quat": {
+          "description": "An exact orientation, as a unit quaternion [x, y, z, w]; yaw, pitch and roll turn it further. Written by the export of the game's arenas when degrees don't give a rotation back to the bit.",
+          "$ref": "#/$defs/quat"
+        },
         "size": {
           "description": "Dimensions of a slab.",
           "$ref": "#/$defs/size"
@@ -1024,6 +1057,14 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 10000
+        },
+        "diamond": {
+          "description": "Set on its corner (a gable under a pitched roof): the renderer straightens its texture.",
+          "type": "boolean"
+        },
+        "centered": {
+          "description": "y is the height of its center (like a box's), not of its base.",
+          "type": "boolean"
         }
       },
       "required": [
@@ -1605,7 +1646,7 @@
       ]
     },
     "place": {
-      "description": "A named place for the full map (M).",
+      "description": "A named place for the full map (M): its name, or one of the places of the game's arenas (place), translated.",
       "type": "object",
       "properties": {
         "name": {
@@ -1629,6 +1670,55 @@
             "maxLength": 32
           }
         },
+        "place": {
+          "description": "One of the places of the game's arenas, shown in the player's language (instead of name).",
+          "type": "string",
+          "enum": [
+            "village",
+            "fort",
+            "factory",
+            "airfield",
+            "bridge",
+            "sawmill",
+            "cabin",
+            "town",
+            "mine",
+            "mesa",
+            "arch",
+            "oasis",
+            "viaduct",
+            "northTunnel",
+            "southTunnel",
+            "station",
+            "tracks",
+            "expressway",
+            "offices",
+            "square",
+            "park",
+            "tower",
+            "carPark",
+            "northBoulevard",
+            "southBoulevard",
+            "crater",
+            "lagoon",
+            "bunkers",
+            "airstrip",
+            "wreck",
+            "waterfall",
+            "lavaFlow",
+            "freighter",
+            "swingBridge",
+            "basin",
+            "harbourOffice",
+            "silos",
+            "terminal",
+            "fuelDepot",
+            "warehouses",
+            "fishermen",
+            "lighthouse",
+            "railway"
+          ]
+        },
         "x": {
           "description": "X of the place (m; +x is west).",
           "$ref": "#/$defs/coord"
@@ -1639,9 +1729,53 @@
         }
       },
       "required": [
-        "name",
         "x",
         "z"
+      ],
+      "anyOf": [
+        {
+          "required": [
+            "name"
+          ]
+        },
+        {
+          "required": [
+            "place"
+          ]
+        }
+      ]
+    },
+    "navGraph": {
+      "description": "The AI's nav graph (a map that the terrain cuts up, like the Canyon): points and the links between them, taken as given. A map that has one has no nav grid unless it asks for one (nav). The game also checks that each link joins two of its points.",
+      "type": "object",
+      "properties": {
+        "points": {
+          "description": "Its points: [[x, z], …].",
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "$ref": "#/$defs/point"
+          }
+        },
+        "links": {
+          "description": "Its links, both ways: [[i, j], …] (indices in points).",
+          "type": "array",
+          "maxItems": 8192,
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1023
+            }
+          }
+        }
+      },
+      "required": [
+        "points",
+        "links"
       ]
     },
     "spawn": {

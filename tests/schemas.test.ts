@@ -63,14 +63,15 @@ const FULL = {
   urban: true,
   ambience: "fort",
   nav: { cell: 2.5, maxSlope: 26 },
-  boxes: [{ kind: "wall", x: 10, z: 10, y: 1, size: [4, 2, 0.5], yaw: 30, pitch: 5, roll: -5, look: "timber", round: false, underpass: true, approach: 6 }],
+  navGraph: { points: [[-20, -20], [0, -20], [0, 0]], links: [[0, 1], [1, 2]] },
+  boxes: [{ kind: "wall", x: 10, z: 10, y: 1, size: [4, 2, 0.5], yaw: 30, pitch: 5, roll: -5, quat: [0.6, 0, 0, 0.8], look: "timber", round: false, underpass: true, approach: 6 }],
   props: [
-    { type: "brick", x: 0, z: 5, y: 0, yaw: 90, pitch: 0, roll: 0, size: [4, 3, 0.3], scale: 1, rests: [], group: 1 },
-    { type: "roof", x: 0, z: 5, y: 3, yaw: 90, pitch: 10, roll: 0, size: [4, 0.2, 4], scale: 1.2, rests: [0], group: 1 },
+    { type: "brick", x: 0, z: 5, y: 0, yaw: 90, pitch: 0, roll: 0, quat: [0, 0, 0, 1], size: [4, 3, 0.3], scale: 1, rests: [], group: 1, diamond: false, centered: false },
+    { type: "roof", x: 0, z: 5, y: 3, yaw: 90, pitch: 10, roll: 0, quat: [0, 0.6, 0, 0.8], size: [4, 0.2, 4], scale: 1.2, rests: [0], group: 1, diamond: true, centered: true },
   ],
   prefabs: Object.values(PREFABS),
   zones: [{ label: "A", x: 0, z: 0, y: 0.5, radius: 6 }, { label: "C", x: 20, z: 0, y: 1, radius: 8 }],
-  places: [{ name: "Village", names: { en: "Village" }, x: 20, z: 20 }],
+  places: [{ name: "Village", names: { en: "Village" }, place: "village", x: 20, z: 20 }],
   spawns: { blue: { x: 0, z: -45, facing: 0, width: 30 }, red: { x: 0, z: 45, facing: 180, width: 30 } },
 } as const satisfies Full<MapFile>;
 
@@ -127,9 +128,13 @@ const STRING_CANDIDATES = ["zz-unknown", "", " ", "x".repeat(32), "x".repeat(33)
 /**
  * Champs dont la lecture juge la valeur d'après un autre champ (le schéma ne le peut pas : voir sa
  * description) : le relief (hauteurs et taille), le bas d'une cascade sous son haut, les appuis d'un
- * accessoire sous le nombre d'accessoires, les paires [min, max].
+ * accessoire sous le nombre d'accessoires, les paires [min, max], la norme d'un quaternion (ses
+ * quatre composantes ensemble), les liaisons d'un réseau de passage sous le nombre de ses points.
  */
-const RELATIVE = [/^terrain\./, /^falls\[\d+\]\.(top|bottom)$/, /^props\[\d+\]\.rests\[\d+\]$/, /^prefabs\[\d+\]\.(scale|size)\[\d+\]$/];
+const RELATIVE = [
+  /^terrain\./, /^falls\[\d+\]\.(top|bottom)$/, /^props\[\d+\]\.rests\[\d+\]$/, /^prefabs\[\d+\]\.(scale|size)\[\d+\]$/,
+  /^(boxes|props)\[\d+\]\.quat\[\d+\]$/, /^navGraph\.links\[\d+\]\[\d+\]$/,
+];
 
 describe("schémas JSON des formats ouverts", () => {
   it("les fichiers de schemas/ sont ceux que fait le générateur d'après le code", () => {

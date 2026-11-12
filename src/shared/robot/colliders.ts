@@ -9,6 +9,7 @@ import { CONTACT_FORCE_THRESHOLD } from "../combat/collisions";
 import { COLLISION_GROUPS } from "../physics/groups";
 import type { Block, Bot, ColliderOwner, HitTarget, MeleeHitbox, Part, Turret, TurretHitbox } from "../sim/entities";
 import type { Simulation } from "../sim/simulation";
+import { dcos, dpow, dsin } from "../math/det";
 
 /** Jeu laissé entre un bloc et ses voisins d'un autre morceau (m). */
 const GAP = BLOCK_SIZE / 2 - BLOCK_HALF;
@@ -91,7 +92,7 @@ function shapeHulls(shape: ShapeId): { points: Float32Array; volume: number }[] 
   if (!hulls) {
     hulls = shapePieces(shape).map((p) => ({
       points: Float32Array.from(p.points.flatMap((v) => [v.x * BLOCK_HALF, v.y * BLOCK_HALF, v.z * BLOCK_HALF])),
-      volume: p.volume * BLOCK_HALF ** 3,
+      volume: p.volume * dpow(BLOCK_HALF, 3),
     }));
     HULLS.set(shape, hulls);
   }
@@ -239,7 +240,7 @@ function addBlades(sim: Simulation, part: Part): void {
         moves = "rotor";
         for (let i = 0; i < blade.arms.count; i++) attachTo(RAPIER.ColliderDesc.cuboid(blade.arms.width / 2, half, reach));
       } else if (blade.inner > 0) {
-        const chord = blade.outer * Math.sin(Math.PI / RING_SEGMENTS);
+        const chord = blade.outer * dsin(Math.PI / RING_SEGMENTS);
         for (let i = 0; i < RING_SEGMENTS; i++) attachTo(RAPIER.ColliderDesc.cuboid(chord, half, reach));
       } else {
         attachTo(RAPIER.ColliderDesc.cylinder(half, blade.outer));
@@ -274,7 +275,7 @@ function placeBlade(h: MeleeHitbox): void {
   };
   const blade = spec.blade;
   if (blade) {
-    const along = (a: number): Vec3 => add(scale(e1, Math.cos(a)), scale(e2, Math.sin(a)));
+    const along = (a: number): Vec3 => add(scale(e1, dcos(a)), scale(e2, dsin(a)));
     const middle = (blade.inner + blade.outer) / 2;
     if (blade.arms || blade.inner > 0) {
       const n = h.colliders.length;

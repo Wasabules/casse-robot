@@ -10,6 +10,7 @@ import {
   type WheelMount,
 } from "./robotDesign";
 import { BELT_CLEARANCE, BELT_MARGIN, trackGroups } from "./tracks";
+import { dcos, dpow, dsin } from "../math/det";
 
 /*
  * Encombrement des pièces d'un plan : ce que chacune occupe au-delà de sa case, en volumes simples
@@ -133,7 +134,7 @@ export function kneeOf(hip: Vec3, foot: Vec3, out: Vec3): Vec3 {
   const axis = norm(sub(foot, hip));
   let bend = add(vec3(0, 1.2, 0), out);
   bend = norm(sub(bend, scale(axis, dot(bend, axis))));
-  return add(scale(add(hip, foot), 0.5), scale(bend, Math.sqrt(LEG_SEGMENT ** 2 - (d / 2) ** 2)));
+  return add(scale(add(hip, foot), 0.5), scale(bend, Math.sqrt(dpow(LEG_SEGMENT, 2) - dpow(d / 2, 2))));
 }
 
 /** L'extérieur d'une patte : à l'horizontale, du centre de masse vers sa hanche (`fallback` si elle est dessous). */
@@ -179,7 +180,7 @@ function frame(b: BlockPlacement): { at: (p: Vec3) => Vec3; size: (h: Vec3) => V
 export function plateBody(b: BlockPlacement): Solid | null {
   if (!isBlockType(b.type) || blockDef(b.type).shape !== "plate") return null;
   const tilt = blockDef(b.type).aero?.maxDeflection ?? 0;
-  const thick = (BLOCK_SIZE / 2) * Math.sin(tilt) + (PLATE_THICKNESS / 2) * Math.cos(tilt);
+  const thick = (BLOCK_SIZE / 2) * dsin(tilt) + (PLATE_THICKNESS / 2) * dcos(tilt);
   return { kind: "box", center: center(b), half: frame(b).size(vec3(BLOCK_SIZE / 2, thick, BLOCK_SIZE / 2)) };
 }
 

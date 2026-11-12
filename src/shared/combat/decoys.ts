@@ -8,6 +8,7 @@ import type { Bot, Projectile } from "../sim/entities";
 import type { Simulation } from "../sim/simulation";
 import { isStunned } from "./emp";
 import { areEnemies, spawnProjectile } from "./projectiles";
+import { dpow } from "../math/det";
 
 /*
  * Leurres. Un lance-leurres (bloc à `flares`) éjecte, sur ordre du joueur (touche F) ou quand
@@ -33,8 +34,8 @@ const DECOY_CONE = 0.9;
 const SALVO_CHANCE = { homing: 0.65, command: 0.4 };
 const FLARES_PER_SALVO = weaponDef("flare").projectile.pellets?.count ?? 1;
 const DECOY_CHANCE = {
-  homing: 1 - Math.pow(1 - SALVO_CHANCE.homing, 1 / FLARES_PER_SALVO),
-  command: 1 - Math.pow(1 - SALVO_CHANCE.command, 1 / FLARES_PER_SALVO),
+  homing: 1 - dpow(1 - SALVO_CHANCE.homing, 1 / FLARES_PER_SALVO),
+  command: 1 - dpow(1 - SALVO_CHANCE.command, 1 / FLARES_PER_SALVO),
 };
 /** Un missile détourné éclate à moins de cette distance de son leurre (m). */
 export const DECOY_BURST = 1.5;

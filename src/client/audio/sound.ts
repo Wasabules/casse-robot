@@ -12,7 +12,7 @@ import { energyFraction } from "../../shared/robot/energy";
 import type { Block, Bot, GroundFire, Projectile, Prop } from "../../shared/sim/entities";
 import type { ImpactSurface, SimEvent } from "../../shared/sim/events";
 import type { World } from "../../shared/sim/world";
-import { Music, type MusicTheme } from "./music";
+import { Music, type MusicListener, type MusicNow, type MusicTheme } from "./music";
 import { cueAllowed, soundScene, STINGER_DUCK, type SoundScene, type SoundScreen } from "./soundScene";
 import { canPlayOpus, LOOP_PAD, SampleBank, SAMPLES, type SampleKey } from "./samples";
 // (en espace de noms : `t` est ici le temps)
@@ -672,6 +672,8 @@ export class Sound {
   private preloading: Promise<void> | null = null;
   private musicTheme: MusicTheme | null = null;
   private musicVolume = 0.5;
+  /** Le lecteur de musique (hud/nowPlaying.ts), qui écoute ce qui change. */
+  private musicListener: MusicListener | null = null;
   /** Relevé des sons joués (réglage « Afficher les sons joués ») : le nom de chacun, et sa distance. */
   private trace: ((label: string) => void) | null = null;
   private sim: World;
@@ -956,9 +958,38 @@ export class Sound {
     return this.music?.debugState() ?? null;
   }
 
-  /** Passe au morceau suivant de l'écran, s'il est prêt (essais, console : `__casse.game.sound.skipMusic()`). */
+  /**
+   * Morceau suivant de l'écran (le lecteur des menus, la touche en partie), en fondu ; faux sans
+   * musique d'écran. Console : `__casse.game.sound.nextMusic()` (`skipMusic`, son ancien nom).
+   */
+  nextMusic(): boolean {
+    return this.music?.next() ?? false;
+  }
+
+  /** L'ancien nom de `nextMusic` (essais, console). */
   skipMusic(): boolean {
-    return this.music?.skip() ?? false;
+    return this.nextMusic();
+  }
+
+  /** Revient au morceau précédent de l'écran (son historique), en fondu ; faux s'il n'y en a pas. */
+  previousMusic(): boolean {
+    return this.music?.previous() ?? false;
+  }
+
+  /** Ce que joue la musique (le lecteur, les paramètres) ; null sans musique (pas d'Opus, pas encore de son). */
+  musicNow(): MusicNow | null {
+    return this.music?.now() ?? null;
+  }
+
+  /** La musique s'entend-elle (son activé, volume général et volume de la musique non nuls) ? */
+  get musicAudible(): boolean {
+    return this.enabled && this.volume > 0 && this.musicVolume > 0;
+  }
+
+  /** Le lecteur de musique écoute ce qui change (un morceau commence, se prépare, est illisible ; la musique se tait). */
+  set onMusic(listener: MusicListener | null) {
+    this.musicListener = listener;
+    if (this.music) this.music.onChange = listener;
   }
 
   private unlock(): void {
@@ -1007,6 +1038,7 @@ export class Sound {
     for (let i = 0; i < PROP_VOICES; i++) this.propVoices.push({ loop: new LoopVoice(ctx, this.worldBus, true), prop: null });
     if (canPlayOpus()) {
       this.music = new Music(ctx, this.master, import.meta.env.BASE_URL);
+      this.music.onChange = this.musicListener;
       this.music.setVolume(this.musicVolume);
       this.music.play(this.musicTheme);
       this.samples = new SampleBank(ctx);

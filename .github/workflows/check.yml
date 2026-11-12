@@ -23,6 +23,26 @@ jobs:
       - run: npm run check
       - run: npm run map:check
 
+  # La simulation compilée (crates/casse-sim, Rust) : ses tests, puis le module reconstruit ici,
+  # vérifié contre le TypeScript (tests/native.test.ts : mêmes entrées, mêmes sorties au bit près)
+  native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # (la version de rust-toolchain.toml, et sa cible WebAssembly : rustup la prend ensuite d'elle-même)
+      - run: rustup toolchain install 1.99.1 --profile minimal --target wasm32-unknown-unknown
+      - run: npm ci
+      - run: npm run native:test
+      - run: npm run native
+      # (et la sonde de la physique : Rapier 0.36 compilé ici contre celui du jeu, au bit près)
+      - run: npm run native -- --probe
+      - run: npx vitest run tests/native.test.ts tests/nativePhysics.test.ts
+
   # Le rendu : le jeu construit, dans Chrome sans carte graphique (SwiftShader) ; chaque écran se
   # dessine sans erreur ni shader qui ne compile pas, et survit à une perte du contexte WebGL
   render:
@@ -36,6 +56,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run render:check
+      # Le même parcours sous WebGPU, si le Chrome de la machine d'intégration l'offre sans carte
+      # graphique (sinon l'essai le dit et passe : il est fait sur une vraie carte avant chaque envoi)
+      - run: npm run render:check -- --no-build --renderer=webgpu --optional
       - if: failure()
         uses: actions/upload-artifact@v4
         with:

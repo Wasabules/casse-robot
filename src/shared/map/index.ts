@@ -5,13 +5,16 @@
  * relief s'importe d'une image ou d'un RAW (heightmap.ts). Le détail pour les auteurs : docs/maps.md.
  */
 export * from "./format";
-export { encodeTerrain, decodeTerrain, fromBase64, toBase64 } from "./codec";
+export { encodeTerrain, decodeTerrain, fromBase64, terrainCodes, toBase64 } from "./codec";
 export { canonicalJson, mapKey } from "./key";
 export {
-  MAP_CHOICES, MAP_LISTS, MAP_MIGRATIONS, MAP_PATTERNS, MAP_RANGES, MAX_ANGLE, readMap, readMapText, upgradeMap, ZONE_LABELS,
+  MAP_CHOICES, MAP_LISTS, MAP_MIGRATIONS, MAP_PATTERNS, MAP_RANGES, MAX_ANGLE, QUAT_SLACK, readMap, readMapText, upgradeMap, ZONE_LABELS,
   type MapMigration, type NumberRange, type ReadResult,
 } from "./read";
 export { arenaFromMap, boundAt, groundStyle, mapBounds, turnQuat, type ArenaOrigins, type ElementOrigin } from "./build";
+export { exactDegrees, exactTurn, mapFromArena } from "./export";
+export { mapText } from "./text";
+export { PACKAGE_FILES, packageImage, packMap, unpackMap, type MapPackage, type PackedMap, type PackedTerrain } from "./pack";
 export { checkMap, checkMapText, needsSize, validateMap, validateArena, type MapCheck } from "./validate";
 export {
   decodePng, decodeRaw16, heightsFromImage, imageFromBytes, imageFromHeights, isHeightmapError, MAX_IMAGE_SIDE, sampleImage, smoothImage, terrainFromImage,

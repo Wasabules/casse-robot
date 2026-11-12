@@ -13,6 +13,8 @@ A map is made **in the game, with the map editor** (main menu → **Map editor**
 - [Level design tips](#level-design-tips)
 - [Testing your map](#testing-your-map)
 - [Submitting your map to the game](#submitting-your-map-to-the-game)
+- [The game's arenas as maps](#the-games-arenas-as-maps)
+- [Map packages](#map-packages)
 - [For developers](#for-developers)
 
 ## The editor
@@ -63,7 +65,7 @@ To submit the map to the game, export it (**File → Export the map**) and follo
 
 - **Meters and degrees.** The center of the map is the origin; **north = +z, west = +x, up = +y** (a robot facing north has west on its left). The minimap and the full map (M) show north up and west on the left; a terrain image reads the same way (its top to the north, its left to the west).
 - The **reds** start from the north (+z), the **blues** from the south (-z), except with [free spawn lines](#spawn-lines-spawns). A fair map is symmetric about the east-west axis (z → -z) or about the center.
-- **Rotations** (`yaw`, `pitch`, `roll`, in degrees): yaw turns around the vertical (90 turns north toward west), then pitch around x, then roll around z.
+- **Rotations** (`yaw`, `pitch`, `roll`, in degrees): yaw turns around the vertical (90 turns north toward west), then pitch around x, then roll around z. A box or a prop can also have `quat`, an exact orientation as a unit quaternion `[x, y, z, w]` (the export of the game's arenas writes one when degrees don't give a rotation back to the bit); `yaw`, `pitch` and `roll` then turn it further (that's how the editor turns such an element).
 - A point on the plane is written `[x, z]`; dimensions, `[largeur (x), hauteur (y), profondeur (z)]` (width, height, depth).
 - **Heights:** without `y`, an element is **placed on the ground** (the terrain); with `y`, at that (absolute) height. For a prop and a building, `y` is the height of its **base**; for a scenery box, that of its **center**.
 
@@ -100,7 +102,7 @@ The game ignores the `$schema` key: with or without it, it's the same map, with 
 
 A schema only says what a schema can say: types, required fields, bounds, lengths, allowed values. The game checks more (see [Limits and checks](#limits-and-checks)): the terrain's data and coverage, consistent dimensions, zones with different letters that the AI reaches, clear and safe spawn lines, the counts once the prefabs are unfolded. `npm run map:check` has the last word.
 
-A robot design (the blocks and wheels the garage saves) has its schema too: [`schemas/robot.schema.json`](../schemas/robot.schema.json).
+A robot design (the blocks and wheels the garage saves) has its schema too: [`schemas/robot.schema.json`](../schemas/robot.schema.json). The numbers of the game's elements (the props' shapes, masses and hit points, the blocks, the weapons…) are published as data in [`content/catalog.json`](../content/catalog.json), with [its schema](../content/catalog.schema.json).
 
 ### `format` and `meta`
 
@@ -120,7 +122,7 @@ A square grid of heights, centered on the origin. Without `terrain`, the map is 
 | Field | | |
 |---|---|---|
 | `cells` | 16 to 440 | Cells per side (there are `cells + 1` vertices per side). |
-| `step` | 1 or 2 | Grid step (m). The terrain is `cells × step` m per side, **440 m at most**. A power-of-two step: at 1.375 m, physics rays slipped between the terrain's triangles. |
+| `step` | 1, 1.25 or 2 | Grid step (m). The terrain is `cells × step` m per side, **440 m at most**. Steps that are exact in binary: at 1.375 m, physics rays slipped between the terrain's triangles; 1.25 is the Volcanic Island's. |
 | `min`, `max` | 0 to 250 | Heights (m) of the lowest and highest code. |
 | `heights` | | The heights, coded from 0 (`min`) to 65,535 (`max`) as **little-endian** Uint16, encoded in **base64**. Order: one column per x, from east (-x) to west (+x), and within each column increasing z (south to north): the index of vertex (ix, iz) is `ix × (cells + 1) + iz`. |
 
@@ -161,7 +163,7 @@ Don't write it by hand: `npm run map:terrain` makes it from an image (see [Impor
 
 ### `boxes`: the static scenery
 
-Indestructible boxes: `{ "kind", "x", "z", "y"?, "size": [l, h, p], "yaw"?, "pitch"?, "roll"?, "look"?, "round"?, "underpass"?, "approach"? }` (`[l, h, p]`: width, height, depth).
+Indestructible boxes: `{ "kind", "x", "z", "y"?, "size": [l, h, p], "yaw"?, "pitch"?, "roll"?, "quat"?, "look"?, "round"?, "underpass"?, "approach"? }` (`[l, h, p]`: width, height, depth; each up to 440 m, from one edge of the map to the other).
 
 | `kind` | |
 |---|---|
@@ -181,7 +183,7 @@ Indestructible boxes: `{ "kind", "x", "z", "y"?, "size": [l, h, p], "yaw"?, "pit
 
 ### `props`: the props
 
-What breaks, burns, explodes or falls: `{ "type", "x", "z", "y"?, "yaw"?, "pitch"?, "roll"?, "size"?, "scale"?, "rests"?, "group"? }`.
+What breaks, burns, explodes or falls: `{ "type", "x", "z", "y"?, "yaw"?, "pitch"?, "roll"?, "quat"?, "size"?, "scale"?, "rests"?, "group"?, "diamond"?, "centered"? }`.
 
 | `type` | Shape | |
 |---|---|---|
@@ -192,7 +194,7 @@ What breaks, burns, explodes or falls: `{ "type", "x", "z", "y"?, "yaw"?, "pitch
 | `pine`, `oak`, `palm`, `kapok` | cylinder (`scale`) | Trees: they topple, burn. |
 | `cactus`, `lamppost`, `floodlight`, `watertank`, `tank` | cylinder (`scale`) | The storage tank (`tank`) explodes and sets off its neighbors. At night (`sky.night`), the lamppost and the floodlight mast (9 m, its floodlights along its `yaw`, like the lamppost's arm) give light; knocked over or broken, they go out. |
 
-`scale` enlarges a cylinder or a crate (0.2 to 4). A movable prop is placed slightly above the ground (it settles onto it); an anchored prop, at the lowest ground under it. `rests`: the props (their **indices** in `props`) it rests on (a roof on its walls: when they're all gone, it falls); `group`: a building number (the AI goes around a building as one piece).
+`scale` enlarges a cylinder or a crate (0.2 to 4). A movable prop is placed slightly above the ground (it settles onto it); an anchored prop, at the lowest ground under it. `rests`: the props (their **indices** in `props`) it rests on (a roof on its walls: when they're all gone, it falls); `group`: a building number (the AI goes around a building as one piece). `diamond`: a slab set on its corner (a gable under a pitched roof), whose texture the renderer straightens. `centered`: `y` is the height of the prop's **center**, like a box's, rather than of its base (the export of the game's arenas uses it when no base height gives the center back exactly: base + half-height is rounded). A prop with any orientation, even `quat: [0, 0, 0, 1]`, counts as turned for the spawn clearance checks; one with none, as upright.
 
 ### `prefabs`: prefabricated elements
 
@@ -214,7 +216,7 @@ The same `seed` always gives the same wood: the map is data, the same everywhere
 ### `zones` and `places`
 
 - `zones`: **one to five** capture zones `{ "label": "A"…"E", "x", "z", "y"?, "radius": 2–30 }`, with different letters, inside the play area. Without `y`, on the ground; on a bridge or a platform, give the height of its top. They're used in Zone Capture and King of the Hill; the AI goes to take them.
-- `places`: named places for the full map (M) `{ "name", "names"?, "x", "z" }` (32 characters, 24 places at most).
+- `places`: named places for the full map (M) `{ "name", "names"?, "x", "z" }` (32 characters, 24 places at most). Instead of `name`, `place` takes one of the places of the game's arenas, shown in the player's language: `village`, `fort`, `factory`, `airfield`, `bridge`, `station`, `square`, `park`, `harbourOffice`… (the list is in the JSON Schema).
 
 ### Spawn lines: `spawns`
 
@@ -239,6 +241,7 @@ Both teams together (one without the other is rejected). Robots line up on them 
 
 - `urban`: `true` for a city (buildings cover a good share of the ground): the AI doesn't take a point inside a building as a destination, it goes as close as it can in the street.
 - `nav`: the **AI's nav grid**, computed automatically on a map that has terrain, deep water or lava: cells of `cell` m (2.5 by default, 2 to 6), closed if the slope exceeds `maxSlope` degrees (26 by default), or in lava or deep water. Only the largest connected region stays open. `false`: no grid (the AI goes straight).
+- `navGraph`: the **AI's nav graph**, the other way to find routes, for a map that its terrain cuts up (the Canyon: cliffs, trails, a viaduct, an arch): `{ "points": [[x, z], …], "links": [[i, j], …] }`, points (1,024 at most) and the links between them (indices in `points`, both ways; 8,192 at most). When the straight line to its destination isn't passable, a ground robot follows the shortest path in the graph. The game takes the links as given: it doesn't look for the passable ones itself (the Canyon's file has those the game computed on its terrain, plus the two across the void). A map with a graph has no nav grid, unless it asks for one with `nav`.
 
 ## Importing terrain
 
@@ -275,7 +278,7 @@ A map that exceeds these bounds is rejected (`npm run map:check` says why): it w
 | | At most |
 |---|---|
 | File | 4 MB |
-| Terrain | 440 cells per side, 440 m per side, a 1 or 2 m step, heights from 0 to 250 m |
+| Terrain | 440 cells per side, 440 m per side, a 1, 1.25 or 2 m step, heights from 0 to 250 m |
 | Play area (`half`) | 20 to 200 m |
 | Scenery boxes (prefabs included) | 400 |
 | Props (prefabs included) | 900, of which 120 movable (crates, barrels, gas cylinders, cars) |
@@ -284,6 +287,7 @@ A map that exceeds these bounds is rejected (`npm run map:check` says why): it w
 | Lava shapes, vents, waterfalls, paths | 32, 32, 16, 64 |
 | Points of a polyline | 128; 1,024 for all paths, 512 for all lava flows |
 | Trees in a wood, rocks in a pile | 200 (1,200 for the whole map) |
+| Nav graph (`navGraph`) | 1,024 points, 8,192 links |
 
 The game also checks, while building the arena:
 
@@ -291,7 +295,7 @@ The game also checks, while building the arena:
 - the dimensions are consistent (AI area inside the play area, spawn lines at least 10 m from the center and 2 m from the edge, aircraft circuit);
 - nothing off the map, zones inside the play area;
 - **spawn lines**: at least half of their slots free (no scenery or prop, passable, neither in deep water nor in lava), and **nothing dangerous** within 8 m (lava, barrel, gas cylinder, storage tank, car); free lines (`spawns`) inside the play area, and at least 24 m apart;
-- **each zone is reachable** by the AI (the nav grid has an open cell in its disc).
+- **each zone is reachable** by the AI (the nav grid has an open cell in its disc; without a grid, a point of its disc is outside the scenery boxes: a zone around a monument is playable).
 
 The server runs the same checks on the maps in its folder, and the browser on those it imports or that a server sends it: a malformed or hostile map is rejected without breaking anything.
 
@@ -321,6 +325,30 @@ The server runs the same checks on the maps in its folder, and the browser on th
 3. The map must have a **free license** (`CC-BY-4.0`, `CC-BY-SA-4.0` or `CC0-1.0`: the game is free, its community must be able to reuse it), your name (or your nickname) as author, and a description; a name and a description in English (`names`, `descriptions`) are welcome. Don't reuse terrain you don't have the rights to (a real elevation map is usually free: state its source in the *pull request* description).
 4. `npm run check` (which review runs, and which continuous integration will run) checks all the maps in `maps/` and plays a short AI battle on each; `npm run map:check` only runs the checks, in a few seconds.
 
+## The game's arenas as maps
+
+The game's own arenas, from the Depot to the Harbor, are written in this format in [`content/arenas/`](../content/arenas/) (`npm run map:export -- all`; `npm run map:export -- valley canyon --into some/folder` for a few of them elsewhere). They are a reference for what the format can say, and a starting point: copy one into `maps/` under another name, change it (in the editor: **Community maps… → Import a map…**, then **Edit**), and it's yours (their license is the game's, AGPL-3.0-or-later). They are not in `maps/`: the game and the server would load them a second time, next to the arenas they already have.
+
+The export is exact: read back and built, each file gives the same arena as the game's code, to the bit (boxes, props, zones, paths, play dimensions, sky, ground palette, nav grid or nav graph), except the terrain, at the precision of its 16-bit coding (0.4 mm at most), and the direction of the Volcanic Island's waterfalls (an angle that no number of degrees gives back to the bit; only the renderer reads it). A short AI battle on the arena built from its file gives the same world as on the code's arena, with the file's terrain. To get there, a file says everything explicitly:
+
+- the height of every box and prop (`y`), the perimeter walls and the invisible limits as boxes, and `"limits": { "bound": 0 }` (no limit added); `"nav": false` when the arena has no nav grid; the small arenas' sky and their own ambience;
+- the angles, in degrees chosen so that they give the rotation back exactly; when no degrees do (a rotation composed by the code, an angle beyond a full turn), a `quat`; an upright prop that the code gave an orientation keeps it (`quat: [0, 0, 0, 1]`);
+- a prop's `centered` height when no base height gives its center back exactly.
+
+The files are written one element per line, the terrain last (`mapText`): a map read and written again gives the same text. After changing an arena, run `npm run map:export -- all` again: the tests check that the files are the ones the export makes.
+
+## Map packages
+
+A **map package** is the same map as a folder, easier to make and to read with other tools (no base64 to decode):
+
+| File | |
+|---|---|
+| `map.json` | The map, whose `terrain` names its image (`"image": "terrain.png"`) instead of holding its `heights`. |
+| `terrain.png` | The terrain as a 16-bit grayscale PNG, `cells + 1` pixels per side: each pixel is the code of its height (0: `min`, 65,535: `max`), the top to the north and the left to the west (like an imported terrain image). |
+| `LICENSE.txt` | The map's license and author (written from `meta`; the map itself stays the reference). |
+
+`npm run map:pack -- maps/ma-carte.casse-map.json [--into dossier]` (`dossier`: a folder) makes the folder `ma-carte/` (next to the file, or in `--into`); `npm run map:unpack -- ma-carte/ [--into dossier]` makes `ma-carte.casse-map.json` from it again, and checks it like the game does. Nothing is lost either way: the codes go into the image as they are (the Volcanic Island comes back byte for byte; its package weighs 115 KB against 271 KB, the PNG compresses the terrain). The game and the server don't read packages yet: only the tool does.
+
 ## For developers
 
 The engine is in `src/shared/map/` (no DOM: it also runs on the server); everything is imported from `src/shared/map/index.ts`.
@@ -333,9 +361,12 @@ The engine is in `src/shared/map/` (no DOM: it also runs on the server); everyth
 | `mapKey(carte)` | key.ts | Its identifier (`map-` + a hash of its canonical content). |
 | `registerMap(carte)` | load.ts | Makes it playable: `Simulation.loadArena(arena)` or `loadArena(identifiant)`. |
 | `blankMap(options)` | template.ts | A valid starting map. |
+| `mapFromArena(arena, meta?)`, `exactTurn`, `exactDegrees` | export.ts | An arena (a game arena, or any `ArenaLayout`) as a map, exactly (see [The game's arenas as maps](#the-games-arenas-as-maps)). |
+| `mapText(carte)` | text.ts | A map as the text of its file: one element per line, the terrain last, `-0` kept. |
+| `packMap`, `unpackMap`, `packageImage`, `PACKAGE_FILES` | pack.ts | A map ↔ a map package (see [Map packages](#map-packages)). |
 | `decodePng`, `decodeRaw16`, `imageFromBytes`, `terrainFromImage`, `heightsFromImage`, `imageFromHeights` | heightmap.ts | Terrain import and export. |
 | `encodePng` | png.ts | A height image as an 8- or 16-bit PNG. |
-| `encodeTerrain`, `decodeTerrain` | codec.ts | A map's terrain ↔ the game's heights (the decoded terrain is cached per map terrain: it must not be modified). |
+| `encodeTerrain`, `decodeTerrain`, `terrainCodes` | codec.ts | A map's terrain ↔ the game's heights (the decoded terrain is cached per map terrain: it must not be modified); its raw 16-bit codes. |
 | `applyBrush`, `fieldOf`, `terrainOfField` | brush.ts | The terrain brushes (the editor). |
 | `addElement`, `setElement`, `moveElements`, `rotateElements`, `duplicateElements`, `removeElements`, `movePoint`, `spawnsOf`, `issueTarget` | edit.ts | The editing operations: each returns a new map (the `rests` supports and the `group` buildings follow). |
 | `MapHistory` | history.ts | The undo history (bounded in count and in bytes of terrain). |

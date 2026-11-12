@@ -21,6 +21,7 @@ import { turretFrame } from "./turrets";
 import { drainAt, repairAt } from "./repair";
 import { barrierOnPath, damageBarrier, deployBarrier } from "./barriers";
 import { releaseSmoke } from "./smoke";
+import { dcos } from "../math/det";
 
 /** Nombre maximal d'éléments qu'un projectile perforant traverse en un pas. */
 const MAX_PIERCE = 6;
@@ -424,7 +425,7 @@ export function nearestEnemy(sim: Simulation, p: Projectile, radius: number, kin
  */
 export function findHomingTarget(sim: Simulation, origin: Vec3, dir: Vec3, airOnly: boolean, shooter: Bot | null): Bot | null {
   let best: Bot | null = null;
-  let bestCos = Math.cos(Math.PI / 6);
+  let bestCos = dcos(Math.PI / 6);
   for (const bot of sim.bots) {
     if (!bot.cockpit.alive || !areEnemies(shooter, bot)) continue;
     if (airOnly && bot.profile.mobility === "ground") continue;

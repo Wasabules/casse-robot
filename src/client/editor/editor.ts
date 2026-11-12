@@ -14,7 +14,7 @@ import { isDynamicProp } from "../../shared/map/prefabs";
 import type { GameModeId } from "../../shared/modes";
 import { actionsFor, chordCode, eventChords, isChord, type ActionId, type Bindings } from "../input/bindings";
 import { t } from "../i18n/i18n";
-import { mapIssueText } from "../i18n/names";
+import { mapIssueText, placeName } from "../i18n/names";
 import { isHeightmapError } from "../../shared/map/heightmap";
 import { heightmapErrorText } from "../i18n/names";
 import { downloadHeightPng, downloadMap, heightImageFromFile, mapFileName, pickFile } from "../maps/files";
@@ -42,7 +42,7 @@ import { TOOL_ACTIONS, TOOLS, type ToolId } from "./tools";
 
 /** Ce que l'application donne à l'éditeur. */
 export interface EditorHost {
-  readonly engine: B.Engine;
+  readonly engine: B.AbstractEngine;
   readonly canvas: HTMLCanvasElement;
   readonly maps: MapLibrary;
   /** Touches choisies par le joueur, et le nom à l'écran de celle d'une action. */
@@ -470,7 +470,7 @@ export class MapEditor {
     const g = view.ground;
     const labels: Label[] = [];
     for (const z of this.map.zones) labels.push({ text: z.label, cls: "zone", x: z.x, y: (z.y ?? g(z.x, z.z)) + 3, z: z.z });
-    for (const p of this.map.places ?? []) labels.push({ text: p.name, cls: "place", x: p.x, y: g(p.x, p.z) + 7.5, z: p.z });
+    for (const p of this.map.places ?? []) labels.push({ text: p.place ? placeName(p.place) : (p.name ?? ""), cls: "place", x: p.x, y: g(p.x, p.z) + 7.5, z: p.z });
     const spawns = spawnsOf(this.map);
     for (const team of ["blue", "red"] as const) {
       const s = spawns[team];

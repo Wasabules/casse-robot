@@ -1,5 +1,6 @@
 import { add, cross, scale, vec3, type Vec3 } from "../math/vec";
 import { isWeaponId, type DamageType, type WeaponId } from "./weapons";
+import { dcos, dpow, dsin } from "../math/det";
 
 /*
  * Armes de contact : une masse qui tourne, ou un bras qui frappe, porté par un bloc (le champ
@@ -725,7 +726,7 @@ export function meleeAxes(axis: MeleeAxis): { axis: Vec3; e1: Vec3; e2: Vec3 } {
 /** Position de la tête d'un bras à l'angle `angle`, depuis le pivot, dans le repère du bloc (m). */
 export function headOffset(axis: MeleeAxis, swing: SwingSpec, angle: number): Vec3 {
   const { e1, e2 } = meleeAxes(axis);
-  return add(scale(e1, swing.reach * Math.cos(angle)), scale(e2, -swing.reach * Math.sin(angle)));
+  return add(scale(e1, swing.reach * dcos(angle)), scale(e2, -swing.reach * dsin(angle)));
 }
 
 /** Une lame plus longue le long de son axe que large : une mèche (son moyeu est au milieu de sa longueur). */
@@ -749,13 +750,13 @@ export function meleeReach(spec: MeleeSpec): number {
 /** Direction (repère du bloc) d'un bras, d'un plateau ou d'une mâchoire à l'angle `angle` autour de son axe : cos θ·e1 − sin θ·e2. */
 export function pivotDir(axis: MeleeAxis, angle: number): Vec3 {
   const { e1, e2 } = meleeAxes(axis);
-  return add(scale(e1, Math.cos(angle)), scale(e2, -Math.sin(angle)));
+  return add(scale(e1, dcos(angle)), scale(e2, -dsin(angle)));
 }
 
 /** Énergie d'un fléau à plein régime (J) : la boule qui tourne au bout de sa chaîne, et le volant de la manivelle. */
 export function flailEnergy(flail: FlailSpec): number {
   const r = flail.crank + flail.chain;
-  return 0.5 * flail.mass * (flail.speed * r) ** 2 + 0.5 * flail.inertia * flail.speed ** 2;
+  return 0.5 * flail.mass * dpow(flail.speed * r, 2) + 0.5 * flail.inertia * dpow(flail.speed, 2);
 }
 
 /** Puissance du moteur d'un fléau (kW) : de quoi lancer sa boule en `spinUp` s. */
@@ -768,10 +769,10 @@ export const flailPower = (flail: FlailSpec): number => flailEnergy(flail) / fla
 export function flailOrbit(flail: FlailSpec): { radius: number; drop: number } {
   let beta = 1.2;
   for (let i = 0; i < 30; i++) {
-    const r = flail.crank + flail.chain * Math.sin(beta);
-    beta = Math.atan((flail.speed ** 2 * r) / 9.81);
+    const r = flail.crank + flail.chain * dsin(beta);
+    beta = Math.atan((dpow(flail.speed, 2) * r) / 9.81);
   }
-  return { radius: flail.crank + flail.chain * Math.sin(beta), drop: flail.chain * Math.cos(beta) };
+  return { radius: flail.crank + flail.chain * dsin(beta), drop: flail.chain * dcos(beta) };
 }
 
 /** Position de la pointe d'une lance sortie de `extension` m, depuis le moyeu, dans le repère du bloc (m). */

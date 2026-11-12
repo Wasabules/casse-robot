@@ -1,4 +1,5 @@
 import { add, cross, dot, len, norm, scale, sub, vec3, type Vec3 } from "../math/vec";
+import { dcos, dsin } from "../math/det";
 
 /*
  * Formes de blocs autres que le cube : biseau, coins, arrondis, pentes, demi-bloc. Chacune est
@@ -42,8 +43,8 @@ function roundPlanes(axis: "x" | "z"): HalfSpace[] {
   for (let k = 0; k < ROUND_FACETS; k++) {
     const t = ((k + 0.5) * Math.PI) / 2 / ROUND_FACETS;
     // Autour de l'axe x : l'arête du haut et de l'avant ; autour de l'axe z : celle du haut et de la gauche
-    const n = axis === "x" ? vec3(0, Math.sin(t), Math.cos(t)) : vec3(Math.cos(t), Math.sin(t), 0);
-    planes.push({ n, d: 2 - Math.sin(t) - Math.cos(t) });
+    const n = axis === "x" ? vec3(0, dsin(t), dcos(t)) : vec3(dcos(t), dsin(t), 0);
+    planes.push({ n, d: 2 - dsin(t) - dcos(t) });
   }
   return planes;
 }

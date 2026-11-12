@@ -5,6 +5,7 @@ import { segmentDistance, type LavaShape, type Vent, type Waterfall } from "./fe
 import type { ArenaLayout, CaptureZone, PropSpot, StaticBox, TerrainPath } from "./layout";
 import { makeTerrain, noise2, smoothstep, terrainHeight } from "./terrain";
 import { house, PropList, seeded } from "./valley";
+import { dcos, dpow, dsin } from "../math/det";
 
 /*
  * L'Île volcanique : une île tropicale (la mer tout autour, une vraie limite : on s'y noie),
@@ -76,7 +77,7 @@ const mirror = (p: readonly [number, number]): [number, number] => [-p[0], -p[1]
 // ─── Les routes en lacets ───────────────────────────────────────────────────────────────────
 
 /** Point (x, z) d'une route : son angle (deg) autour du volcan, sa distance au centre. */
-const polar = (deg: number, r: number): [number, number] => [r * Math.cos((deg * Math.PI) / 180), r * Math.sin((deg * Math.PI) / 180)];
+const polar = (deg: number, r: number): [number, number] => [r * dcos((deg * Math.PI) / 180), r * dsin((deg * Math.PI) / 180)];
 
 /** Une route en lacets, de son pied (à l'angle `start`, deg) au cratère : ses points (x, z) et la hauteur de la chaussée en chacun. */
 interface Road {
@@ -161,7 +162,7 @@ function spiralRoad(start: number): Road {
 /** Le volcan en (r, θ) : la lèvre du cratère, son fond, le cône, ravinés par l'érosion. */
 function volcano(r: number, theta: number): number {
   if (r < RIM_R) return FLOOR_H + (RIM_H - FLOOR_H) * smoothstep(FLOOR_R, RIM_R, r);
-  const cone = LAND + (RIM_H - LAND) * (1 - smoothstep(RIM_R, FOOT_R, r)) ** 1.1;
+  const cone = LAND + (RIM_H - LAND) * dpow(1 - smoothstep(RIM_R, FOOT_R, r), 1.1);
   const gullies = 1.3 * noise2(theta * 4 + 3, r / 6) * smoothstep(RIM_R, RIM_R + 5, r) * (1 - smoothstep(FOOT_R - 12, FOOT_R, r));
   return cone + gullies;
 }
@@ -170,7 +171,7 @@ function volcano(r: number, theta: number): number {
 function natural(x: number, z: number): number {
   const r = Math.hypot(x, z);
   const theta = Math.atan2(z, x);
-  const coast = COAST + 7 * noise2(Math.cos(theta) * 2.3 + 11, Math.sin(theta) * 2.3 - 4);
+  const coast = COAST + 7 * noise2(dcos(theta) * 2.3 + 11, dsin(theta) * 2.3 - 4);
   let h = LAND + RISE * (1 - smoothstep(FOOT_R - 2, RISE_END, r)) + 0.7 * noise2(x / 34, z / 34) + 0.35 * noise2(x / 13 + 31, z / 13 - 7);
   h += (WATER - 0.25 - h) * smoothstep(coast - BEACH, coast, r);
   h += (SEABED - h) * smoothstep(coast, coast + SHELF, r);
@@ -511,7 +512,7 @@ function buildProps(): PropSpot[] {
         const angle = random() * Math.PI * 2;
         const r = Math.sqrt(random()) * g.r;
         const kapok = random() < 0.45;
-        if (plant(kapok ? "kapok" : "palm", cx + Math.cos(angle) * r, cz + Math.sin(angle) * r, kapok ? 0.75 + random() * 0.35 : 0.85 + random() * 0.3, kapok ? 9 : 5.5)) placed++;
+        if (plant(kapok ? "kapok" : "palm", cx + dcos(angle) * r, cz + dsin(angle) * r, kapok ? 0.75 + random() * 0.35 : 0.85 + random() * 0.3, kapok ? 9 : 5.5)) placed++;
       }
     }
   }
@@ -519,8 +520,8 @@ function buildProps(): PropSpot[] {
   for (let k = 0, placed = 0; k < 400 && placed < 40; k++) {
     const angle = random() * Math.PI * 2;
     const r = 96 + random() * 12;
-    const x = Math.cos(angle) * r;
-    const z = Math.sin(angle) * r;
+    const x = dcos(angle) * r;
+    const z = dsin(angle) * r;
     const scale = 0.85 + random() * 0.35;
     if (!clear(x, z, 6) || !clear(-x, -z, 6)) continue;
     plant("palm", x, z, scale, 6);
@@ -564,7 +565,7 @@ const FALLS: readonly Waterfall[] = [GORGE_WEST, GORGE_EAST].map((g) => {
   // Une résurgence : la rivière sort de la roche volcanique, au fond de la tête de la gorge
   const dir = Math.atan2(g[1][0] - g[0][0], g[1][1] - g[0][1]);
   const back = (GORGE_BOTTOM + GORGE_TOP) / 2;
-  return { x: g[0][0] - Math.sin(dir) * back, z: g[0][1] - Math.cos(dir) * back, top: fallTop(g) - 0.6, bottom: WATER, width: 3.2, dir };
+  return { x: g[0][0] - dsin(dir) * back, z: g[0][1] - dcos(dir) * back, top: fallTop(g) - 0.6, bottom: WATER, width: 3.2, dir };
 });
 
 export const ISLAND: ArenaLayout = {

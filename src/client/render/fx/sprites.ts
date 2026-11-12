@@ -211,11 +211,16 @@ void main(void) {
 #ifdef FIRE
   float heat = vData.z;
   float seed = vExtra.w;
+  // (les textures sont lues avant de choisir entre flamme et boule de feu : WebGPU refuse une
+  // lecture filtrée dans une branche qui dépend de l'instance : textureSample en WGSL)
+  vec2 q = vUV;
+  float n1 = texture2D(noiseMap, vec2(q.x * 0.8 + seed * 5.0, q.y * 0.7 - time * 1.6 + seed * 3.0)).r;
+  float n2 = texture2D(noiseMap, vec2(q.x * 1.9 - seed * 7.0, q.y * 1.6 - time * 2.9)).g;
+  vec2 wob = texture2D(noiseMap, vUV * 0.5 + vec2(seed * 3.7, time * 0.06)).rg - 0.5;
+  vec4 tex = puff(vUV + wob * 0.1, vData.x);
+  float n = texture2D(noiseMap, vUV * 1.2 + vec2(seed * 5.3, -time * 0.4)).b;
   if (vExtra.y > 0.5) {
     // Une flamme : une langue qui ondule en montant, plus chaude en bas et au cœur
-    vec2 q = vUV;
-    float n1 = texture2D(noiseMap, vec2(q.x * 0.8 + seed * 5.0, q.y * 0.7 - time * 1.6 + seed * 3.0)).r;
-    float n2 = texture2D(noiseMap, vec2(q.x * 1.9 - seed * 7.0, q.y * 1.6 - time * 2.9)).g;
     float turb = n1 * 0.62 + n2 * 0.38;
     float y = q.y;
     // Elle ondule de plus en plus vers le haut
@@ -241,11 +246,7 @@ void main(void) {
   } else {
     // Une boule de feu : une volute incandescente qui roule, puis refroidit en fumée (la couleur
     // de l'instance est celle de cette fumée)
-    float frame = vData.x;
     float age = vData.y;
-    vec2 wob = texture2D(noiseMap, vUV * 0.5 + vec2(seed * 3.7, time * 0.06)).rg - 0.5;
-    vec4 tex = puff(vUV + wob * 0.1, frame);
-    float n = texture2D(noiseMap, vUV * 1.2 + vec2(seed * 5.3, -time * 0.4)).b;
     float temp = heat * (0.5 + 0.7 * tex.b * tex.a + (n - 0.5) * 0.7);
     float burning = smoothstep(0.1, 0.32, temp);
     vec3 smoke = vColor.rgb * shade(tex);

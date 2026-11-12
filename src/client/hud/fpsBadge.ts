@@ -13,10 +13,10 @@ const REFRESH_MS = 500;
  */
 export class FpsBadge {
   private readonly el = byId("fpsBadge");
-  private readonly engine: B.Engine;
+  private readonly engine: B.AbstractEngine;
   private timer = 0;
 
-  constructor(engine: B.Engine) {
+  constructor(engine: B.AbstractEngine) {
     this.engine = engine;
   }
 

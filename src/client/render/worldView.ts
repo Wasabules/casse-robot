@@ -29,6 +29,7 @@ import { headLift, JET_NACELLE } from "../../shared/design/clearance";
 import { MeleeRig } from "./meleeView";
 import { MELEE_IDS } from "../../shared/catalog/melee";
 import { lampColors, lampLevels, LIGHT_BLOCKS, lightPowered, sweepAngle } from "./lightSources";
+import { PropBatches } from "./propBatches";
 
 /** Échelle d'un débris par rapport à un bloc, et d'un éclat par rapport à son accessoire. */
 const DEBRIS_SCALE = 0.47;
@@ -117,12 +118,15 @@ function blotch(id: number): number {
 }
 
 /**
- * Un accessoire affiché ; `placed` : ancré et déjà posé, sa matrice est figée. `char` : son cran de
- * noircissement (sa source en dépend). `sway` : un arbre qui ploie sous un souffle (voir `swayTrees`).
+ * Un accessoire affiché ; `mesh` : son instance, ou null s'il est dans un lot d'accessoires immobiles
+ * (`propLots`, render/propBatches.ts). `placed` : ancré et déjà posé, sa matrice est figée. `char` :
+ * son cran de noircissement (sa source en dépend). `sway` : un arbre qui ploie sous un souffle (voir
+ * `swayTrees`). `scale` : l'agrandissement d'un arbre plus grand que nature.
  */
 interface PropEntry {
   prop: Prop;
-  mesh: B.InstancedMesh;
+  mesh: B.InstancedMesh | null;
+  scale: number;
   jet: B.InstancedMesh | null;
   placed: boolean;
   char: CharLevel;
@@ -204,6 +208,8 @@ export class WorldView {
   private readonly stems = new Map<number, { wheel: Wheel; mesh: B.InstancedMesh; local: Vec3; alongZ: boolean }>();
   private readonly debris = new Map<number, { debris: Debris; mesh: B.InstancedMesh }>();
   private readonly props = new Map<number, PropEntry>();
+  /** Les accessoires ancrés immobiles, en lots d'instances fines par source. */
+  private readonly propLots: PropBatches;
   /** Heure de la page à la dernière image (s) : les arbres qui ploient s'animent en temps réel. */
   private lastSync = performance.now() / 1000;
   /** Un accessoire vient de céder (pan de mur, arbre, caisse) : sa dernière position, pour la poussière. */
@@ -249,6 +255,7 @@ export class WorldView {
     this.assets = assets;
     this.shadows = shadows;
     this.melee = new MeleeRig(assets, shadows);
+    this.propLots = new PropBatches(scene, shadows);
     this.unsubscribe = sim.on((e) => this.onEvent(e));
   }
 
@@ -278,6 +285,7 @@ export class WorldView {
     this.syncArms();
     this.syncFittings();
     for (const entry of this.props.values()) this.syncProp(entry, dt);
+    this.propLots.flush();
     for (const { debris, mesh } of this.debris.values()) {
       syncBody(debris.rb, mesh);
       const left = debris.life - (this.sim.time - debris.born);
@@ -311,7 +319,8 @@ export class WorldView {
     this.melee.dispose();
     // Les lots, les repères et ce qui y est accroché disparaissent avec les nœuds des morceaux
     for (const { node } of this.parts.values()) node.dispose();
-    for (const { mesh } of [...this.wheels.values(), ...this.arms.values(), ...this.forks.values(), ...this.stems.values(), ...this.debris.values(), ...this.props.values()]) mesh.dispose();
+    for (const { mesh } of [...this.wheels.values(), ...this.arms.values(), ...this.forks.values(), ...this.stems.values(), ...this.debris.values(), ...this.props.values()]) mesh?.dispose();
+    this.propLots.dispose();
     for (const tag of this.tags.values()) tag.dispose();
     for (const map of [this.parts, this.batches, this.slots, this.pieces, this.pieceOf, this.anchors, this.wheels, this.arms, this.forks, this.stems, this.debris, this.props, this.tags, this.flames, this.heads, this.rounds, this.fires, this.kicks, this.nacelles, this.soot, this.lenses]) map.clear();
     this.dirty.clear();
@@ -384,17 +393,23 @@ export class WorldView {
         this.addProp(e.prop);
         break;
       case "propReleased": {
-        // Il tombe : sa pose change désormais à chaque image
+        // Il tombe : sa pose change désormais à chaque image (il quitte son lot)
         const entry = this.props.get(e.prop.id);
-        entry?.mesh.unfreezeWorldMatrix();
-        if (entry) entry.placed = false;
+        if (entry) {
+          this.ownMesh(entry).unfreezeWorldMatrix();
+          entry.placed = false;
+        }
         break;
       }
       case "propRemoved": {
-        // Son corps est déjà retiré du monde : on prend la dernière pose de son mesh
+        // Son corps est déjà retiré du monde : on prend la dernière pose de son mesh (ou de son lot)
         const entry = this.props.get(e.prop.id);
-        if (entry && e.prop.state.kind !== "intact") this.onPropBroken?.(e.prop, vec3(entry.mesh.position.x, entry.mesh.position.y, entry.mesh.position.z));
-        this.disposeFrom(this.props, e.prop.id);
+        if (!entry) break;
+        const lot = this.propLots.remove(e.prop.id);
+        const at = entry.mesh?.position ?? lot?.getTranslation();
+        if (at && e.prop.state.kind !== "intact") this.onPropBroken?.(e.prop, vec3(at.x, at.y, at.z));
+        entry.mesh?.dispose();
+        this.props.delete(e.prop.id);
         break;
       }
       case "propFire": {
@@ -799,12 +814,51 @@ export class WorldView {
    * est une instance agrandie. Un accessoire ancré ne bouge pas : sa pose est figée (`placed`).
    */
   private addProp(prop: Prop): void {
-    const spot = this.sim.arena.props[prop.spot];
     const char = charLevel(prop.charred);
-    const mesh = this.instance(this.assets.propSource(prop.type, prop.half, !!spot?.diamond, char), "prop");
     const shape = propDef(prop.type).shape;
-    if (shape.kind === "cylinder") mesh.scaling.setAll(prop.half.y / shape.halfHeight);
-    this.props.set(prop.id, { prop, mesh, jet: null, placed: false, char, sway: null });
+    const scale = shape.kind === "cylinder" ? prop.half.y / shape.halfHeight : 1;
+    const entry: PropEntry = { prop, mesh: null, scale, jet: null, placed: true, char, sway: null };
+    this.props.set(prop.id, entry);
+    // Ancré, il ne bougera pas : il rejoint le lot de sa source, à sa pose
+    if (prop.fixed) {
+      const t = prop.rb.translation(), r = prop.rb.rotation();
+      this.propLots.add(prop.id, this.propSourceOf(entry), B.Matrix.Compose(new B.Vector3(scale, scale, scale), new B.Quaternion(r.x, r.y, r.z, r.w), new B.Vector3(t.x, t.y, t.z)));
+      return;
+    }
+    const mesh = this.instance(this.propSourceOf(entry), "prop");
+    mesh.scaling.setAll(scale);
+    entry.mesh = mesh;
+    entry.placed = false;
+  }
+
+  /** La source d'un accessoire, à son cran de noircissement. */
+  private propSourceOf(entry: PropEntry): B.Mesh {
+    const prop = entry.prop;
+    const spot = this.sim.arena.props[prop.spot];
+    return this.assets.propSource(prop.type, prop.half, !!spot?.diamond, entry.char);
+  }
+
+  /** Un accessoire qui change (il ploie, tombe, fuit) quitte son lot : une instance à lui, à la même pose. */
+  private ownMesh(entry: PropEntry): B.InstancedMesh {
+    if (entry.mesh) return entry.mesh;
+    const mesh = this.instance(this.propSourceOf(entry), "prop");
+    const matrix = this.propLots.remove(entry.prop.id);
+    if (matrix) matrix.decompose(mesh.scaling, mesh.rotationQuaternion!, mesh.position);
+    else mesh.scaling.setAll(entry.scale);
+    entry.mesh = mesh;
+    entry.placed = false;
+    return mesh;
+  }
+
+  /** Un accessoire ancré redevenu immobile (un arbre qui a fini de ployer) rejoint le lot de sa source. */
+  private rejoinLot(entry: PropEntry): void {
+    const mesh = entry.mesh;
+    if (!mesh || entry.jet || !entry.prop.fixed) return;
+    mesh.computeWorldMatrix(true);
+    this.propLots.add(entry.prop.id, this.propSourceOf(entry), mesh.getWorldMatrix().clone());
+    mesh.dispose();
+    entry.mesh = null;
+    entry.placed = true;
   }
 
   /** Le bois noircit d'un cran : l'accessoire prend la matière de ce cran (une autre source, à la même pose). */
@@ -857,16 +911,21 @@ export class WorldView {
     const prop = entry.prop;
     const char = charLevel(prop.charred);
     if (char === entry.char) return;
-    const spot = this.sim.arena.props[prop.spot];
+    entry.char = char;
     const old = entry.mesh;
-    const mesh = this.instance(this.assets.propSource(prop.type, prop.half, !!spot?.diamond, char), "prop");
+    // Dans un lot : il passe à celui de sa nouvelle source
+    if (!old) {
+      const matrix = this.propLots.remove(prop.id);
+      if (matrix) this.propLots.add(prop.id, this.propSourceOf(entry), matrix);
+      return;
+    }
+    const mesh = this.instance(this.propSourceOf(entry), "prop");
     mesh.scaling.copyFrom(old.scaling);
     mesh.position.copyFrom(old.position);
     mesh.rotationQuaternion!.copyFrom(old.rotationQuaternion ?? B.Quaternion.Identity());
     if (entry.jet) entry.jet.parent = mesh;
     old.dispose();
     entry.mesh = mesh;
-    entry.char = char;
     entry.placed = false;
   }
 
@@ -879,7 +938,7 @@ export class WorldView {
       const prop = entry.prop;
       const shape = propDef(prop.type).shape;
       if (!prop.fixed || shape.kind !== "cylinder" || !propDef(prop.type).topples) continue;
-      const base = entry.sway ? entry.sway.position : entry.mesh.position;
+      const base = entry.sway ? entry.sway.position : entry.mesh ? entry.mesh.position : prop.rb.translation();
       const dx = base.x - point.x;
       const dz = base.z - point.z;
       const d = Math.hypot(dx, dz);
@@ -889,9 +948,11 @@ export class WorldView {
       if (amplitude < 0.01) continue;
       // Il penche à l'opposé du souffle : autour de l'axe haut × direction
       const axis = new B.Vector3(dz / d, 0, -dx / d);
-      const rest = entry.sway ?? { position: entry.mesh.position.clone(), rotation: (entry.mesh.rotationQuaternion ?? B.Quaternion.Identity()).clone() };
+      // (il quitte son lot le temps de ployer)
+      const mesh = this.ownMesh(entry);
+      const rest = entry.sway ?? { position: mesh.position.clone(), rotation: (mesh.rotationQuaternion ?? B.Quaternion.Identity()).clone() };
       entry.sway = { axis, amplitude: Math.max(amplitude, entry.sway ? entry.sway.amplitude * 0.5 : 0), t: 0, position: rest.position, rotation: rest.rotation };
-      entry.mesh.unfreezeWorldMatrix();
+      mesh.unfreezeWorldMatrix();
       entry.placed = false;
     }
   }
@@ -899,12 +960,14 @@ export class WorldView {
   /** Un arbre qui ploie : il pivote autour du pied de son tronc, et reprend sa pose de repos à la fin. */
   private syncSway(entry: PropEntry, sway: Sway, dt: number): void {
     sway.t += dt;
-    const mesh = entry.mesh;
+    const mesh = this.ownMesh(entry);
     if (sway.t > SWAY_TIME || !entry.prop.fixed) {
       entry.sway = null;
       mesh.position.copyFrom(sway.position);
       mesh.rotationQuaternion!.copyFrom(sway.rotation);
       entry.placed = false;
+      // Revenu à sa pose de repos : il rejoint son lot
+      this.rejoinLot(entry);
       return;
     }
     // Il penche d'un coup, puis oscille en s'amortissant
@@ -923,7 +986,10 @@ export class WorldView {
       this.syncSway(entry, entry.sway, dt);
       return;
     }
-    const { prop, mesh } = entry;
+    // Dans un lot, immobile : rien à faire (une bouteille qui fuit en sort)
+    if (!entry.mesh && entry.prop.state.kind !== "venting") return;
+    const mesh = this.ownMesh(entry);
+    const { prop } = entry;
     if (entry.placed) return;
     syncBody(prop.rb, mesh);
     if (prop.fixed) {

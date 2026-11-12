@@ -1,0 +1,56 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Chantier",
+    "names": {"en":"Construction Site"},
+    "author": "Casse-Robot",
+    "description": "Deux terrasses sur les flancs, des conteneurs au centre : on se bat en hauteur ou à couvert.",
+    "descriptions": {"en":"Two terraces on the flanks, containers in the middle: fight up high or under cover."},
+    "license": "AGPL-3.0-or-later"
+  },
+  "bounds": {"half":36,"roam":29,"spawnLine":29,"spawnSpread":24,"circuit":35,"airFloor":0},
+  "limits": {"bound":0},
+  "sky": {"color":"#c7d1d6","fog":0.009},
+  "ambience": "yard",
+  "zones": [
+    {"label":"A","x":-24,"z":0,"y":1.5,"radius":4},
+    {"label":"B","x":0,"z":0,"y":0,"radius":5},
+    {"label":"C","x":24,"z":0,"y":1.5,"radius":4}
+  ],
+  "boxes": [
+    {"kind":"wall","x":0,"z":-36,"y":0.6,"size":[73,1.2,1]},
+    {"kind":"wall","x":-36,"z":0,"y":0.6,"size":[1,1.2,73]},
+    {"kind":"wall","x":0,"z":36,"y":0.6,"size":[73,1.2,1]},
+    {"kind":"wall","x":36,"z":0,"y":0.6,"size":[1,1.2,73]},
+    {"kind":"platform","x":-24,"z":0,"y":0.75,"size":[12,1.5,18]},
+    {"kind":"ramp","x":-24,"z":11.7817179374673,"y":-0.12312825013079876,"size":[6,1.8,6.18465843842649],"pitch":14.036243467926479},
+    {"kind":"ramp","x":-24,"z":-11.7817179374673,"y":-0.12312825013079876,"size":[6,1.8,6.18465843842649],"pitch":-14.036243467926479},
+    {"kind":"ramp","x":-15.2182820625327,"z":0,"y":-0.12312825013079876,"size":[6.18465843842649,1.8,6],"roll":-14.036243467926479},
+    {"kind":"platform","x":24,"z":0,"y":0.75,"size":[12,1.5,18]},
+    {"kind":"ramp","x":24,"z":11.7817179374673,"y":-0.12312825013079876,"size":[6,1.8,6.18465843842649],"pitch":14.036243467926479},
+    {"kind":"ramp","x":24,"z":-11.7817179374673,"y":-0.12312825013079876,"size":[6,1.8,6.18465843842649],"pitch":-14.036243467926479},
+    {"kind":"ramp","x":15.2182820625327,"z":0,"y":-0.12312825013079876,"size":[6.18465843842649,1.8,6],"roll":14.036243467926479},
+    {"kind":"barrier","x":0,"z":7,"y":1.2,"size":[7,2.4,0.8]},
+    {"kind":"barrier","x":0,"z":-7,"y":1.2,"size":[7,2.4,0.8]},
+    {"kind":"pillar","x":-10,"z":20,"y":1.5,"size":[1.6,3,1.6]},
+    {"kind":"pillar","x":10,"z":20,"y":1.5,"size":[1.6,3,1.6]},
+    {"kind":"pillar","x":-10,"z":-20,"y":1.5,"size":[1.6,3,1.6]},
+    {"kind":"pillar","x":10,"z":-20,"y":1.5,"size":[1.6,3,1.6]}
+  ],
+  "props": [
+    {"type":"crate","x":-16,"z":13,"y":0},
+    {"type":"crate","x":16,"z":-13,"y":0},
+    {"type":"crate","x":-16,"z":-13,"y":0},
+    {"type":"crate","x":16,"z":13,"y":0},
+    {"type":"crate","x":-24,"z":6,"y":1.5},
+    {"type":"crate","x":24,"z":-6,"y":1.5},
+    {"type":"barrel","x":-4.5,"z":8.2,"y":0},
+    {"type":"barrel","x":4.5,"z":-8.2,"y":0},
+    {"type":"barrel","x":-11.2,"z":20,"y":0},
+    {"type":"barrel","x":11.2,"z":-20,"y":0},
+    {"type":"barrel","x":-26,"z":-6,"y":1.5},
+    {"type":"barrel","x":26,"z":6,"y":1.5},
+    {"type":"gas","x":5,"z":8.4,"y":0},
+    {"type":"gas","x":-5,"z":-8.4,"y":0}
+  ]
+}

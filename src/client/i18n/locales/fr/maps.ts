@@ -70,6 +70,8 @@ export const maps = {
     paths: "chemins",
     points: "points",
     languages: "langues",
+    navPoints: "points du réseau de passage",
+    navLinks: "liaisons du réseau de passage",
   } as const satisfies Record<MapCounted, Message>),
   /** Pourquoi une image ne fait pas un relief. */
   ...section("heightmap", {

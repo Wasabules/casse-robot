@@ -9,6 +9,7 @@ import type { Bot, Turret } from "../sim/entities";
 import type { Simulation } from "../sim/simulation";
 import { canFire, stackRate, useArm } from "./arsenal";
 import { spawnProjectile } from "./projectiles";
+import { dcos, dsin } from "../math/det";
 
 export const turretSpec = (t: Turret): TurretSpec => blockDef(t.block.type).turret!;
 
@@ -21,7 +22,7 @@ export function liveTurrets(bot: Bot): Turret[] {
 
 /** Direction du canon dans le repère du bloc, d'après le lacet et le site. */
 const barrelLocal = (yaw: number, pitch: number): Vec3 =>
-  vec3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
+  vec3(dsin(yaw) * dcos(pitch), dsin(pitch), dcos(yaw) * dcos(pitch));
 
 /** Direction du tir dans le repère du bloc : celle du canon, ou la sortie d'une tourelle fixe (arrière ou dessous). */
 const outletLocal = (spec: TurretSpec, t: Turret): Vec3 =>
@@ -123,7 +124,7 @@ export function restTurret(t: Turret): void {
 /** Un pas de rotation de la tête vers ce lacet (par le plus court) et ce site, à ses vitesses de rotation. */
 function turnHead(t: Turret, yaw: number, pitch: number): void {
   const spec = turretSpec(t);
-  const dyaw = Math.atan2(Math.sin(yaw - t.yaw), Math.cos(yaw - t.yaw));
+  const dyaw = Math.atan2(dsin(yaw - t.yaw), dcos(yaw - t.yaw));
   t.yaw += clamp(dyaw, -spec.yawRate * STEP, spec.yawRate * STEP);
   t.pitch += clamp(pitch - t.pitch, -spec.pitchRate * STEP, spec.pitchRate * STEP);
 }

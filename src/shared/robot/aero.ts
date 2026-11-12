@@ -6,6 +6,7 @@ import { add, cross, dot, qrot, scale, sub, vec3, type Vec3 } from "../math/vec"
 import type { AeroSurface, Bot } from "../sim/entities";
 import { blockWorldPos } from "./queries";
 import { flapRuns } from "./surfaces";
+import { dcos, dsin } from "../math/det";
 
 /** Vitesse de braquage des gouvernes (rad/s) : ce sont des servomoteurs, pas des interrupteurs. */
 const SERVO_RATE = 3;
@@ -14,14 +15,14 @@ const aeroOf = (s: AeroSurface): AeroSpec => blockDef(s.block.type).aero!;
 
 /** Coefficients de portance et de traînée d'une plaque à l'incidence α (rad). */
 export function aeroCoefficients(spec: AeroSpec, alpha: number): { cl: number; cd: number } {
-  const a = Math.atan2(Math.sin(alpha), Math.cos(alpha)); // ramené dans ]-π, π]
+  const a = Math.atan2(dsin(alpha), dcos(alpha)); // ramené dans ]-π, π]
   if (Math.abs(a) <= spec.stallAngle) {
     const cl = spec.liftSlope * a;
     return { cl, cd: spec.dragMin + spec.inducedDrag * cl * cl };
   }
   // Décroché : l'écoulement décolle, la plaque ne porte presque plus et freine beaucoup
-  const s = Math.sin(a);
-  return { cl: 0.9 * Math.sin(2 * a), cd: spec.dragMin + 1.2 * s * s };
+  const s = dsin(a);
+  return { cl: 0.9 * dsin(2 * a), cd: spec.dragMin + 1.2 * s * s };
 }
 
 /** Écoulement de l'air sur une surface : position, vitesse dans le plan de la corde, incidence, directions des forces. */

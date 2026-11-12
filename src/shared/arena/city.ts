@@ -1,9 +1,11 @@
 import { CAR_HALF, type PropType } from "../catalog/props";
 import { axisAngle, NO_ROTATION, qmul, vec3, type Quat, type Vec3 } from "../math/vec";
 import { barrier, box, incline, zone } from "./builders";
+import { NO_PEAK } from "./features";
 import type { ArenaLayout, ArenaPlace, CaptureZone, PropSpot, StaticBox, TerrainPath } from "./layout";
 import { makeTerrain, noise2, smoothstep } from "./terrain";
 import { PropList } from "./valley";
+import { dcos, dsin } from "../math/det";
 
 /*
  * La Cité : une ville en ruines (±94 m de rues entre les remblais de gravats et les immeubles
@@ -195,7 +197,7 @@ function station(): StaticBox[] {
     for (const s of [-1, 1]) {
       // Dans la trémie, inclinée comme elle ; puis au niveau des rues jusqu'au bord
       const mid = s * (RAIL_FULL + RAIL_RAMP / 2);
-      const run = RAIL_RAMP / Math.cos(angle) / 2;
+      const run = RAIL_RAMP / dcos(angle) / 2;
       list.push(box("track", x, railBed(mid) - 0.02, mid, 1.3, 0.08, run, axisAngle(vec3(1, 0, 0), -s * angle)));
       const from = RAIL_FULL + RAIL_RAMP;
       const to = PLAY - 6;
@@ -298,7 +300,7 @@ function skyline(): StaticBox[] {
     const r = 135 + random() * 55;
     const s = 7 + random() * 9;
     const height = 18 + random() * 40;
-    list.push(box("tower", Math.cos(a) * r, 12 + height / 2, Math.sin(a) * r, s, height / 2, s * (0.7 + random() * 0.6), yaw(random() * 0.6)));
+    list.push(box("tower", dcos(a) * r, 12 + height / 2, dsin(a) * r, s, height / 2, s * (0.7 + random() * 0.6), yaw(random() * 0.6)));
   }
   const at = 124;
   const t = 2;
@@ -454,8 +456,8 @@ function car(P: PropList, type: "car" | "wreck", x: number, z: number, a: number
 function busShelter(P: PropList, x: number, z: number, a: number): void {
   const turn = yaw(a);
   const at = (lx: number, ly: number, lz: number): Vec3 => {
-    const c = Math.cos(a);
-    const s = Math.sin(a);
+    const c = dcos(a);
+    const s = dsin(a);
     return vec3(x + lx * c + lz * s, ly, z - lx * s + lz * c);
   };
   const back = P.add({ type: "sheet", pos: at(0, BASE + 1.15, -0.6), half: vec3(1.6, 1.15, 0.04), rot: turn });
@@ -677,7 +679,7 @@ export const CITY: ArenaLayout = {
   // Dalles et pavés tachés de crasse, talus de terre sèche sur les pentes, gravats au-dessus de 10,5 m
   ground: {
     base: ["#8d8980", "#a09a8e"], dirt: "#6d675c", sand: "#8d8980", mud: "#6d675c", rock: "#726c64", peak: "#726c64",
-    rockLine: 10.5, rockSpan: 3, peakLine: Infinity, grain: 7, stains: 0.35,
+    rockLine: 10.5, rockSpan: 3, peakLine: NO_PEAK, grain: 7, stains: 0.35,
     slope: { color: "#77705d", from: 0.985, span: 0.04 }, lawn: "#5d7a3e",
   },
   urban: true,

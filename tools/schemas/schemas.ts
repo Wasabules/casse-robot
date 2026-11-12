@@ -5,8 +5,9 @@ import { WHEEL_TYPES, wheelDef, type WheelType } from "../../src/shared/catalog/
 import { ROBOT_BUDGET } from "../../src/shared/design/budget";
 import { AXES, TRACK_LAYERS, TRACK_RISE, type Axis } from "../../src/shared/design/robotDesign";
 import {
-  MAP_CHOICES, MAP_FORMAT, MAP_LIMITS, MAP_LISTS, MAP_PATTERNS, MAP_RANGES, MAX_ANGLE, needsSize, ZONE_LABELS, type NumberRange,
+  MAP_CHOICES, MAP_FORMAT, MAP_LIMITS, MAP_LISTS, MAP_PATTERNS, MAP_RANGES, MAX_ANGLE, needsSize, QUAT_SLACK, ZONE_LABELS, type NumberRange,
 } from "../../src/shared/map";
+import { catalogData, catalogSchema, catalogText } from "./catalog";
 
 /*
  * Les schémas JSON des deux formats ouverts du jeu : une carte communautaire (`MapFile`,
@@ -86,6 +87,8 @@ const turn: Record<string, Schema> = {
   yaw,
   pitch: ref("angle", "Rotation around x (degrees), after the yaw."),
   roll: ref("angle", "Rotation around z (degrees), after the pitch."),
+  quat: ref("quat", "An exact orientation, as a unit quaternion [x, y, z, w]; yaw, pitch and roll turn it further. "
+    + "Written by the export of the game's arenas when degrees don't give a rotation back to the bit."),
 };
 
 /** Sans `y` : posé sur le sol. */
@@ -108,6 +111,10 @@ function mapDefs(): Record<string, Schema> {
     point: { description: "A point on the plane: [x, z] (m).", type: "array", minItems: 2, maxItems: 2, items: ref("coord") },
     polyline: list(`A polyline: [[x, z], …], 2 to ${L.points} points.`, ref("point"), L.points, 2),
     size: { description: "Dimensions: [width (x), height (y), depth (z)] (m).", type: "array", minItems: 3, maxItems: 3, items: num(R.size) },
+    quat: {
+      description: `A unit quaternion [x, y, z, w] (the game checks that its norm is 1, within ${QUAT_SLACK}).`,
+      type: "array", minItems: 4, maxItems: 4, items: num(R.quat),
+    },
     seed: num(R.seed, "Seed of the scattering: the same seed always gives the same result."),
     meta: object("What the author says about the map: shown as is, in every language.", {
       name: text(L.name, true, "The map's name."),
@@ -237,6 +244,8 @@ function mapDefs(): Record<string, Schema> {
       scale: num(R.prop.scale, "Enlarges a cylinder or a crate."),
       rests: list("The props (their indices in props) it rests on: when they're all gone, it falls.", { type: "integer", minimum: 0, maximum: L.props - 1 }, MAP_LISTS.rests),
       group: num(R.prop.group, "A building number: the AI goes around a building as one piece."),
+      diamond: bool("Set on its corner (a gable under a pitched roof): the renderer straightens its texture."),
+      centered: bool("y is the height of its center (like a box's), not of its base."),
     }, ["type", "x", "z"], {
       if: { required: ["type"], properties: { type: { enum: SIZED_PROPS } } },
       then: { required: ["size"] },
@@ -320,11 +329,23 @@ function mapDefs(): Record<string, Schema> {
       y: ref("height", "Height (m) of what it's on (a bridge, a platform); without it, on the ground."),
       radius: num(R.zone.radius, "Its radius (m)."),
     }, ["label", "x", "z", "radius"]),
-    place: object("A named place for the full map (M).", {
+    place: object("A named place for the full map (M): its name, or one of the places of the game's arenas (place), translated.", {
       name: text(L.place, true, "Its name."),
       names: translations(L.place, "Its name in other languages."),
+      place: choice(MAP_CHOICES.place, "One of the places of the game's arenas, shown in the player's language (instead of name)."),
       ...at("the place"),
-    }, ["name", "x", "z"]),
+    }, ["x", "z"], { anyOf: [{ required: ["name"] }, { required: ["place"] }] }),
+    navGraph: object(
+      "The AI's nav graph (a map that the terrain cuts up, like the Canyon): points and the links between them, taken as given. "
+        + "A map that has one has no nav grid unless it asks for one (nav). The game also checks that each link joins two of its points.",
+      {
+        points: list("Its points: [[x, z], …].", ref("point"), L.navPoints),
+        links: list("Its links, both ways: [[i, j], …] (indices in points).", {
+          type: "array", minItems: 2, maxItems: 2, items: { type: "integer", minimum: 0, maximum: L.navPoints - 1 },
+        }, L.navLinks),
+      },
+      ["points", "links"],
+    ),
     spawn: object("A team's spawn line.", {
       ...at("its middle"),
       facing: ref("angle", "Where the team faces when starting (degrees: 0 toward north, 90 toward west); 0 by default."),
@@ -345,7 +366,8 @@ export function mapSchema(): Schema {
       + "The game checks more than a schema can say: consistent dimensions, the terrain covering the play area, nothing off the map, "
       + `zones with different letters that the AI reaches, clear and safe spawn lines at least 24 m apart, at most ${L.boxes} boxes and ${L.props} props `
       + `(${L.dynamicProps} movable) once the prefabs are unfolded, ${L.scattered} scattered trees and rocks, ${L.pathPoints} points for all paths, `
-      + `${L.lavaPoints} for all lava; a [min, max] pair needs min ≤ max, a waterfall's bottom below its top, a prop's rests below the number of props. `
+      + `${L.lavaPoints} for all lava; a [min, max] pair needs min ≤ max, a waterfall's bottom below its top, a prop's rests below the number of props, `
+      + "a quaternion of norm 1, a nav graph's links below its number of points. "
       + "Texts are measured once trimmed. Run npm run map:check.",
     type: "object",
     properties: {
@@ -374,6 +396,7 @@ export function mapSchema(): Schema {
           }),
         ],
       },
+      navGraph: ref("navGraph"),
       boxes: list("The static scenery: indestructible boxes.", ref("box"), L.boxes),
       props: list("The props.", ref("prop"), L.props),
       prefabs: list("Prefabricated elements, unfolded into props and boxes.", { oneOf: prefabKinds.map((kind) => ref(kind)) }, L.prefabs),
@@ -476,10 +499,15 @@ export function robotSchema(): Schema {
 /** Le texte d'un fichier de schéma. */
 export const schemaText = (schema: Schema): string => `${JSON.stringify(schema, null, 2)}\n`;
 
-/** Les fichiers de schémas, par chemin depuis la racine du dépôt. */
+/**
+ * Les fichiers que fait `npm run schemas`, par chemin depuis la racine du dépôt : les schémas des
+ * deux formats ouverts, et le catalogue du jeu en données ouvertes avec son schéma (tools/schemas/catalog.ts).
+ */
 export function schemaFiles(): Record<string, string> {
   return {
     "schemas/map.schema.json": schemaText(mapSchema()),
     "schemas/robot.schema.json": schemaText(robotSchema()),
+    "content/catalog.schema.json": schemaText(catalogSchema()),
+    "content/catalog.json": catalogText(catalogData()),
   };
 }

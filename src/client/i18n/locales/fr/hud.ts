@@ -196,6 +196,13 @@ export const hud = {
   "hud.page.touchDown": "Descendre",
   "hud.page.touchBoost": "Turbo",
   "hud.page.touchScope": "Viseur",
+  "hud.page.pause": "Pause",
+  "hud.page.fullscreen": "Plein écran",
+  "hud.page.exitFullscreen": "Quitter le plein écran",
+  "hud.page.rotate": "Tourne ton téléphone à l'horizontale : tu verras mieux l'arène, et les commandes auront leur place.",
+  "hud.page.touchGarage": "Au doigt, un toucher pose la pièce choisie, glisser tourne la vue et pincer la rapproche. Enlever une pièce, la copier et les raccourcis demandent une souris et un clavier.",
+  "hud.page.touchEditor": "L'éditeur de cartes se manie à la souris et au clavier : au doigt, tu peux regarder une carte, l'essayer et en sortir, mais pas la modifier facilement.",
+  "hud.page.dismiss": "Fermer",
   "hud.page.elevation": "Hausse",
   "hud.page.heading": "Cap",
   "hud.page.range": "Portée",
@@ -221,5 +228,6 @@ export const hud = {
   // La carte graphique réinitialisée (client/hud/gpuNotice.ts)
   "hud.gpu.lost": "La carte graphique s'est réinitialisée : l'image revient…",
   "hud.gpu.stuck": "L'image ne revient pas : le navigateur n'a pas rendu la carte graphique au jeu. Recharger la page le relance (la partie en cours est perdue).",
+  "hud.gpu.reset": "La carte graphique s'est réinitialisée. En WebGPU, le jeu ne la reprend pas de lui-même : recharger la page le relance (la partie en cours est perdue).",
   "hud.gpu.reload": "Recharger la page",
 } as const;

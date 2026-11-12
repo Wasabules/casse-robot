@@ -1,10 +1,10 @@
-import { ARENA_IDS, type ArenaId, type BoxLook, type PathSurface, type StaticKind } from "../arena/layout";
+import { ARENA_IDS, PLACE_IDS, type ArenaId, type BoxLook, type PathSurface, type PlaceId, type StaticKind } from "../arena/layout";
 import { PROP_TYPES, type PropType } from "../catalog/props";
 import { terrainCodes } from "./codec";
 import {
   MAP_FORMAT, MAP_LIMITS, type MapBox, type MapCounted, type MapFall, type MapFile, type MapGround, type MapIssue, type MapLava,
-  type MapMeta, type MapPath, type MapPlace, type MapPoint, type MapPrefab, type MapProp, type MapSize, type MapSpawn, type MapSpawns, type MapTerrain, type MapVent,
-  type MapZone, type RoofMaterial, type TreeType, type WallMaterial,
+  type MapMeta, type MapNavGraph, type MapPath, type MapPlace, type MapPoint, type MapPrefab, type MapProp, type MapQuat, type MapSize, type MapSpawn, type MapSpawns,
+  type MapTerrain, type MapTurn, type MapVent, type MapZone, type RoofMaterial, type TreeType, type WallMaterial,
 } from "./format";
 
 /*
@@ -47,6 +47,7 @@ const FACADES = { facade: true, tenement: true, brick: true, concrete: true } as
 const SIDES = { n: true, s: true, w: true, e: true } as const;
 const ROOF_KINDS = { gable: true, flat: true } as const;
 const ROCK_LOOKS = { sandstone: true, basalt: true } as const;
+const PLACES = Object.fromEntries(PLACE_IDS.map((id) => [id, true])) as Record<PlaceId, true>;
 
 /**
  * Les valeurs permises de chaque champ à choix (celles qu'accepte la lecture ; les sortes
@@ -55,7 +56,7 @@ const ROCK_LOOKS = { sandstone: true, basalt: true } as const;
  */
 export const MAP_CHOICES = {
   boxKind: STATIC_KINDS, boxLook: BOX_LOOKS, surface: PATH_SURFACES, wall: WALLS, roof: ROOFS, roofKind: ROOF_KINDS,
-  tree: TREES, facade: FACADES, side: SIDES, rockLook: ROCK_LOOKS,
+  tree: TREES, facade: FACADES, side: SIDES, rockLook: ROCK_LOOKS, place: PLACES,
 } as const;
 
 /** Les lettres des zones. */
@@ -80,6 +81,13 @@ const whole = (min: number, max: number): NumberRange => ({ min, max, int: true 
 export const MAX_ANGLE = 1e6;
 
 /**
+ * Un quaternion d'orientation (`MapTurn.quat`) : ses composantes de -1 à 1, et sa norme à moins de
+ * `QUAT_SLACK` de 1 (un quaternion écrit à la main, à quelques décimales, passe ; la construction le
+ * normalise s'il le faut).
+ */
+export const QUAT_SLACK = 0.01;
+
+/**
  * Les bornes des nombres que vérifie la lecture, champ par champ (celles qui ne sont pas déjà dans
  * `MAP_LIMITS`). Le générateur des schémas JSON (tools/schemas/) les reprend : le schéma dit ce que
  * dit la lecture.
@@ -91,7 +99,7 @@ export const MAP_RANGES = (() => {
     height: span(L.minY, L.maxY),
     /** Une dimension d'une boîte ou d'une dalle (m). */
     size: span(0.01, L.maxSize),
-    seed: whole(0, 2 ** 31),
+    seed: whole(0, 0x80000000),
     terrain: { cells: whole(L.minCells, L.maxCells), height: span(L.minHeight, L.maxHeight) },
     bounds: {
       half: span(L.minHalf, L.maxHalf), roam: span(5, L.maxHalf), spawnLine: span(5, L.maxHalf), spawnSpread: span(2, L.maxHalf),
@@ -122,6 +130,8 @@ export const MAP_RANGES = (() => {
     containers: { count: whole(1, L.containers), levels: whole(1, L.levels) },
     zone: { radius: span(2, 30) },
     spawn: { width: span(L.minSpawnWidth, L.maxSpawnWidth) },
+    /** Une composante d'un quaternion. */
+    quat: span(-1, 1),
   } as const;
 })();
 
@@ -278,6 +288,18 @@ class Reader {
     return [1, 1, 1];
   }
 
+  /** Un quaternion unitaire [x, y, z, w] (à `QUAT_SLACK` près). */
+  quat(v: unknown, path: string): MapQuat | undefined {
+    if (v === undefined) return undefined;
+    if (Array.isArray(v) && v.length === 4) {
+      const q: [number, number, number, number] = [0, 0, 0, 0];
+      for (let i = 0; i < 4; i++) q[i] = this.within(v[i], `${path}[${i}]`, MAP_RANGES.quat);
+      if (Math.abs(Math.hypot(...q) - 1) <= QUAT_SLACK) return q;
+    }
+    this.bad(path);
+    return undefined;
+  }
+
   /** Deux nombres [a, b] avec a ≤ b, dans ces bornes. */
   range(v: unknown, path: string, bounds: NumberRange): readonly [number, number] | undefined {
     if (v === undefined) return undefined;
@@ -423,8 +445,8 @@ function readPath(r: Reader, v: unknown, i: number): MapPath {
   });
 }
 
-function readTurn(r: Reader, o: Raw, path: string): { yaw?: number; pitch?: number; roll?: number } {
-  return { yaw: r.angle(o.yaw, `${path}.yaw`), pitch: r.angle(o.pitch, `${path}.pitch`), roll: r.angle(o.roll, `${path}.roll`) };
+function readTurn(r: Reader, o: Raw, path: string): MapTurn {
+  return { yaw: r.angle(o.yaw, `${path}.yaw`), pitch: r.angle(o.pitch, `${path}.pitch`), roll: r.angle(o.roll, `${path}.roll`), quat: r.quat(o.quat, `${path}.quat`) };
 }
 
 function readBox(r: Reader, v: unknown, i: number): MapBox {
@@ -454,6 +476,8 @@ function readProp(r: Reader, v: unknown, i: number, count: number): MapProp {
     scale: r.optWithin(o.scale, `${path}.scale`, MAP_RANGES.prop.scale),
     rests,
     group: r.optWithin(o.group, `${path}.group`, MAP_RANGES.prop.group),
+    diamond: r.bool(o.diamond, `${path}.diamond`),
+    centered: r.bool(o.centered, `${path}.centered`),
   });
 }
 
@@ -537,11 +561,35 @@ function readZone(r: Reader, v: unknown, i: number): MapZone {
 function readPlace(r: Reader, v: unknown, i: number): MapPlace {
   const path = `places[${i}]`;
   const o = r.obj(v, path) ?? {};
+  // Un nom, ou l'un des lieux des arènes du jeu (traduit) : il faut l'un ou l'autre
+  const place = o.place === undefined ? undefined : r.oneOf(o.place, `${path}.place`, PLACES);
   return defined({
-    name: r.text(o.name, `${path}.name`, MAP_LIMITS.place, true) ?? "",
+    name: r.text(o.name, `${path}.name`, MAP_LIMITS.place, o.place === undefined || o.name !== undefined),
     names: r.texts(o.names, `${path}.names`, MAP_LIMITS.place),
+    place,
     x: r.coord(o.x, `${path}.x`), z: r.coord(o.z, `${path}.z`),
   });
+}
+
+/** Le réseau de passage : des points, et des liaisons entre deux d'entre eux (leurs rangs). */
+function readNavGraph(r: Reader, v: unknown): MapNavGraph | undefined {
+  if (v === undefined) return undefined;
+  const o = r.obj(v, "navGraph") ?? {};
+  const L = MAP_LIMITS;
+  if (o.points === undefined) r.bad("navGraph.points");
+  if (o.links === undefined) r.bad("navGraph.links");
+  const points = r.list(o.points, "navGraph.points", L.navPoints, "navPoints").map((p, i) => r.point(p, `navGraph.points[${i}]`));
+  // (sans point, aucune liaison n'est possible : `num` refuse tout rang)
+  const last = points.length - 1;
+  const links = r.list(o.links, "navGraph.links", L.navLinks, "navLinks").map((l, i): readonly [number, number] => {
+    const path = `navGraph.links[${i}]`;
+    if (!Array.isArray(l) || l.length !== 2) {
+      r.bad(path);
+      return [0, 0];
+    }
+    return [r.num(l[0], `${path}[0]`, 0, last, true), r.num(l[1], `${path}[1]`, 0, last, true)];
+  });
+  return { points, links };
 }
 
 function readSpawn(r: Reader, v: unknown, team: "blue" | "red"): MapSpawn {
@@ -654,6 +702,7 @@ function readCurrent(o: Raw): ReadResult {
     urban: r.bool(o.urban, "urban"),
     ambience: o.ambience === undefined ? undefined : r.oneOf<ArenaId>(o.ambience, "ambience", Object.fromEntries(ARENA_IDS.map((id) => [id, true])) as Record<ArenaId, true>),
     nav,
+    navGraph: readNavGraph(r, o.navGraph),
     boxes: optList(o.boxes, r.list(o.boxes, "boxes", L.boxes, "boxes").map((v, i) => readBox(r, v, i))),
     props: optList(o.props, rawProps.map((v, i) => readProp(r, v, i, rawProps.length))),
     prefabs: optList(o.prefabs, r.list(o.prefabs, "prefabs", L.prefabs, "prefabs").map((v, i) => readPrefab(r, v, i)).filter((p): p is MapPrefab => p !== null)),

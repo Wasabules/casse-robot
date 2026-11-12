@@ -1,6 +1,7 @@
 import { RESUME_HEAT, type Weapon } from "../catalog/weapons";
 import { clamp } from "../math/scalar";
 import type { ArmState } from "../sim/entities";
+import { dpow } from "../math/det";
 
 /*
  * Ressources d'une arme : sa cadence (`cooldown`), sa chaleur pour les armes automatiques, ses
@@ -37,7 +38,7 @@ export function tickArm(state: ArmState, weapon: Weapon, dt: number): void {
  * souvent que seule : ses munitions et sa chaleur durent d'autant.
  */
 export const STACK_FALLOFF = 0.8;
-export const stackRate = (count: number): number => (1 - STACK_FALLOFF ** count) / (1 - STACK_FALLOFF);
+export const stackRate = (count: number): number => (1 - dpow(STACK_FALLOFF, count)) / (1 - STACK_FALLOFF);
 
 /**
  * L'arme est-elle prête ? Sa cadence se décompte au pas fixe : 0,05 − 3 × 1/60 laisse un reste

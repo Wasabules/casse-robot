@@ -86,6 +86,13 @@ export interface GroundStyle {
   readonly lawn?: string;
 }
 
+/**
+ * `peakLine` d'une arène sans sommets (ni neige ni cendre) : au-dessus de tout relief (une carte
+ * monte à 250 m au plus, `MAP_LIMITS.maxHeight`). Un nombre fini, pour qu'elle s'écrive en carte
+ * (JSON ne connaît pas l'infini).
+ */
+export const NO_PEAK = 300;
+
 /** La palette par défaut, celle de la Vallée : herbe, terre, sable des berges, roche des pentes, neige des sommets. */
 export const VALLEY_GROUND: GroundStyle = {
   base: ["#5f7f3b", "#7a8f46"], dirt: "#8a7456", sand: "#a39470", mud: "#5f5845", rock: "#7a766e", peak: "#eef1f3",

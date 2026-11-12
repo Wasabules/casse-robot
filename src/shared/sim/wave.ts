@@ -9,6 +9,7 @@ import { vec3 } from "../math/vec";
 import { designRadius, groundHeight, removeBot, setBotVelocity, spawnBot } from "../robot/lifecycle";
 import type { Bot, Team } from "./entities";
 import type { Simulation } from "./simulation";
+import { dcos, dsin } from "../math/det";
 
 /**
  * Cercles sur lesquels les robots apparaissent, en part de la ligne de départ de l'arène
@@ -110,7 +111,7 @@ function sideAngle(sim: Simulation, team: Team, t: number): number {
   let from = team === "blue" ? Math.PI + SIDE_MARGIN : SIDE_MARGIN;
   if (sim.arena.bounds.spawns) {
     const line = spawnLineOf(sim.arena.bounds, team);
-    const toward = Math.hypot(line.x, line.z) > 1 ? Math.atan2(line.z, line.x) : Math.atan2(-Math.cos(line.facing), -Math.sin(line.facing));
+    const toward = Math.hypot(line.x, line.z) > 1 ? Math.atan2(line.z, line.x) : Math.atan2(-dcos(line.facing), -dsin(line.facing));
     from = toward - Math.PI / 2 + SIDE_MARGIN;
   }
   return from + t * (Math.PI - 2 * SIDE_MARGIN);
@@ -153,11 +154,11 @@ function placeOnCircle(sim: Simulation, profile: BotProfile, team: Team, start: 
     for (let k = 0; k < 72; k++) {
       a = start + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.05;
       radius = ring;
-      if (isClear(sim, Math.cos(a) * ring, Math.sin(a) * ring, r, placed)) break search;
+      if (isClear(sim, dcos(a) * ring, dsin(a) * ring, r, placed)) break search;
     }
   }
-  const x = Math.cos(a) * radius;
-  const z = Math.sin(a) * radius;
+  const x = dcos(a) * radius;
+  const z = dsin(a) * radius;
   placed.push({ x, z, r });
   // Face à peu près tangente au cercle
   return spawnBot(sim, profile, vec3(x, spawnHeight(sim, profile, x, z, r), z), -a + Math.PI, team);
@@ -171,15 +172,15 @@ function spawnHeight(sim: Simulation, profile: BotProfile, x: number, z: number,
   let ground = groundLevel(sim.arena, x, z);
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * Math.PI * 2;
-    ground = Math.max(ground, groundLevel(sim.arena, x + Math.cos(a) * r, z + Math.sin(a) * r));
+    ground = Math.max(ground, groundLevel(sim.arena, x + dcos(a) * r, z + dsin(a) * r));
   }
   return ground + (profile.mobility === "hover" ? HOVER_SPAWN_Y : groundHeight(profile.design) + 0.03);
 }
 
 /** Un avion en vol sur son circuit, à l'angle `a`, face à la tangente, déjà à sa vitesse de croisière. */
 function launchPlane(sim: Simulation, profile: BotProfile, team: Team, a: number): Bot {
-  const cos = Math.cos(a);
-  const sin = Math.sin(a);
+  const cos = dcos(a);
+  const sin = dsin(a);
   const R = sim.arena.bounds.circuit;
   const floor = sim.arena.bounds.airFloor ?? 0;
   const y = groundLevel(sim.arena, cos * R, sin * R) + Math.max(PLANE_SPAWN_Y, floor);

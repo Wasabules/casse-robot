@@ -14,3 +14,6 @@ tools/sounds/raw/
 
 # Captures des outils de navigateur (npm run render:check)
 artifacts/
+
+# La simulation compilée (Rust) : ce que construit cargo
+target/

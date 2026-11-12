@@ -20,6 +20,7 @@ import { burnable, groundBelow, ignite, igniteProp, PUDDLE_REACH, spawnGroundFir
 import { spawnDebris } from "./debris";
 import { blastProjectiles } from "./interception";
 import { barrierBetween } from "./barriers";
+import { dcos, dsin } from "../math/det";
 
 /**
  * Part des blocs de départ que le morceau du cockpit doit garder (voir `integrity`) : en dessous,
@@ -194,7 +195,7 @@ function damageProp(sim: Simulation, prop: Prop, amount: number, dir: Vec3): voi
   if (prop.state.kind === "intact") {
     if (def.vent) {
       const angle = rand(0, Math.PI * 2); // le trou est quelque part sur le flanc
-      prop.state = { kind: "venting", left: def.vent.duration, leak: vec3(Math.cos(angle), 0, Math.sin(angle)) };
+      prop.state = { kind: "venting", left: def.vent.duration, leak: vec3(dcos(angle), 0, dsin(angle)) };
     } else {
       prop.state = { kind: "fuse", left: def.fuse ?? 0 };
       // Ce qui brûle et a une longue mèche (une voiture) flambe en attendant d'exploser

@@ -1,0 +1,6 @@
+# La version de Rust de la simulation compilée : la même partout, pour que le WebAssembly construit
+# soit le même d'une machine à l'autre (npm run native).
+[toolchain]
+channel = "1.99.1"
+targets = ["wasm32-unknown-unknown"]
+profile = "minimal"

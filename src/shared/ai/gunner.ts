@@ -19,6 +19,7 @@ import { rand } from "../math/scalar";
 import { add, distance, dot, len, norm, scale, sub, vec3, type Vec3 } from "../math/vec";
 import type { Block, Bot, Projectile, Turret } from "../sim/entities";
 import type { Simulation } from "../sim/simulation";
+import { dcos, dsin } from "../math/det";
 
 /** Intervalle entre deux choix de cible (s). */
 const RETARGET = 0.6;
@@ -408,8 +409,8 @@ export function firingDirection(muzzle: Vec3, target: Vec3, vel: Vec3, weapon: W
       const root = v2 * v2 - g * (g * horizontal * horizontal + 2 * d.y * v2);
       const angle = root >= 0 ? Math.atan((v2 - Math.sqrt(root)) / (g * horizontal)) : Math.PI / 4;
       const flat = vec3(d.x / horizontal, 0, d.z / horizontal);
-      dir = add(scale(flat, Math.cos(angle)), vec3(0, Math.sin(angle), 0));
-      flight = horizontal / (p.speed * Math.cos(angle));
+      dir = add(scale(flat, dcos(angle)), vec3(0, dsin(angle), 0));
+      flight = horizontal / (p.speed * dcos(angle));
     }
     aim = add(target, scale(vel, flight));
   }

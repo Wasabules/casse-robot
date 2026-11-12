@@ -1,4 +1,4 @@
-import type { ArenaId, BoxLook, CommunityMeta, PathSurface, StaticKind } from "../arena/layout";
+import type { ArenaId, BoxLook, CommunityMeta, PathSurface, PlaceId, StaticKind } from "../arena/layout";
 import type { GroundStyle } from "../arena/features";
 import type { PropType } from "../catalog/props";
 
@@ -36,7 +36,7 @@ export type MapMeta = CommunityMeta;
  */
 export interface MapTerrain {
   readonly cells: number;
-  /** Pas de la grille (m) : 1 ou 2 (une puissance de deux : voir `MAP_LIMITS.steps`). */
+  /** Pas de la grille (m) : 1, 1,25 ou 2 (voir `MAP_LIMITS.steps`). */
   readonly step: number;
   readonly min: number;
   readonly max: number;
@@ -133,11 +133,22 @@ export interface MapPath {
   readonly surface?: PathSurface;
 }
 
-/** Orientation : lacet (autour de la verticale ; 90 tourne le nord vers l'ouest), tangage (autour de x), roulis (autour de z), en degrés. */
+/** Un quaternion unitaire [x, y, z, w] : une orientation exacte (voir `MapTurn.quat`). */
+export type MapQuat = readonly [number, number, number, number];
+
+/**
+ * Orientation : lacet (autour de la verticale ; 90 tourne le nord vers l'ouest), tangage (autour de x),
+ * roulis (autour de z), en degrés. `quat` : une orientation exacte, au bit près (un quaternion
+ * unitaire), celle qu'écrit l'export des arènes du jeu quand des degrés ne la redonnent pas
+ * exactement (une rotation composée par le code) ; le lacet, le tangage et le roulis la tournent
+ * ensuite (l'éditeur tourne ainsi un élément qui en a une). Seul, `quat: [0, 0, 0, 1]` dit qu'un
+ * accessoire a une orientation, droite (le jeu le traite alors en accessoire tourné : voir sim/wave.ts).
+ */
 export interface MapTurn {
   readonly yaw?: number;
   readonly pitch?: number;
   readonly roll?: number;
+  readonly quat?: MapQuat;
 }
 
 /**
@@ -172,6 +183,13 @@ export interface MapProp extends MapTurn {
   readonly scale?: number;
   readonly rests?: readonly number[];
   readonly group?: number;
+  /** Posé en losange (un pignon, sous un toit à deux pans) : le rendu redresse sa texture (voir `PropSpot.diamond`). */
+  readonly diamond?: boolean;
+  /**
+   * `y` est la hauteur de son centre (comme pour une boîte), pas celle de sa base. L'export des arènes
+   * du jeu s'en sert quand aucune base ne redonne exactement le centre (base + demi-hauteur s'arrondit).
+   */
+  readonly centered?: boolean;
 }
 
 /** Matières des murs et des toits d'un bâtiment. */
@@ -259,12 +277,29 @@ export interface MapSpawns {
   readonly red: MapSpawn;
 }
 
-/** Un lieu nommé de la carte (la carte entière, M) : son nom, et s'il le faut un nom par langue. */
+/**
+ * Un lieu nommé de la carte (la carte entière, M) : son nom, et s'il le faut un nom par langue ; ou
+ * l'un des lieux des arènes du jeu (`place` : « village », « bridge »…), traduit dans chaque langue.
+ * Il faut l'un ou l'autre ; avec `place`, le jeu ne montre pas `name`.
+ */
 export interface MapPlace {
-  readonly name: string;
+  readonly name?: string;
   readonly names?: Readonly<Record<string, string>>;
+  readonly place?: PlaceId;
   readonly x: number;
   readonly z: number;
+}
+
+/**
+ * Réseau de passage de l'IA au sol (voir `NavGraph`, arena/layout.ts) : des points (x, z) et leurs
+ * liaisons (rangs dans `points`, dans les deux sens), praticables en ligne droite ou déclarées (un
+ * pont, une arche). Le jeu les prend telles quelles : il ne cherche pas lui-même les liaisons
+ * praticables (l'export du Canyon écrit celles que le jeu a calculées sur son relief). Une carte qui
+ * en a un n'a pas de grille de passage, sauf si elle en demande une (`nav`).
+ */
+export interface MapNavGraph {
+  readonly points: readonly MapPoint[];
+  readonly links: readonly (readonly [number, number])[];
 }
 
 /** Une carte communautaire. */
@@ -287,6 +322,8 @@ export interface MapFile {
   /** Ambiance sonore : celle d'une arène du jeu (la Vallée par défaut). */
   readonly ambience?: ArenaId;
   readonly nav?: MapNav | false;
+  /** Réseau de passage de l'IA (une carte que le relief coupe : le Canyon). */
+  readonly navGraph?: MapNavGraph;
   readonly boxes?: readonly MapBox[];
   readonly props?: readonly MapProp[];
   readonly prefabs?: readonly MapPrefab[];
@@ -311,10 +348,14 @@ export const MAP_LIMITS = {
   description: 400,
   place: 32,
   languages: 8,
-  /** Relief : cases par côté, pas permis (m), côté du relief au plus (m : le sol plat sous le relief fait ±220 m). */
+  /**
+   * Relief : cases par côté, pas permis (m), côté du relief au plus (m : le sol plat sous le relief
+   * fait ±220 m). Des pas exacts en binaire : à 1,375 m, des rayons de la physique passaient entre les
+   * triangles du relief ; 1,25 est celui de l'Île volcanique.
+   */
   minCells: 16,
   maxCells: 440,
-  steps: [1, 2] as readonly number[],
+  steps: [1, 1.25, 2] as readonly number[],
   maxSide: 440,
   /** Hauteurs (m). */
   minHeight: 0,
@@ -326,8 +367,8 @@ export const MAP_LIMITS = {
   reach: 220,
   minY: -10,
   maxY: 300,
-  /** Dimension d'une boîte, d'une dalle (m). */
-  maxSize: 200,
+  /** Dimension d'une boîte, d'une dalle (m) : d'un bord à l'autre de la carte (les limites invisibles du Port en font 408). */
+  maxSize: 440,
   boxes: 400,
   props: 900,
   /** Accessoires mobiles (caisses, barils, voitures) : des corps que la physique fait bouger. */
@@ -367,11 +408,15 @@ export const MAP_LIMITS = {
   /** Taille d'une case de la grille de passage (m). */
   minNavCell: 2,
   maxNavCell: 6,
+  /** Points et liaisons d'un réseau de passage (le Canyon en a 293 et 1 912). */
+  navPoints: 1024,
+  navLinks: 8192,
 } as const;
 
 /** Sur quoi porte un dépassement de nombre (`MapIssue` « tooMany »). */
 export type MapCounted =
-  | "boxes" | "props" | "dynamicProps" | "prefabs" | "scattered" | "zones" | "places" | "lava" | "vents" | "falls" | "paths" | "points" | "languages";
+  | "boxes" | "props" | "dynamicProps" | "prefabs" | "scattered" | "zones" | "places" | "lava" | "vents" | "falls" | "paths" | "points" | "languages"
+  | "navPoints" | "navLinks";
 
 /** Ce que les lignes de départ ont de travers : une équipe. */
 export type MapTeam = "blue" | "red";

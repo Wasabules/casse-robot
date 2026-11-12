@@ -1,5 +1,5 @@
 import { lavaAt } from "../../shared/arena/features";
-import { spotPose, type ArenaLayout, type BoxLook, type StaticBox, type StaticKind } from "../../shared/arena/layout";
+import { spotPose, type ArenaLayout, type BoxLook, type PropSpot, type StaticBox, type StaticKind } from "../../shared/arena/layout";
 import { terrainHeight } from "../../shared/arena/terrain";
 import { propDef, type PropType } from "../../shared/catalog/props";
 import { clamp } from "../../shared/math/scalar";
@@ -69,7 +69,7 @@ interface View {
 }
 
 /** Accessoire ancré debout, tel que la carte le dessine : une emprise, ou un cercle. */
-interface Standing {
+export interface Standing {
   color: string;
   polygon: Vec3[] | null;
   circle: { x: number; z: number; r: number } | null;
@@ -143,7 +143,7 @@ export class MiniMap {
   setArena(layout: ArenaLayout): void {
     if (layout === this.layout) return;
     this.layout = layout;
-    this.extent = layout.terrain ? layout.bounds.half * 1.12 : layout.bounds.half + 2;
+    this.extent = mapExtent(layout);
     const size = Math.round(clamp(this.extent * 2 * BACKGROUND_DENSITY, BACKGROUND_MIN, BACKGROUND_MAX));
     for (const c of [this.background, this.structures]) c.width = c.height = size;
     drawBackground(this.background, layout, this.extent);
@@ -170,18 +170,10 @@ export class MiniMap {
   }
 
   private addStanding(prop: Prop): void {
-    const color = STRUCTURE_COLORS[prop.type];
     const spot = this.layout?.props[prop.spot];
-    if (!color || !spot || spot.diamond) return;
-    const { pos, rot } = spotPose(spot, true);
-    const crown = CROWN[prop.type];
-    const def = propDef(prop.type);
-    if (crown || def.shape.kind === "cylinder") {
-      const r = crown ? crown * (spot.scale ?? 1) : prop.half.x;
-      this.standing.set(prop, { color, polygon: null, circle: { x: pos.x, z: pos.z, r } });
-    } else {
-      this.standing.set(prop, { color, polygon: footprint(pos, prop.half, rot), circle: null });
-    }
+    const standing = spot && standingOf(spot, prop.half);
+    if (!standing) return;
+    this.standing.set(prop, standing);
     this.structuresDirty = true;
   }
 
@@ -190,16 +182,7 @@ export class MiniMap {
     const c = this.structures.getContext("2d")!;
     const size = this.structures.width;
     c.clearRect(0, 0, size, size);
-    const k = size / (2 * this.extent);
-    const u = (x: number): number => (this.extent - x) * k;
-    const v = (z: number): number => (this.extent - z) * k;
-    for (const s of this.standing.values()) {
-      c.fillStyle = s.color;
-      c.beginPath();
-      if (s.circle) c.arc(u(s.circle.x), v(s.circle.z), Math.max(1, s.circle.r * k), 0, Math.PI * 2);
-      else if (s.polygon) s.polygon.forEach((p, i) => (i ? c.lineTo(u(p.x), v(p.z)) : c.moveTo(u(p.x), v(p.z))));
-      c.fill();
-    }
+    paintStanding(c, this.standing.values(), this.extent, size / (2 * this.extent));
   }
 
   /** Une carte : le fond et les bâtiments dans sa fenêtre, puis zones, robots et regard de la caméra. */
@@ -322,56 +305,110 @@ function drawBot(c: Ctx, bot: Bot, x: number, y: number, size: number, mine: boo
   c.restore();
 }
 
+/** Demi-côté de ce que montre la carte entière d'une arène (m) : une grande arène, avec le pied de ses montagnes. */
+export function mapExtent(layout: ArenaLayout): number {
+  return layout.terrain ? layout.bounds.half * 1.12 : layout.bounds.half + 2;
+}
+
+/**
+ * Ce que la carte dessine d'un accessoire ancré debout (un pan de mur, un toit, une citerne, un
+ * arbre), d'après son emplacement et ses demi-dimensions ; null : rien (une caisse, un pignon).
+ */
+export function standingOf(spot: PropSpot, half: Vec3): Standing | null {
+  const color = STRUCTURE_COLORS[spot.type];
+  if (!color || spot.diamond) return null;
+  const { pos, rot } = spotPose(spot, true);
+  const crown = CROWN[spot.type];
+  if (crown || propDef(spot.type).shape.kind === "cylinder") {
+    const r = crown ? crown * (spot.scale ?? 1) : half.x;
+    return { color, polygon: null, circle: { x: pos.x, z: pos.z, r } };
+  }
+  return { color, polygon: footprint(pos, half, rot), circle: null };
+}
+
+/** Dessine des accessoires debout sur une toile qui couvre [-extent, extent]² à `k` px par m. */
+export function paintStanding(c: Ctx, list: Iterable<Standing>, extent: number, k: number): void {
+  const u = (x: number): number => (extent - x) * k;
+  const v = (z: number): number => (extent - z) * k;
+  for (const s of list) {
+    c.fillStyle = s.color;
+    c.beginPath();
+    if (s.circle) c.arc(u(s.circle.x), v(s.circle.z), Math.max(1, s.circle.r * k), 0, Math.PI * 2);
+    else if (s.polygon) s.polygon.forEach((p, i) => (i ? c.lineTo(u(p.x), v(p.z)) : c.moveTo(u(p.x), v(p.z))));
+    c.fill();
+  }
+}
+
 /** Le fond d'une arène : sol (relief ombré, eau, chemins) et décor fixe, sur [-extent, extent]². */
-function drawBackground(canvas: HTMLCanvasElement, layout: ArenaLayout, extent: number): void {
+export function drawBackground(canvas: HTMLCanvasElement, layout: ArenaLayout, extent: number): void {
   const c = canvas.getContext("2d")!;
   const size = canvas.width;
-  const k = size / (2 * extent);
-  const terrain = layout.terrain;
-  if (terrain) {
-    // Relief : la couleur du sol du rendu (voir ArenaView), ombrée par une lumière venue du nord-ouest
+  if (layout.terrain) {
     const image = c.createImageData(size, size);
-    const light = norm(vec3(0.6, 1.2, 0.6));
-    const water = layout.water ?? -Infinity;
-    const paths = layout.paths ?? [];
-    for (let j = 0; j < size; j++) {
-      for (let i = 0; i < size; i++) {
-        const x = extent - (i + 0.5) / k;
-        const z = extent - (j + 0.5) / k;
-        const h = terrainHeight(terrain, x, z);
-        const n = norm(vec3(terrainHeight(terrain, x - 1, z) - terrainHeight(terrain, x + 1, z), 2, terrainHeight(terrain, x, z - 1) - terrainHeight(terrain, x, z + 1)));
-        let { r, g, b } = groundColor(x, h, z, n.y, water, paths, layout);
-        if (h < water) [r, g, b] = [r * 0.3 + 0.25 * 0.7, g * 0.3 + 0.44 * 0.7, b * 0.3 + 0.53 * 0.7];
-        // L'eau profonde (une limite : on s'y noie) plus sombre ; la lave, qui brûle, en orange vif
-        if (layout.deepWater !== undefined && water - Math.max(0, h) > layout.deepWater) [r, g, b] = [0.1, 0.24, 0.36];
-        if (layout.lava && lavaAt(layout.lava, x, z) > 0) [r, g, b] = [0.95, 0.36, 0.08];
-        const shade = 0.55 + 0.6 * Math.max(0, n.x * light.x + n.y * light.y + n.z * light.z);
-        const outside = Math.max(Math.abs(x), Math.abs(z)) > layout.bounds.half ? 0.62 : 1;
-        const o = (j * size + i) * 4;
-        image.data[o] = clamp(r * shade * 0.9 * outside * 255, 0, 255);
-        image.data[o + 1] = clamp(g * shade * 0.9 * outside * 255, 0, 255);
-        image.data[o + 2] = clamp(b * shade * 0.9 * outside * 255, 0, 255);
-        image.data[o + 3] = 255;
-      }
-    }
+    paintTerrainRows(image, layout, extent, 0, size);
     c.putImageData(image, 0, 0);
   } else {
-    // Sol plat : l'arène claire dans ses murs, un quadrillage de 4 m
-    c.fillStyle = "#28313a";
-    c.fillRect(0, 0, size, size);
-    const h = layout.bounds.half;
-    const a = (extent - h) * k;
-    c.fillStyle = "#4b5862";
-    c.fillRect(a, a, 2 * h * k, 2 * h * k);
-    c.strokeStyle = "rgba(255, 255, 255, 0.06)";
-    c.lineWidth = 1;
-    for (let m = -h; m <= h; m += 4) {
-      const p = (extent - m) * k;
-      c.beginPath(); c.moveTo(p, a); c.lineTo(p, a + 2 * h * k); c.stroke();
-      c.beginPath(); c.moveTo(a, p); c.lineTo(a + 2 * h * k, p); c.stroke();
+    drawFlatGround(c, layout, extent, size);
+  }
+  drawBoxes(c, layout, extent, size / (2 * extent));
+}
+
+/**
+ * Le relief d'une arène, de la ligne `from` à la ligne `to` (exclue) d'une image carrée qui couvre
+ * [-extent, extent]² : la couleur du sol du rendu (voir ArenaView), ombrée par une lumière venue du
+ * nord-ouest, l'eau, la lave. Par lignes : le plan d'une arène (menu/arenaPreview.ts) se calcule en
+ * plusieurs fois, entre deux images.
+ */
+export function paintTerrainRows(image: ImageData, layout: ArenaLayout, extent: number, from: number, to: number): void {
+  const terrain = layout.terrain;
+  if (!terrain) return;
+  const size = image.width;
+  const k = size / (2 * extent);
+  const light = norm(vec3(0.6, 1.2, 0.6));
+  const water = layout.water ?? -Infinity;
+  const paths = layout.paths ?? [];
+  for (let j = from; j < Math.min(to, size); j++) {
+    for (let i = 0; i < size; i++) {
+      const x = extent - (i + 0.5) / k;
+      const z = extent - (j + 0.5) / k;
+      const h = terrainHeight(terrain, x, z);
+      const n = norm(vec3(terrainHeight(terrain, x - 1, z) - terrainHeight(terrain, x + 1, z), 2, terrainHeight(terrain, x, z - 1) - terrainHeight(terrain, x, z + 1)));
+      let { r, g, b } = groundColor(x, h, z, n.y, water, paths, layout);
+      if (h < water) [r, g, b] = [r * 0.3 + 0.25 * 0.7, g * 0.3 + 0.44 * 0.7, b * 0.3 + 0.53 * 0.7];
+      // L'eau profonde (une limite : on s'y noie) plus sombre ; la lave, qui brûle, en orange vif
+      if (layout.deepWater !== undefined && water - Math.max(0, h) > layout.deepWater) [r, g, b] = [0.1, 0.24, 0.36];
+      if (layout.lava && lavaAt(layout.lava, x, z) > 0) [r, g, b] = [0.95, 0.36, 0.08];
+      const shade = 0.55 + 0.6 * Math.max(0, n.x * light.x + n.y * light.y + n.z * light.z);
+      const outside = Math.max(Math.abs(x), Math.abs(z)) > layout.bounds.half ? 0.62 : 1;
+      const o = (j * size + i) * 4;
+      image.data[o] = clamp(r * shade * 0.9 * outside * 255, 0, 255);
+      image.data[o + 1] = clamp(g * shade * 0.9 * outside * 255, 0, 255);
+      image.data[o + 2] = clamp(b * shade * 0.9 * outside * 255, 0, 255);
+      image.data[o + 3] = 255;
     }
   }
-  // Décor fixe : son emprise au sol
+}
+
+/** Sol plat (une arène sans relief) : l'arène claire dans ses murs, un quadrillage de 4 m. */
+export function drawFlatGround(c: Ctx, layout: ArenaLayout, extent: number, size: number): void {
+  const k = size / (2 * extent);
+  c.fillStyle = "#28313a";
+  c.fillRect(0, 0, size, size);
+  const h = layout.bounds.half;
+  const a = (extent - h) * k;
+  c.fillStyle = "#4b5862";
+  c.fillRect(a, a, 2 * h * k, 2 * h * k);
+  c.strokeStyle = "rgba(255, 255, 255, 0.06)";
+  c.lineWidth = 1;
+  for (let m = -h; m <= h; m += 4) {
+    const p = (extent - m) * k;
+    c.beginPath(); c.moveTo(p, a); c.lineTo(p, a + 2 * h * k); c.stroke();
+    c.beginPath(); c.moveTo(a, p); c.lineTo(a + 2 * h * k, p); c.stroke();
+  }
+}
+
+/** Décor fixe : l'emprise au sol de chaque boîte, ce sur quoi l'on roule d'abord, les obstacles par-dessus. */
+export function drawBoxes(c: Ctx, layout: ArenaLayout, extent: number, k: number): void {
   const boxes = [...layout.boxes].sort((p, q) => BOX_ORDER.indexOf(p.kind) - BOX_ORDER.indexOf(q.kind));
   for (const box of boxes) drawBox(c, box, extent, k);
 }

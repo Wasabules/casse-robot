@@ -31,10 +31,12 @@ import { placeWheels, stepWheels } from "../robot/wheels";
 import { ownerBot, syncHeads } from "../robot/colliders";
 import type { ArmState, Barrier, Block, Bot, ColliderOwner, Debris, GroundFire, Part, Projectile, Prop, SmokeCloud, Team } from "./entities";
 import type { SimEvent, SimListener } from "./events";
+import { initNative } from "../native/native";
 
 /** Charge le module WebAssembly de Rapier. À attendre une fois avant de créer une Simulation. */
-export function initPhysics(): Promise<void> {
-  return RAPIER.init();
+export async function initPhysics(): Promise<void> {
+  // (et la simulation compilée : crates/casse-sim, src/shared/native/native.ts)
+  await Promise.all([RAPIER.init(), initNative()]);
 }
 
 /**

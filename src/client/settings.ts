@@ -1,6 +1,17 @@
 import { detectLocale, isLocale, type Locale } from "./i18n/state";
 import { BINDINGS_VERSION, DEFAULT_BINDINGS, migrateBindings, type Bindings } from "./input/bindings";
 
+/**
+ * Moteur de rendu (render/engine.ts) : WebGPU (si le navigateur le permet, sinon WebGL) ou WebGL.
+ * Pris au chargement de la page.
+ */
+export const RENDERERS = ["webgpu", "webgl"] as const;
+export type Renderer = (typeof RENDERERS)[number];
+/** Le rendu demandé par l'adresse de la page (`?renderer=webgpu`, `?renderer=webgl`), sinon celui des réglages. */
+export function requestedRenderer(chosen: Renderer, search = typeof location === "undefined" ? "" : location.search): Renderer {
+  const forced = new URLSearchParams(search).get("renderer");
+  return forced === "webgpu" || forced === "webgl" ? forced : chosen;
+}
 /** Qualité des ombres : taille de la carte d'ombre et finesse du filtrage. */
 export const SHADOW_QUALITIES = ["low", "medium", "high"] as const;
 export type ShadowQuality = (typeof SHADOW_QUALITIES)[number];
@@ -34,6 +45,8 @@ export const DEADZONE_RANGE = { min: 0.05, max: 0.4 } as const;
 /** Réglages du joueur, gardés dans le navigateur d'une visite à l'autre. */
 export interface Settings {
   // --- Graphismes ---
+  /** Moteur de rendu (render/engine.ts) : pris au chargement de la page. */
+  renderer: Renderer;
   /** Ombres portées (coûteuses sur les petites machines). */
   shadows: boolean;
   shadowQuality: ShadowQuality;
@@ -97,6 +110,7 @@ function browserLanguages(): readonly string[] {
 }
 
 export const DEFAULT_SETTINGS: Readonly<Settings> = {
+  renderer: "webgl",
   shadows: true,
   shadowQuality: "medium",
   renderScale: 1,
@@ -148,6 +162,51 @@ export function graphicsPreset(s: Settings): GraphicsPreset | null {
   return null;
 }
 
+/** Ce qu'on sait de la machine, pour choisir les graphismes du premier lancement. */
+export interface DeviceInfo {
+  /** Le pointeur principal est un doigt (téléphone, tablette). */
+  coarse: boolean;
+  /** Plus petit côté de l'écran (px CSS). */
+  screen: number;
+  /** Mémoire (Go : `navigator.deviceMemory`, de 0,25 à 8 ; absente : inconnue, Firefox et Safari ne la donnent pas). */
+  memory?: number;
+  /** Cœurs du processeur (`navigator.hardwareConcurrency`). */
+  cores?: number;
+}
+
+/** Un téléphone : un doigt, et un écran dont le plus petit côté ne dépasse pas cette taille (px CSS). */
+const PHONE_SCREEN = 600;
+
+/**
+ * Le préréglage graphique du premier lancement : le plus léger sur un téléphone, sur une tablette
+ * modeste (4 Go de mémoire ou 4 cœurs au plus) et sur une très petite machine (2 Go ou 2 cœurs) ;
+ * le moyen ailleurs (celui par défaut).
+ */
+export function firstRunPreset(device: DeviceInfo): GraphicsPreset {
+  const memory = device.memory ?? Infinity;
+  const cores = device.cores ?? Infinity;
+  if (device.coarse && (device.screen <= PHONE_SCREEN || memory <= 4 || cores <= 4)) return "low";
+  if (memory <= 2 || cores <= 2) return "low";
+  return "medium";
+}
+
+/** La machine de ce navigateur (hors du navigateur : un ordinateur ordinaire). */
+export function deviceInfo(): DeviceInfo {
+  if (typeof window === "undefined") return { coarse: false, screen: 1080 };
+  const nav = navigator as Navigator & { deviceMemory?: number };
+  return {
+    coarse: window.matchMedia?.("(pointer: coarse)").matches ?? false,
+    screen: Math.min(window.screen?.width ?? 1080, window.screen?.height ?? 1080),
+    memory: typeof nav.deviceMemory === "number" ? nav.deviceMemory : undefined,
+    cores: typeof nav.hardwareConcurrency === "number" && nav.hardwareConcurrency > 0 ? nav.hardwareConcurrency : undefined,
+  };
+}
+
+/** Les réglages par défaut pour cette machine : ceux de `DEFAULT_SETTINGS`, aux graphismes de `firstRunPreset`. */
+export function defaultSettings(device: DeviceInfo = deviceInfo()): Settings {
+  return { ...DEFAULT_SETTINGS, ...GRAPHICS_PRESETS[firstRunPreset(device)] };
+}
+
 const KEY = "casse-robot.settings";
 
 /**
@@ -190,6 +249,7 @@ export function parseSettings(json: string | null): Settings {
   const version = typeof saved.bindingsVersion === "number" && Number.isFinite(saved.bindingsVersion) ? saved.bindingsVersion : 1;
   s.bindings = migrateBindings(saved.bindings, version);
   s.bindingsVersion = BINDINGS_VERSION;
+  s.renderer = pick(RENDERERS, saved.renderer) ?? s.renderer;
   s.shadowQuality = pick(SHADOW_QUALITIES, saved.shadowQuality) ?? s.shadowQuality;
   s.renderScale = pick(RENDER_SCALES, saved.renderScale) ?? s.renderScale;
   s.effects = pick(EFFECT_LEVELS, saved.effects) ?? s.effects;
@@ -202,12 +262,17 @@ export function parseSettings(json: string | null): Settings {
   return s;
 }
 
-/** Le stockage du navigateur peut être indisponible (navigation privée) : on retombe alors sur les réglages par défaut. */
+/**
+ * Les réglages enregistrés ; au premier lancement (rien d'enregistré), ceux par défaut pour cette
+ * machine (un téléphone part sur les graphismes les plus légers). Le stockage du navigateur peut
+ * être indisponible (navigation privée) : on retombe alors sur les réglages par défaut.
+ */
 export function loadSettings(): Settings {
   try {
-    return parseSettings(localStorage.getItem(KEY));
+    const saved = localStorage.getItem(KEY);
+    return saved === null ? defaultSettings() : parseSettings(saved);
   } catch {
-    return { ...DEFAULT_SETTINGS };
+    return defaultSettings();
   }
 }
 

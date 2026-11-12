@@ -7,6 +7,7 @@ import { COLLISION_GROUPS } from "../physics/groups";
 import type { Bot, Part, Wheel, WheelBody } from "../sim/entities";
 import type { Simulation } from "../sim/simulation";
 import { vibration } from "../combat/melee";
+import { dcos, dsin } from "../math/det";
 
 /*
  * Roues par lancer de rayon. Une roue montée n'a ni corps ni liaison : à chaque pas, un rayon part
@@ -98,9 +99,9 @@ function swivel(w: Wheel, trail: number, v: Vec3): void {
   const speed = Math.hypot(v.x, v.z);
   if (speed < SWIVEL_MIN_SPEED) return;
   const heading = Math.atan2(v.x, v.z);
-  const gap = Math.atan2(Math.sin(heading - w.steer), Math.cos(heading - w.steer));
+  const gap = Math.atan2(dsin(heading - w.steer), dcos(heading - w.steer));
   const step = clamp(gap * Math.min(1, (speed * STEP) / trail), -SWIVEL_RATE * STEP, SWIVEL_RATE * STEP);
-  w.steer = Math.atan2(Math.sin(w.steer + step), Math.cos(w.steer + step));
+  w.steer = Math.atan2(dsin(w.steer + step), dcos(w.steer + step));
 }
 
 /**

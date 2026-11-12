@@ -5,6 +5,8 @@
  * son module (`@babylonjs/core/<Dossier>/<module>`). Ces modules enregistrent aussi leurs effets
  * de bord : lancer de rayon (`scene.pick`), ombres, instances (`createInstance`), instances
  * fines (`thinInstanceAdd`) et contours (`enableEdgesRendering`, la zone sélectionnée du garage).
+ * Le lecteur glTF n'est pas ici : il est à part (client/babylonGltf.ts) et ne se charge qu'à la
+ * demande, quand un accessoire a un modèle glTF (render/propModels.ts).
  */
 import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder";
 import { CreateCylinder } from "@babylonjs/core/Meshes/Builders/cylinderBuilder";
@@ -19,6 +21,8 @@ import "@babylonjs/core/Meshes/thinInstanceMesh";
 import "@babylonjs/core/Rendering/edgesRenderer";
 
 export { Engine } from "@babylonjs/core/Engines/engine";
+// Le moteur du jeu peut être WebGL ou WebGPU (render/engine.ts, client/babylonGpu.ts) : le reste du client ne voit que celui-ci
+export type { AbstractEngine } from "@babylonjs/core/Engines/abstractEngine";
 export { Scene } from "@babylonjs/core/scene";
 export { Node } from "@babylonjs/core/node";
 export { Camera } from "@babylonjs/core/Cameras/camera";
@@ -32,12 +36,16 @@ export { Matrix, Quaternion, Vector3, Vector4 } from "@babylonjs/core/Maths/math
 export { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 export { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 export { Mesh } from "@babylonjs/core/Meshes/mesh";
+export { SubMesh } from "@babylonjs/core/Meshes/subMesh";
+export type { Geometry } from "@babylonjs/core/Meshes/geometry";
 export { InstancedMesh } from "@babylonjs/core/Meshes/instancedMesh";
 export { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData";
 export { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
 export { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
+export { MultiMaterial } from "@babylonjs/core/Materials/multiMaterial";
 export type { Material } from "@babylonjs/core/Materials/material";
 export { Texture } from "@babylonjs/core/Materials/Textures/texture";
+export type { BaseTexture } from "@babylonjs/core/Materials/Textures/baseTexture";
 export { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
 // Fumée et flammes réalistes (render/fx/sprites.ts, render/fx/fxMaterial.ts) : leurs shaders et leurs textures calculées
 export { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial";

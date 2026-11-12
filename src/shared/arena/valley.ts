@@ -3,6 +3,7 @@ import { axisAngle, qmul, qrot, vec3, type Quat, type Vec3 } from "../math/vec";
 import { barrier, box, zone } from "./builders";
 import type { ArenaLayout, CaptureZone, PropSpot, StaticBox, TerrainPath } from "./layout";
 import { makeTerrain, noise2, smoothstep } from "./terrain";
+import { dcos, dsin } from "../math/det";
 
 /*
  * La Vallée : une grande carte (±105 m de terrain de jeu, des montagnes tout autour), avec du
@@ -19,7 +20,7 @@ import { makeTerrain, noise2, smoothstep } from "./terrain";
 /** Hauteur du fond de la vallée (m) : au-dessus du sol plat (y = 0), que le relief recouvre. */
 const BASE = 2.4;
 /** Rivière : ligne médiane (z selon x, symétrique par rapport au centre), lit, berges, profondeur (m). */
-const riverZ = (x: number): number => 0.35 * x + 3 * Math.sin(x / 14);
+const riverZ = (x: number): number => 0.35 * x + 3 * dsin(x / 14);
 const RIVER_BED = 4;
 const RIVER_BANK = 18;
 const RIVER_DEPTH = 1.9;
@@ -429,8 +430,8 @@ function buildProps(): PropSpot[] {
     for (let k = 0; k < w.count * 8 && placed < w.count; k++) {
       const angle = random() * Math.PI * 2;
       const r = Math.sqrt(random()) * w.r;
-      const x = w.x + Math.cos(angle) * r;
-      const z = w.z + Math.sin(angle) * r;
+      const x = w.x + dcos(angle) * r;
+      const z = w.z + dsin(angle) * r;
       if (Math.max(Math.abs(x), Math.abs(z)) > 104 || !clear(x, z, 7)) continue;
       tree(P, random() < w.oak ? "oak" : "pine", x, z, 0.8 + random() * 0.45);
       taken.push([x, z]);

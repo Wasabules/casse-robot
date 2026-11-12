@@ -1,0 +1,19 @@
+[package]
+name = "casse-sim"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "La simulation de Casse-Robot, compilée (portée depuis src/shared, module par module)"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# La sonde de la physique (tests/nativePhysics.test.ts) : Rapier, la version de @dimforge/rapier3d-compat
+# 0.21.0 (rapier3d 0.36.0, parry 0.31). Hors du module embarqué dans le jeu tant que la simulation
+# compilée ne remplace pas celle du TypeScript (le jeu aurait Rapier deux fois).
+physics = ["dep:rapier3d"]
+
+[dependencies]
+rapier3d = { version = "=0.36.0", optional = true, features = ["fem"] }

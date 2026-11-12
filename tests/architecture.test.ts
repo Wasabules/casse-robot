@@ -34,4 +34,39 @@ describe("architecture", () => {
     expect(Object.keys(clientSources).length).toBeGreaterThan(10);
     expect(offenders).toEqual([]);
   });
+
+  it("le lecteur glTF n'entre pas dans le paquet principal : il ne se charge qu'à la demande", () => {
+    // Babylon ne s'importe que de client/babylon.ts, son lecteur glTF de client/babylonGltf.ts et son moteur WebGPU de client/babylonGpu.ts
+    const babylon = Object.entries(clientSources)
+      .filter(([file, code]) => !/\/client\/babylon(Gltf|Gpu)?\.ts$/.test(file) && /from\s+["']@babylonjs\//.test(code))
+      .map(([file]) => file);
+    expect(babylon).toEqual([]);
+    // babylonGltf.ts n'est importé que par render/propGltf.ts…
+    const gltf = Object.entries(clientSources)
+      .filter(([file, code]) => !file.endsWith("/render/propGltf.ts") && /from\s+["'][./]+(\/\.\.)*\/?babylonGltf["']/.test(code))
+      .map(([file]) => file);
+    expect(gltf).toEqual([]);
+    // … qui ne l'est qu'à la demande (`import("./propGltf")`) ou pour ses types
+    const eager = Object.entries(clientSources)
+      .filter(([, code]) => /^import\s+(?!type\b)[^;]*from\s+["'][./]+propGltf["']/m.test(code) || /^import\s+["'][./]+propGltf["']/m.test(code))
+      .map(([file]) => file);
+    expect(eager).toEqual([]);
+    expect(clientSources["../src/client/render/propModels.ts"]).toMatch(/import\("\.\/propGltf"\)/);
+  });
+
+  it("le moteur WebGPU n'entre pas dans le paquet principal : render/engine.ts le charge à la demande", () => {
+    const eager = Object.entries(clientSources)
+      .filter(([, code]) => /^import\s+(?!type)[^;]*from\s+["'][./]+(\/\.\.)*\/?babylonGpu["']/m.test(code))
+      .map(([file]) => file);
+    expect(eager).toEqual([]);
+    expect(clientSources["../src/client/render/engine.ts"]).toMatch(/import\("\.\.\/babylonGpu"\)/);
+  });
+
+  it("la simulation n'emploie pas sin, cos, log ni les puissances de Math, dont le dernier bit dépend du moteur JavaScript (src/shared/math/det.ts)", () => {
+    const offenders = Object.entries(sharedSources)
+      .filter(([file]) => !file.endsWith("/math/det.ts"))
+      .filter(([, code]) => /Math\.(sin|cos|log|pow)\(|\s\*\*\s/.test(code.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "")))
+      .map(([file]) => file);
+    expect(offenders).toEqual([]);
+  });
 });

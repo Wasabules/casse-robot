@@ -1,0 +1,3407 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Wasabules/casse-robot/main/content/catalog.schema.json",
+  "title": "Casse-Robot content catalog",
+  "description": "The game's elements as data: blocks, block shapes, wheels, weapons and their projectiles, melee weapons, props, preset robots, with their display names in French and English. Generated from the game's TypeScript catalogs (npm run schemas), which remain the source: read it, don't edit it. Units: meters, kilograms, seconds, radians, newtons; energies in kJ unless noted (J for a few strike energies); frames: a block's or robot's +z is forward, +x left, +y up.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "description": "The URL of this schema.",
+      "type": "string"
+    },
+    "format": {
+      "description": "Version of the catalog's format: it goes up when a change breaks what tools read.",
+      "const": 1
+    },
+    "constants": {
+      "description": "Constants of the game the entries refer to.",
+      "type": "object",
+      "properties": {
+        "blockSize": {
+          "description": "Side of a block's cell (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "plateThickness": {
+          "description": "Thickness of a plate block (wings, control surfaces) (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "gravity": {
+          "description": "Gravity (m/s²).",
+          "type": "number",
+          "minimum": 0
+        },
+        "robotBudget": {
+          "description": "Build budget of a robot: the sum of its blocks' and wheels' costs may not exceed it.",
+          "type": "number",
+          "minimum": 0
+        },
+        "generatorPower": {
+          "description": "Power of every robot's generator (kW), which recharges its batteries.",
+          "type": "number",
+          "minimum": 0
+        },
+        "motorEfficiency": {
+          "description": "Efficiency of a rotor's motor (melee weapons): what doesn't go into the blade is lost.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "resumeHeat": {
+          "description": "Heat at which an overheated weapon can fire again.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "blockSize",
+        "plateThickness",
+        "gravity",
+        "robotBudget",
+        "generatorPower",
+        "motorEfficiency",
+        "resumeHeat"
+      ]
+    },
+    "damageTypes": {
+      "description": "The kinds of damage.",
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "kinetic",
+          "pierce",
+          "explosive",
+          "impact",
+          "fire",
+          "energy",
+          "cut"
+        ]
+      },
+      "additionalProperties": {
+        "description": "A kind of damage.",
+        "type": "object",
+        "properties": {
+          "names": {
+            "$ref": "#/$defs/names"
+          }
+        },
+        "required": [
+          "names"
+        ]
+      }
+    },
+    "shapes": {
+      "description": "The block shapes cut out of the cube (a block type's `shape`).",
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "wedge",
+          "corner",
+          "innerCorner",
+          "round",
+          "roundCorner",
+          "slopeLow",
+          "slopeHigh",
+          "slab"
+        ]
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/shape"
+      }
+    },
+    "blocks": {
+      "description": "The block types, by identifier (a robot design's `type`).",
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "frame",
+          "armorLight",
+          "armor",
+          "armorHeavy",
+          "wedgeLight",
+          "wedge",
+          "wedgeHeavy",
+          "cornerLight",
+          "corner",
+          "cornerHeavy",
+          "innerCornerLight",
+          "innerCorner",
+          "roundLight",
+          "round",
+          "roundCornerLight",
+          "roundCorner",
+          "slopeLowLight",
+          "slopeLow",
+          "slopeHighLight",
+          "slopeHigh",
+          "slabLight",
+          "slab",
+          "armorReactive",
+          "cockpit",
+          "thruster",
+          "engine",
+          "wing",
+          "flap",
+          "gunTurret",
+          "sniperTurret",
+          "cannonTurret",
+          "missileLauncher",
+          "flakLauncher",
+          "mineLayer",
+          "empMineLayer",
+          "fireMineLayer",
+          "smokeMineLayer",
+          "bounceMineLayer",
+          "aaMineLayer",
+          "remoteMineLayer",
+          "sensorMineLayer",
+          "stickyMineLayer",
+          "repairTurret",
+          "naniteLauncher",
+          "barrierProjector",
+          "bombBay",
+          "rotor",
+          "propeller",
+          "jet",
+          "hoverPad",
+          "leg",
+          "battery",
+          "repairModule",
+          "flareLauncher",
+          "radar",
+          "headlight",
+          "beacon",
+          "navLight",
+          "strobe",
+          "antiCollision",
+          "rotatingLight",
+          "policeBar",
+          "jammer",
+          "flamerTurret",
+          "empTurret",
+          "smokeLauncher",
+          "laserTurret",
+          "railTurret",
+          "shotgunTurret",
+          "rocketPod",
+          "warheadLauncher",
+          "lockonLauncher",
+          "plasmaTurret",
+          "spinner",
+          "hammer",
+          "verticalSpinner",
+          "drum",
+          "shellSpinner",
+          "flipper",
+          "flail",
+          "jaw",
+          "laserBlade",
+          "plasmaWhip",
+          "shockLance",
+          "crusherField",
+          "saw",
+          "drill",
+          "shield"
+        ]
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/blockType"
+      }
+    },
+    "wheels": {
+      "description": "The wheel types, by identifier.",
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "standard",
+          "steered",
+          "small",
+          "smallSteered",
+          "heavy",
+          "heavySteered",
+          "caster",
+          "track"
+        ]
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/wheelType"
+      }
+    },
+    "weapons": {
+      "description": "The weapons, by identifier (a turret's `weapon`).",
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "rifle",
+          "sniper",
+          "cannon",
+          "missile",
+          "flak",
+          "mine",
+          "flamer",
+          "emp",
+          "smoke",
+          "laser",
+          "rail",
+          "shotgun",
+          "rockets",
+          "plasma",
+          "warhead",
+          "lockon",
+          "bombs",
+          "empMine",
+          "fireMine",
+          "smokeMine",
+          "bounceMine",
+          "aaMine",
+          "remoteMine",
+          "sensorMine",
+          "stickyMine",
+          "flare",
+          "repair",
+          "nanites",
+          "barrier"
+        ]
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/weapon"
+      }
+    },
+    "melee": {
+      "description": "The melee weapons, by identifier (a block type's `melee`).",
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "spinner",
+          "hammer",
+          "flipper",
+          "flail",
+          "jaw",
+          "laserBlade",
+          "plasmaWhip",
+          "shockLance",
+          "verticalSpinner",
+          "crusherField",
+          "drum",
+          "shellSpinner",
+          "propeller",
+          "saw",
+          "drill"
+        ]
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/meleeWeapon"
+      }
+    },
+    "props": {
+      "description": "The props of the scenery, by identifier (a map's `props[].type`).",
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "crate",
+          "barrel",
+          "gas",
+          "brick",
+          "concrete",
+          "plank",
+          "sheet",
+          "roof",
+          "pine",
+          "oak",
+          "palm",
+          "kapok",
+          "cactus",
+          "watertank",
+          "tank",
+          "facade",
+          "tenement",
+          "car",
+          "wreck",
+          "lamppost",
+          "floodlight"
+        ]
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/propType"
+      }
+    },
+    "robots": {
+      "description": "The preset robots, by identifier.",
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "scarab",
+          "stilt",
+          "trike",
+          "centi",
+          "drone",
+          "ram",
+          "crane",
+          "plane",
+          "hexa",
+          "truck",
+          "rocket",
+          "tank",
+          "hovercraft",
+          "spider",
+          "heli",
+          "buggy",
+          "bulwark",
+          "lancer",
+          "brawler",
+          "swarm",
+          "tracker",
+          "furnace",
+          "carrier",
+          "sapper",
+          "mechanic",
+          "guardian",
+          "angel",
+          "scout",
+          "fighter",
+          "dragster",
+          "bomber",
+          "frigate",
+          "manta",
+          "bastion",
+          "reaper",
+          "pounder",
+          "catapult",
+          "crusher",
+          "thresher",
+          "duelist",
+          "urchin",
+          "tumbler",
+          "drummer",
+          "whirlwind",
+          "sawyer",
+          "borer"
+        ]
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/robot"
+      }
+    }
+  },
+  "required": [
+    "format",
+    "constants",
+    "damageTypes",
+    "shapes",
+    "blocks",
+    "wheels",
+    "weapons",
+    "melee",
+    "props",
+    "robots"
+  ],
+  "$defs": {
+    "names": {
+      "description": "The display name in each language (the game's message catalogs, src/client/i18n/locales/<language>/).",
+      "type": "object",
+      "properties": {
+        "fr": {
+          "description": "In French (the source language).",
+          "type": "string"
+        },
+        "en": {
+          "description": "In English.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "fr",
+        "en"
+      ]
+    },
+    "damageType": {
+      "description": "A kind of damage: kinetic (bullets), pierce (armor-piercing), explosive, impact (collisions, hammers), fire, energy (lasers: heavy armor doesn't stop it better), cut (blades).",
+      "enum": [
+        "kinetic",
+        "pierce",
+        "explosive",
+        "impact",
+        "fire",
+        "energy",
+        "cut"
+      ]
+    },
+    "resistances": {
+      "description": "Damage factor per kind of damage (1 when absent; below 1 it resists, above 1 it is sensitive).",
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "kinetic",
+          "pierce",
+          "explosive",
+          "impact",
+          "fire",
+          "energy",
+          "cut"
+        ]
+      },
+      "additionalProperties": {
+        "description": "Factor applied to the damage of this kind.",
+        "type": "number",
+        "minimum": 0
+      }
+    },
+    "groundFire": {
+      "description": "A puddle of fire on the ground: it burns what stands in it (fire damage, and it may set it ablaze) and sets wood alight.",
+      "type": "object",
+      "properties": {
+        "radius": {
+          "description": "Radius (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "life": {
+          "description": "How long it burns (s).",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "radius",
+        "life"
+      ]
+    },
+    "explosion": {
+      "description": "An explosion: area damage decreasing linearly to its edge, and a blast that pushes bodies.",
+      "type": "object",
+      "properties": {
+        "look": {
+          "description": "Its look (effect and sound in the client).",
+          "enum": [
+            "shell",
+            "missile",
+            "rocket",
+            "flak",
+            "mine",
+            "bomb",
+            "napalm",
+            "warhead",
+            "barrel",
+            "gas",
+            "car"
+          ]
+        },
+        "radius": {
+          "description": "Radius of the damage area (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "damage": {
+          "description": "Damage at the center, decreasing to 0 at the edge (explosive damage).",
+          "type": "number",
+          "minimum": 0
+        },
+        "blastRadius": {
+          "description": "Radius of the blast (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "power": {
+          "description": "Impulse of the blast at the center (N·s per block hit).",
+          "type": "number",
+          "minimum": 0
+        },
+        "lift": {
+          "description": "Vertical component added to the blast's direction.",
+          "type": "number"
+        },
+        "ignite": {
+          "description": "Chance to set fire to each block left whole in the damage area.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "puddle": {
+          "description": "A puddle of fire left on the ground (napalm).",
+          "$ref": "#/$defs/groundFire"
+        }
+      },
+      "required": [
+        "look",
+        "radius",
+        "damage",
+        "blastRadius",
+        "power",
+        "lift"
+      ]
+    },
+    "thruster": {
+      "description": "An engine: it pushes toward the top of its block (up: lift; forward: propulsion; sideways: a tail rotor).",
+      "type": "object",
+      "properties": {
+        "maxThrust": {
+          "description": "Maximum thrust (N).",
+          "type": "number",
+          "minimum": 0
+        },
+        "spoolTime": {
+          "description": "Response time (s): the thrust follows the setting with this lag.",
+          "type": "number",
+          "minimum": 0
+        },
+        "torqueRatio": {
+          "description": "Reaction torque of the propeller per newton of thrust (N·m/N): on a multirotor they cancel out.",
+          "type": "number"
+        },
+        "power": {
+          "description": "Electric power drawn at full thrust (kW), from the batteries.",
+          "type": "number",
+          "minimum": 0
+        },
+        "gimbal": {
+          "description": "Tilt rotor: the thrust can tilt up to this angle (rad) on each side of the block's axis.",
+          "type": "number",
+          "minimum": 0
+        },
+        "look": {
+          "description": "Its look and sound: rotor blades, an airplane propeller in front of its block, a turbojet nacelle; a flame when absent.",
+          "enum": [
+            "rotor",
+            "propeller",
+            "jet"
+          ]
+        },
+        "topSpeed": {
+          "description": "Propeller: its thrust falls as the air comes along its axis, down to 0 at this speed (m/s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "exhaust": {
+          "description": "Flame jet of a flame engine: what is behind its nozzle heats up.",
+          "$ref": "#/$defs/exhaust"
+        }
+      },
+      "required": [
+        "maxThrust",
+        "spoolTime",
+        "torqueRatio",
+        "power"
+      ]
+    },
+    "exhaust": {
+      "description": "The flame jet of an engine: its length follows the engine's speed (a quarter of `reach` at idle); fire damage, strongest at the nozzle.",
+      "type": "object",
+      "properties": {
+        "nozzle": {
+          "description": "Distance from the block's center to the end of the nozzle (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "reach": {
+          "description": "Length of the jet at full speed, beyond the nozzle (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "dps": {
+          "description": "Damage per second (before resistance) at the nozzle, at full speed.",
+          "type": "number",
+          "minimum": 0
+        },
+        "radius": {
+          "description": "Radius of the jet at the nozzle (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "flare": {
+          "description": "What the radius gains per meter (m/m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "afterburner": {
+          "description": "Engine speed (share of the maximum thrust) beyond which the afterburner lengthens the jet by half and makes it a third hotter.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "nozzle",
+        "reach",
+        "dps",
+        "radius",
+        "flare"
+      ]
+    },
+    "aero": {
+      "description": "A lifting surface (a flat plate one cell wide): lift = ½·ρ·V²·area·CL(α), CL = slope·α up to the stall.",
+      "type": "object",
+      "properties": {
+        "area": {
+          "description": "Area (m²).",
+          "type": "number",
+          "minimum": 0
+        },
+        "liftSlope": {
+          "description": "Lift slope (per rad).",
+          "type": "number",
+          "minimum": 0
+        },
+        "stallAngle": {
+          "description": "Stall angle of attack (rad).",
+          "type": "number",
+          "minimum": 0
+        },
+        "dragMin": {
+          "description": "Drag coefficient at zero lift.",
+          "type": "number",
+          "minimum": 0
+        },
+        "inducedDrag": {
+          "description": "Induced drag: CD = dragMin + inducedDrag·CL².",
+          "type": "number",
+          "minimum": 0
+        },
+        "maxDeflection": {
+          "description": "Maximum deflection (rad) of a control surface.",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "area",
+        "liftSlope",
+        "stallAngle",
+        "dragMin",
+        "inducedDrag"
+      ]
+    },
+    "turret": {
+      "description": "A turret: a head that turns independently of the robot (yaw around the block's top, pitch above its horizon) and carries a weapon.",
+      "type": "object",
+      "properties": {
+        "weapon": {
+          "description": "The weapon it carries (`weapons`).",
+          "enum": [
+            "rifle",
+            "sniper",
+            "cannon",
+            "missile",
+            "flak",
+            "mine",
+            "flamer",
+            "emp",
+            "smoke",
+            "laser",
+            "rail",
+            "shotgun",
+            "rockets",
+            "plasma",
+            "warhead",
+            "lockon",
+            "bombs",
+            "empMine",
+            "fireMine",
+            "smokeMine",
+            "bounceMine",
+            "aaMine",
+            "remoteMine",
+            "sensorMine",
+            "stickyMine",
+            "flare",
+            "repair",
+            "nanites",
+            "barrier"
+          ]
+        },
+        "yawRate": {
+          "description": "Yaw speed (rad/s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "pitchRate": {
+          "description": "Pitch speed (rad/s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "minPitch": {
+          "description": "Lowest pitch (rad), relative to the block's plane.",
+          "type": "number"
+        },
+        "maxPitch": {
+          "description": "Highest pitch (rad).",
+          "type": "number"
+        },
+        "height": {
+          "description": "Height of the head's axis above the block's center (m; negative: the head hangs below).",
+          "type": "number"
+        },
+        "barrel": {
+          "description": "Length of the barrel from the head's axis to the muzzle (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "head": {
+          "description": "Dimensions of the head (m: width, height, depth), centered on its axis: its hitbox.",
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "number"
+          }
+        },
+        "caliber": {
+          "description": "Diameter of the barrel (m): the hitbox of the barrel.",
+          "type": "number",
+          "minimum": 0
+        },
+        "fixed": {
+          "description": "A fixed turret: it drops its ammunition behind the block (mine layer) or under it (bomb bay), without aiming.",
+          "enum": [
+            "back",
+            "down"
+          ]
+        }
+      },
+      "required": [
+        "weapon",
+        "yawRate",
+        "pitchRate",
+        "minPitch",
+        "maxPitch",
+        "height",
+        "barrel",
+        "head",
+        "caliber"
+      ]
+    },
+    "support": {
+      "description": "A support without a wheel: a hover pad (it glides, it draws power) or a leg (it grips, it steps over obstacles).",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "Hover pad or leg.",
+          "enum": [
+            "hover",
+            "leg"
+          ]
+        },
+        "height": {
+          "description": "Height kept above the ground (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "reach": {
+          "description": "How far down it measures the ground (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "ratedLoad": {
+          "description": "Rated load (kg), for which its spring is tuned.",
+          "type": "number",
+          "minimum": 0
+        },
+        "frequency": {
+          "description": "Natural frequency of its spring (Hz).",
+          "type": "number",
+          "minimum": 0
+        },
+        "dampingRatio": {
+          "description": "Damping ratio (1: critical).",
+          "type": "number",
+          "minimum": 0
+        },
+        "traction": {
+          "description": "Grip: maximum horizontal force, as a share of the bearing force.",
+          "type": "number",
+          "minimum": 0
+        },
+        "power": {
+          "description": "Power drawn under the rated load (kW).",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "kind",
+        "height",
+        "reach",
+        "ratedLoad",
+        "frequency",
+        "dampingRatio",
+        "traction",
+        "power"
+      ]
+    },
+    "repair": {
+      "description": "A repair module: when the robot hasn't been hit for `delay` s, it mends its damaged blocks and wheels nearby, and regrows lost blocks.",
+      "type": "object",
+      "properties": {
+        "rate": {
+          "description": "Hit points restored per second, in all.",
+          "type": "number",
+          "minimum": 0
+        },
+        "radius": {
+          "description": "Reach (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "delay": {
+          "description": "Time without being hit before it works (s).",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "rate",
+        "radius",
+        "delay"
+      ]
+    },
+    "shield": {
+      "description": "A shield generator: while the robot has energy, it absorbs a share of the damage taken by its blocks nearby.",
+      "type": "object",
+      "properties": {
+        "radius": {
+          "description": "Reach (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "absorb": {
+          "description": "Share of the damage absorbed.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "cost": {
+          "description": "Energy per point absorbed (kJ).",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "radius",
+        "absorb",
+        "cost"
+      ]
+    },
+    "light": {
+      "description": "A light (headlight, beacon, aircraft lights): no effect in the simulation; at night it lights the scene.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "A cone along the top of the block, all around, or a cone that turns around the top of the block (a rotating light).",
+          "enum": [
+            "spot",
+            "point",
+            "sweep"
+          ]
+        },
+        "range": {
+          "description": "How far it reaches (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "cone": {
+          "description": "Full angle of the cone (rad).",
+          "type": "number",
+          "minimum": 0
+        },
+        "color": {
+          "description": "Its color: warm, white, red, amber, blue; team: its team's; side: red on the robot's left, green on its right, white in the middle; police: blue and red.",
+          "enum": [
+            "warm",
+            "white",
+            "red",
+            "amber",
+            "blue",
+            "team",
+            "side",
+            "police"
+          ]
+        },
+        "pattern": {
+          "description": "Its rhythm: steady, a slow pulse, short flashes, a double flash, alternating, rotating.",
+          "enum": [
+            "steady",
+            "pulse",
+            "beacon",
+            "strobe",
+            "wigwag",
+            "rotate"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "range",
+        "color",
+        "pattern"
+      ]
+    },
+    "blockType": {
+      "description": "A block type: a 0.5 m cell of a robot (or a thinner plate, or a shape cut out of the cube). A block is destroyed when its hit points reach 0.",
+      "type": "object",
+      "properties": {
+        "names": {
+          "$ref": "#/$defs/names"
+        },
+        "price": {
+          "description": "Unlock price (credits); 0: available from the start.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "mass": {
+          "description": "Mass (kg).",
+          "type": "number",
+          "minimum": 0
+        },
+        "hp": {
+          "description": "Hit points.",
+          "type": "number",
+          "minimum": 0
+        },
+        "tinted": {
+          "description": "It takes the robot's color.",
+          "type": "boolean"
+        },
+        "cost": {
+          "description": "Build cost: a robot's blocks and wheels must stay within the budget (`constants.robotBudget`).",
+          "type": "number",
+          "minimum": 0
+        },
+        "bond": {
+          "description": "Strength of its links with its neighbors (N·m·s): the shock a single link (a neck, a one-block-wide arm) withstands before it breaks; a link is as strong as the weaker of its two blocks.",
+          "type": "number",
+          "minimum": 0
+        },
+        "resist": {
+          "description": "Damage factor per kind of damage.",
+          "$ref": "#/$defs/resistances"
+        },
+        "shape": {
+          "description": "Its shape: a full cube (the default), a thin plate perpendicular to the block's top (wings), or a shape cut out of the cube (`shapes`).",
+          "enum": [
+            "cube",
+            "plate",
+            "wedge",
+            "corner",
+            "innerCorner",
+            "round",
+            "roundCorner",
+            "slopeLow",
+            "slopeHigh",
+            "slab"
+          ]
+        },
+        "thruster": {
+          "$ref": "#/$defs/thruster"
+        },
+        "aero": {
+          "$ref": "#/$defs/aero"
+        },
+        "turret": {
+          "$ref": "#/$defs/turret"
+        },
+        "battery": {
+          "description": "A battery.",
+          "type": "object",
+          "properties": {
+            "capacity": {
+              "description": "Energy stored (kJ), for the engines, the electric weapons, the shield…",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "capacity"
+          ]
+        },
+        "repair": {
+          "$ref": "#/$defs/repair"
+        },
+        "shield": {
+          "$ref": "#/$defs/shield"
+        },
+        "radar": {
+          "description": "A radar: its team spots enemies within its range, through walls and smoke.",
+          "type": "object",
+          "properties": {
+            "range": {
+              "description": "Range (m).",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "range"
+          ]
+        },
+        "jammer": {
+          "description": "A jammer: an enemy radar no longer spots the robot beyond this range.",
+          "type": "object",
+          "properties": {
+            "range": {
+              "description": "Range (m).",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "range"
+          ]
+        },
+        "flares": {
+          "description": "A flare launcher: salvos of flares that decoy enemy missiles.",
+          "type": "object",
+          "properties": {
+            "charges": {
+              "description": "Salvos.",
+              "type": "integer",
+              "minimum": 0
+            },
+            "reload": {
+              "description": "Each salvo comes back after this time (s).",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "charges",
+            "reload"
+          ]
+        },
+        "light": {
+          "$ref": "#/$defs/light"
+        },
+        "support": {
+          "$ref": "#/$defs/support"
+        },
+        "melee": {
+          "description": "The melee weapon whose motor and hub it is (`melee`).",
+          "enum": [
+            "spinner",
+            "hammer",
+            "flipper",
+            "flail",
+            "jaw",
+            "laserBlade",
+            "plasmaWhip",
+            "shockLance",
+            "verticalSpinner",
+            "crusherField",
+            "drum",
+            "shellSpinner",
+            "propeller",
+            "saw",
+            "drill"
+          ]
+        }
+      },
+      "required": [
+        "names",
+        "price",
+        "mass",
+        "hp",
+        "tinted",
+        "cost",
+        "bond"
+      ]
+    },
+    "shape": {
+      "description": "A block shape other than the cube, in the block's frame (left +x, up +y, forward +z), in a cube of half-side 1 (scale by half a block, 0.25 m): the intersection of the cube and half-spaces, one or two convex pieces. Its underside is always full; its slope faces up and forward.",
+      "type": "object",
+      "properties": {
+        "fraction": {
+          "description": "Share of the cube it fills: the mass, hit points and cost of its blocks follow from it.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "swapsLeftAndFront": {
+          "description": "Its mirror image swaps its left and its front (the corners); otherwise it is symmetrical from left to right.",
+          "type": "boolean"
+        },
+        "pieces": {
+          "description": "Its convex pieces (the physics takes the convex hull of each).",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "description": "A convex piece: its faces.",
+            "type": "object",
+            "properties": {
+              "faces": {
+                "description": "Its faces.",
+                "type": "array",
+                "items": {
+                  "description": "A face: its outward normal and its outline (counter-clockwise seen from outside).",
+                  "type": "object",
+                  "properties": {
+                    "normal": {
+                      "description": "Outward unit normal.",
+                      "type": "array",
+                      "minItems": 3,
+                      "maxItems": 3,
+                      "items": {
+                        "type": "number"
+                      }
+                    },
+                    "points": {
+                      "description": "Its corners, [x, y, z] each.",
+                      "type": "array",
+                      "items": {
+                        "description": "A corner.",
+                        "type": "array",
+                        "minItems": 3,
+                        "maxItems": 3,
+                        "items": {
+                          "type": "number"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "normal",
+                    "points"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "faces"
+            ]
+          }
+        }
+      },
+      "required": [
+        "fraction",
+        "swapsLeftAndFront",
+        "pieces"
+      ]
+    },
+    "suspension": {
+      "description": "A suspension: a vertical spring and damper between the chassis and the wheel.",
+      "type": "object",
+      "properties": {
+        "travelUp": {
+          "description": "Travel in compression (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "travelDown": {
+          "description": "Travel in extension (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "frequency": {
+          "description": "Natural frequency under the rated load (Hz): it sets the spring's stiffness.",
+          "type": "number",
+          "minimum": 0
+        },
+        "dampingRatio": {
+          "description": "Damping ratio (1: critical, no bounce).",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "travelUp",
+        "travelDown",
+        "frequency",
+        "dampingRatio"
+      ]
+    },
+    "wheelType": {
+      "description": "A wheel type: the motor is in the wheel (torque falls linearly from `stallTorque` at rest to 0 at `freeSpeed`).",
+      "type": "object",
+      "properties": {
+        "names": {
+          "$ref": "#/$defs/names"
+        },
+        "price": {
+          "description": "Unlock price (credits); 0: available from the start.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "kind": {
+          "description": "Fixed, steered, caster or track roller.",
+          "enum": [
+            "fixed",
+            "steered",
+            "caster",
+            "track"
+          ]
+        },
+        "cost": {
+          "description": "Build cost.",
+          "type": "number",
+          "minimum": 0
+        },
+        "radius": {
+          "description": "Radius (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "width": {
+          "description": "Width (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "mass": {
+          "description": "Mass of the wheel and its motor (kg).",
+          "type": "number",
+          "minimum": 0
+        },
+        "hp": {
+          "description": "Hit points: at 0 the wheel is torn off.",
+          "type": "number",
+          "minimum": 0
+        },
+        "grip": {
+          "description": "Grip (the tire's friction coefficient).",
+          "type": "number",
+          "minimum": 0
+        },
+        "stallTorque": {
+          "description": "Maximum torque at rest (N·m); 0: no motor (a caster).",
+          "type": "number",
+          "minimum": 0
+        },
+        "freeSpeed": {
+          "description": "Free-running speed of the motor (rad/s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "ratedLoad": {
+          "description": "Rated load per wheel (kg): the suspension is tuned for it, and sags beyond.",
+          "type": "number",
+          "minimum": 0
+        },
+        "suspension": {
+          "$ref": "#/$defs/suspension"
+        },
+        "steering": {
+          "description": "A steered wheel: it pivots around a vertical axis through its center.",
+          "type": "object",
+          "properties": {
+            "maxAngle": {
+              "description": "Maximum steering angle on each side (rad).",
+              "type": "number",
+              "minimum": 0
+            },
+            "rate": {
+              "description": "Steering speed (rad/s).",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "maxAngle",
+            "rate"
+          ]
+        },
+        "caster": {
+          "description": "A caster: a free wheel that swivels to follow the motion.",
+          "type": "object",
+          "properties": {
+            "trail": {
+              "description": "Trail (m): how far the pivot is ahead of the wheel.",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "trail"
+          ]
+        },
+        "track": {
+          "description": "A track roller: the neighboring rollers of a side form a track.",
+          "type": "boolean"
+        },
+        "drop": {
+          "description": "The hub hangs this far below its block's center (m): ground clearance.",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "names",
+        "price",
+        "kind",
+        "cost",
+        "radius",
+        "width",
+        "mass",
+        "hp",
+        "grip",
+        "stallTorque",
+        "freeSpeed",
+        "ratedLoad",
+        "suspension"
+      ]
+    },
+    "guidance": {
+      "description": "A missile's guidance: `command`, it follows its launcher's aim; `homing`, it chases its target on its own; `piloted`, the player who fired it flies it.",
+      "type": "object",
+      "properties": {
+        "mode": {
+          "description": "Guidance mode.",
+          "enum": [
+            "command",
+            "homing",
+            "piloted"
+          ]
+        },
+        "turnRate": {
+          "description": "Maximum turn rate (rad/s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "airOnly": {
+          "description": "It only targets flying robots (anti-air).",
+          "type": "boolean"
+        },
+        "launch": {
+          "description": "It first flies straight along the weapon's axis for this time (s), then its guidance takes over.",
+          "type": "number",
+          "minimum": 0
+        },
+        "maxAccel": {
+          "description": "Momentum: it doesn't turn tighter than this lateral acceleration (m/s²).",
+          "type": "number",
+          "minimum": 0
+        },
+        "bleed": {
+          "description": "Share of its speed lost per radian of turn.",
+          "type": "number",
+          "minimum": 0
+        },
+        "recover": {
+          "description": "Rate at which its motor gives the speed back (1/s).",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "mode",
+        "turnRate"
+      ]
+    },
+    "mine": {
+      "description": "A mine: it lands where it falls, arms after `armDelay` s, then waits for what triggers it.",
+      "type": "object",
+      "properties": {
+        "armDelay": {
+          "description": "Time before it arms (s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "trigger": {
+          "description": "An enemy on the ground within `radius`, an enemy in flight within `radius`, its layer's order, or nothing (a sensor).",
+          "enum": [
+            "ground",
+            "air",
+            "remote",
+            "none"
+          ]
+        },
+        "radius": {
+          "description": "Trigger radius (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "action": {
+          "description": "What it does when triggered, instead of bursting on the spot.",
+          "anyOf": [
+            {
+              "description": "It jumps and bursts in the air.",
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "bounce"
+                },
+                "height": {
+                  "description": "Height of the jump (m).",
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "kind",
+                "height"
+              ]
+            },
+            {
+              "description": "It launches a projectile of another weapon at its target.",
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "launch"
+                },
+                "weapon": {
+                  "description": "The weapon whose projectile it launches.",
+                  "enum": [
+                    "rifle",
+                    "sniper",
+                    "cannon",
+                    "missile",
+                    "flak",
+                    "mine",
+                    "flamer",
+                    "emp",
+                    "smoke",
+                    "laser",
+                    "rail",
+                    "shotgun",
+                    "rockets",
+                    "plasma",
+                    "warhead",
+                    "lockon",
+                    "bombs",
+                    "empMine",
+                    "fireMine",
+                    "smokeMine",
+                    "bounceMine",
+                    "aaMine",
+                    "remoteMine",
+                    "sensorMine",
+                    "stickyMine",
+                    "flare",
+                    "repair",
+                    "nanites",
+                    "barrier"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "weapon"
+              ]
+            },
+            {
+              "description": "It sticks to its target and bursts later.",
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "stick"
+                },
+                "fuse": {
+                  "description": "Delay before it bursts (s).",
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "kind",
+                "fuse"
+              ]
+            }
+          ]
+        },
+        "sense": {
+          "description": "A sensor: its team spots enemies within this radius (m), through everything.",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "armDelay",
+        "trigger",
+        "radius"
+      ]
+    },
+    "projectile": {
+      "description": "What a shot launches: it flies with its speed and gravity, may be guided, pierces or explodes on impact.",
+      "type": "object",
+      "properties": {
+        "look": {
+          "description": "Its look in the client.",
+          "enum": [
+            "bullet",
+            "pellet",
+            "shell",
+            "missile",
+            "rocket",
+            "warhead",
+            "mine",
+            "bomb",
+            "flame",
+            "plasma",
+            "orb",
+            "grenade",
+            "beam",
+            "rail",
+            "repair",
+            "flare",
+            "nanites",
+            "barrier"
+          ]
+        },
+        "speed": {
+          "description": "Muzzle speed (m/s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "gravity": {
+          "description": "Share of gravity it undergoes: 0, a straight line (a propelled missile); 1, ballistic.",
+          "type": "number"
+        },
+        "life": {
+          "description": "Maximum flight time (s); an explosive projectile explodes at the end of its course.",
+          "type": "number",
+          "minimum": 0
+        },
+        "damage": {
+          "description": "Damage on a direct hit.",
+          "type": "number",
+          "minimum": 0
+        },
+        "damageType": {
+          "description": "The kind of that damage.",
+          "$ref": "#/$defs/damageType"
+        },
+        "penetrating": {
+          "description": "If it destroys what it hits, it goes on with the damage it has left.",
+          "type": "boolean"
+        },
+        "impulse": {
+          "description": "Impulse given to what it hits (N·s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "explosion": {
+          "$ref": "#/$defs/explosion"
+        },
+        "guidance": {
+          "$ref": "#/$defs/guidance"
+        },
+        "proximity": {
+          "description": "Proximity fuse: it explodes when a target passes within this radius (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "mine": {
+          "$ref": "#/$defs/mine"
+        },
+        "hull": {
+          "description": "It can be shot down: a sphere that bullets and explosions hit.",
+          "type": "object",
+          "properties": {
+            "radius": {
+              "description": "Radius (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "hp": {
+              "description": "Hit points.",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "radius",
+            "hp"
+          ]
+        },
+        "decoy": {
+          "description": "A flare: enemy missiles that see it may follow it.",
+          "type": "boolean"
+        },
+        "repair": {
+          "description": "A repair shot: on an ally, the blocks and wheels near the impact regain hit points; on an enemy, it drains life.",
+          "type": "object",
+          "properties": {
+            "amount": {
+              "description": "Hit points regained by each block and wheel.",
+              "type": "number",
+              "minimum": 0
+            },
+            "radius": {
+              "description": "Radius (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "drain": {
+              "description": "Energy damage to the enemy block hit.",
+              "type": "number",
+              "minimum": 0
+            },
+            "steal": {
+              "description": "Share of what the enemy really lost that repairs the shooter.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "swarm": {
+              "description": "Nanites: they spread over the whole robot and mend its this-many most damaged blocks.",
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "amount",
+            "radius"
+          ]
+        },
+        "barrier": {
+          "description": "An energy wall: it flies `reach` m then unfolds into a vertical rectangle that stops enemy shots.",
+          "type": "object",
+          "properties": {
+            "width": {
+              "description": "Width (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "height": {
+              "description": "Height (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "hp": {
+              "description": "Hit points.",
+              "type": "number",
+              "minimum": 0
+            },
+            "life": {
+              "description": "Lifetime (s).",
+              "type": "number",
+              "minimum": 0
+            },
+            "reach": {
+              "description": "Distance before it unfolds (m).",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "width",
+            "height",
+            "hp",
+            "life",
+            "reach"
+          ]
+        },
+        "ignite": {
+          "description": "Chance to set fire to the block hit.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "puddle": {
+          "description": "A flame jet that touches the ground or the scenery may leave a puddle of fire.",
+          "type": "object",
+          "properties": {
+            "radius": {
+              "description": "Radius (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "life": {
+              "description": "How long it burns (s).",
+              "type": "number",
+              "minimum": 0
+            },
+            "chance": {
+              "description": "Chance to leave one.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "required": [
+            "radius",
+            "life",
+            "chance"
+          ]
+        },
+        "emp": {
+          "description": "An electromagnetic pulse on impact: engines, rotors and turrets nearby cut out.",
+          "type": "object",
+          "properties": {
+            "radius": {
+              "description": "Radius (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "duration": {
+              "description": "Stun at the center (s); half as long at the edge.",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "radius",
+            "duration"
+          ]
+        },
+        "smoke": {
+          "description": "A smoke cloud on impact (or at the end of its course): it hides what is behind it.",
+          "type": "object",
+          "properties": {
+            "radius": {
+              "description": "Final radius (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "duration": {
+              "description": "Time before it clears (s).",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "radius",
+            "duration"
+          ]
+        },
+        "pellets": {
+          "description": "A spread (shotgun): each shot launches several pellets.",
+          "type": "object",
+          "properties": {
+            "count": {
+              "description": "Pellets per shot.",
+              "type": "integer",
+              "minimum": 0
+            },
+            "spread": {
+              "description": "Maximum deviation of each pellet (rad).",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "count",
+            "spread"
+          ]
+        },
+        "fan": {
+          "description": "A fan (rocket salvo): each projectile leaves up to this angle (rad) off the aim, then its guidance brings it back.",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "look",
+        "speed",
+        "gravity",
+        "life",
+        "damage",
+        "damageType",
+        "penetrating",
+        "impulse"
+      ]
+    },
+    "weapon": {
+      "description": "A weapon, carried by a turret block. Every shot launches a projectile.",
+      "type": "object",
+      "properties": {
+        "names": {
+          "$ref": "#/$defs/names"
+        },
+        "cooldown": {
+          "description": "Minimum time between two shots (s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "automatic": {
+          "description": "It fires as long as the trigger is held.",
+          "type": "boolean"
+        },
+        "spread": {
+          "description": "Dispersion with the scope, robot still (rad): its best accuracy.",
+          "type": "number",
+          "minimum": 0
+        },
+        "handling": {
+          "description": "What degrades its accuracy.",
+          "type": "object",
+          "properties": {
+            "hip": {
+              "description": "Factor on the dispersion without the scope.",
+              "type": "number",
+              "minimum": 0
+            },
+            "move": {
+              "description": "Added dispersion per m/s of the robot's speed (rad).",
+              "type": "number",
+              "minimum": 0
+            },
+            "turn": {
+              "description": "Added dispersion per rad/s of the robot's rotation (rad).",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "hip",
+            "move",
+            "turn"
+          ]
+        },
+        "recoil": {
+          "description": "Impulse sent back on the robot that fires (N·s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "range": {
+          "description": "Useful range (m): the AI engages closer targets.",
+          "type": "number",
+          "minimum": 0
+        },
+        "engage": {
+          "description": "Distance at which the AI likes to fight with it (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "heat": {
+          "description": "Overheating: each shot heats it; overheated, it waits until it cools down to `constants.resumeHeat`.",
+          "type": "object",
+          "properties": {
+            "perShot": {
+              "description": "Heat per shot (1: overheat).",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "cooling": {
+              "description": "Cooling per second.",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "perShot",
+            "cooling"
+          ]
+        },
+        "ammo": {
+          "description": "A magazine that regains one round at a time.",
+          "type": "object",
+          "properties": {
+            "capacity": {
+              "description": "Rounds.",
+              "type": "integer",
+              "minimum": 0
+            },
+            "reload": {
+              "description": "Time to regain one round (s); null: it never reloads (one shot per life).",
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            }
+          },
+          "required": [
+            "capacity",
+            "reload"
+          ]
+        },
+        "minRange": {
+          "description": "The AI doesn't fire at a closer target (m): the explosion would hit itself.",
+          "type": "number",
+          "minimum": 0
+        },
+        "scopeOnly": {
+          "description": "The player can only fire it with the scope.",
+          "type": "boolean"
+        },
+        "power": {
+          "description": "An electric weapon: each shot takes this much energy from the batteries (kJ).",
+          "type": "number",
+          "minimum": 0
+        },
+        "lock": {
+          "description": "Lock-on: an enemy must stay in a cone around the aim before the weapon can fire; its missiles then chase it.",
+          "type": "object",
+          "properties": {
+            "time": {
+              "description": "Time to lock (s).",
+              "type": "number",
+              "minimum": 0
+            },
+            "cone": {
+              "description": "Half angle of the cone (rad).",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "time",
+            "cone"
+          ]
+        },
+        "dropped": {
+          "description": "Dropped (bombs): released under the robot without aiming.",
+          "type": "boolean"
+        },
+        "autoSupport": {
+          "description": "Automatic support weapon: its turrets pick the ally to heal and fire on their own.",
+          "type": "boolean"
+        },
+        "projectile": {
+          "$ref": "#/$defs/projectile"
+        }
+      },
+      "required": [
+        "names",
+        "cooldown",
+        "automatic",
+        "spread",
+        "handling",
+        "recoil",
+        "range",
+        "projectile"
+      ]
+    },
+    "blade": {
+      "description": "The volume a rotor's blade sweeps: a thick ring around its axis.",
+      "type": "object",
+      "properties": {
+        "inner": {
+          "description": "Inner radius (m); 0 for a bar or a disc.",
+          "type": "number",
+          "minimum": 0
+        },
+        "outer": {
+          "description": "Outer radius (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "half": {
+          "description": "Half thickness along the axis (m). Longer than `outer`: a drill bit, its hub in the middle of its length.",
+          "type": "number",
+          "minimum": 0
+        },
+        "arms": {
+          "description": "The blade's arms (a bar: two; a propeller: three): its hitbox turns with them.",
+          "type": "object",
+          "properties": {
+            "count": {
+              "description": "Arms.",
+              "type": "integer",
+              "minimum": 0
+            },
+            "width": {
+              "description": "Width of each arm (m).",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "count",
+            "width"
+          ]
+        },
+        "web": {
+          "description": "The web joining a ring to its hub (a shell spinner's spokes): a disc of radius `outer`, that doesn't strike.",
+          "type": "object",
+          "properties": {
+            "at": {
+              "description": "Center along the axis from the hub (m).",
+              "type": "number"
+            },
+            "half": {
+              "description": "Half thickness (m).",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "at",
+            "half"
+          ]
+        }
+      },
+      "required": [
+        "inner",
+        "outer",
+        "half"
+      ]
+    },
+    "spin": {
+      "description": "A rotor: its inertia and full speed give its stored energy (½·I·ω²) and its angular momentum.",
+      "type": "object",
+      "properties": {
+        "inertia": {
+          "description": "Moment of inertia (kg·m²).",
+          "type": "number",
+          "minimum": 0
+        },
+        "speed": {
+          "description": "Full speed (rad/s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "spinUp": {
+          "description": "Time from rest to full speed at full motor power (s): the motor's power follows from it.",
+          "type": "number",
+          "minimum": 0
+        },
+        "spinDown": {
+          "description": "Free spin: the speed loses two thirds (1/e) in this time (s); holding full speed costs these losses.",
+          "type": "number",
+          "minimum": 0
+        },
+        "gyro": {
+          "description": "Factor of the gyroscopic effect on the robot (1: physical; 0: none).",
+          "type": "number",
+          "minimum": 0
+        },
+        "unbalance": {
+          "description": "Imbalance: offset (m) of the spinning mass of a rotor at 0 hit points.",
+          "type": "number",
+          "minimum": 0
+        },
+        "mass": {
+          "description": "Spinning mass (kg), for the imbalance (included in the block's mass).",
+          "type": "number",
+          "minimum": 0
+        },
+        "direction": {
+          "description": "Direction of rotation around the axis (1: counter-clockwise seen from the end of the axis).",
+          "enum": [
+            1,
+            -1
+          ]
+        },
+        "reaction": {
+          "description": "Share of its motor's reaction the robot receives (1: physical; 0: nothing really spins, an energy blade).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "inertia",
+        "speed",
+        "spinUp",
+        "spinDown",
+        "gyro",
+        "unbalance",
+        "mass"
+      ]
+    },
+    "meleeHit": {
+      "description": "What a hit does.",
+      "type": "object",
+      "properties": {
+        "damageType": {
+          "$ref": "#/$defs/damageType"
+        },
+        "damage": {
+          "description": "Damage per kJ of the hit (before resistance).",
+          "type": "number",
+          "minimum": 0
+        },
+        "bite": {
+          "description": "Share of a rotor's stored energy a clean hit takes.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "fling": {
+          "description": "Share of the hit's energy that throws the target (the rest tears it).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "push": {
+          "description": "Direction of the impulse at the point hit.",
+          "type": "object",
+          "properties": {
+            "tangent": {
+              "description": "Along the blade's motion.",
+              "type": "number"
+            },
+            "radial": {
+              "description": "Outward from the hub.",
+              "type": "number"
+            },
+            "axial": {
+              "description": "Along the axis.",
+              "type": "number"
+            },
+            "lift": {
+              "description": "Toward the world's up.",
+              "type": "number"
+            }
+          },
+          "required": [
+            "tangent",
+            "radial",
+            "axial",
+            "lift"
+          ]
+        },
+        "recoil": {
+          "description": "Share of the impulse sent back to its own robot, at the hub.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "spread": {
+          "description": "Share of the damage the neighboring blocks receive.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "wheels": {
+          "description": "Damage factor on wheels and track rollers.",
+          "type": "number",
+          "minimum": 0
+        },
+        "wear": {
+          "description": "Wear: hit points the weapon loses per kJ of hit, divided by the resistance of what it hits.",
+          "type": "number",
+          "minimum": 0
+        },
+        "gap": {
+          "description": "Minimum time between two hits (s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "minSpeed": {
+          "description": "Speed below which a rotor no longer bites (share of full speed); for a flail, the speed of the ball (m/s) below which it only pushes.",
+          "type": "number",
+          "minimum": 0
+        },
+        "ground": {
+          "description": "Share of a clean hit a rotor's hit on the ground takes (0.4 when absent).",
+          "type": "number",
+          "minimum": 0
+        },
+        "ignite": {
+          "description": "Chance to set fire to the block hit.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "stun": {
+          "description": "A local stun of the organs around the point hit.",
+          "type": "object",
+          "properties": {
+            "radius": {
+              "description": "Radius (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "duration": {
+              "description": "Duration (s).",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "radius",
+            "duration"
+          ]
+        }
+      },
+      "required": [
+        "damageType",
+        "damage",
+        "bite",
+        "fling",
+        "push",
+        "recoil",
+        "spread",
+        "wear",
+        "gap",
+        "minSpeed"
+      ]
+    },
+    "meleeWeapon": {
+      "description": "A melee weapon: a mass that spins or an arm that strikes, carried by a block (nothing is fired).",
+      "type": "object",
+      "properties": {
+        "names": {
+          "$ref": "#/$defs/names"
+        },
+        "look": {
+          "description": "Its look (drawing, sound, effects in the client).",
+          "enum": [
+            "bar",
+            "hammer",
+            "saber",
+            "whip",
+            "lance",
+            "field",
+            "disc",
+            "drum",
+            "shell",
+            "propeller",
+            "saw",
+            "drill",
+            "plate",
+            "flail",
+            "jaw"
+          ]
+        },
+        "motion": {
+          "description": "Its motion: a rotor, a rotor driven by its block's engine, a triggered arm, a point that thrusts, a field around the hull, a plate that lifts, a ball on a chain, a jaw that grips.",
+          "enum": [
+            "spin",
+            "driven",
+            "swing",
+            "thrust",
+            "field",
+            "flip",
+            "flail",
+            "grip"
+          ]
+        },
+        "axis": {
+          "description": "Axis of the rotor or of the arm's pivot, in the block's frame (up +y, left +x, forward +z).",
+          "enum": [
+            "up",
+            "left",
+            "forward"
+          ]
+        },
+        "hub": {
+          "description": "The hub (center of the rotor, or the arm's pivot), in the block's frame (m).",
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "number"
+          }
+        },
+        "blade": {
+          "$ref": "#/$defs/blade"
+        },
+        "spin": {
+          "$ref": "#/$defs/spin"
+        },
+        "drive": {
+          "description": "A rotor driven by an engine: its speed follows the thrust.",
+          "type": "object",
+          "properties": {
+            "idle": {
+              "description": "Speed at idle (share of full speed).",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "stop": {
+              "description": "Below this share of the maximum thrust (engine off), it stops.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "required": [
+            "idle",
+            "stop"
+          ]
+        },
+        "bite": {
+          "description": "A rotor that bites continuously instead of striking (saw, drill).",
+          "type": "object",
+          "properties": {
+            "power": {
+              "description": "Cutting power at full speed (kW).",
+              "type": "number",
+              "minimum": 0
+            },
+            "feed": {
+              "description": "Where the bite goes into the target: the edge of a disc, or the point of a bit.",
+              "enum": [
+                "radial",
+                "axial"
+              ]
+            },
+            "grab": {
+              "description": "Factor of the cutting force that drags the target along the blade (0: nothing; 1: physical).",
+              "type": "number",
+              "minimum": 0
+            },
+            "gear": {
+              "description": "Reduction between the rotor and the tool (1: direct drive).",
+              "type": "number",
+              "minimum": 0
+            },
+            "depth": {
+              "description": "Depth (m) to which the damage left by a pierced block goes on to the next.",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "power",
+            "feed",
+            "grab",
+            "gear",
+            "depth"
+          ]
+        },
+        "swing": {
+          "description": "A triggered arm: its head goes from `rest` to `end` around the axis (angles: 0 straight ahead, π/2 toward the block's top), then comes back.",
+          "type": "object",
+          "properties": {
+            "reach": {
+              "description": "Distance from the pivot to the head (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "radius": {
+              "description": "Radius of the head (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "rest": {
+              "description": "Angle at rest (rad).",
+              "type": "number"
+            },
+            "end": {
+              "description": "Angle at the end of the strike (rad).",
+              "type": "number"
+            },
+            "strike": {
+              "description": "Duration of the strike (s).",
+              "type": "number",
+              "minimum": 0
+            },
+            "recover": {
+              "description": "Duration of the return (s).",
+              "type": "number",
+              "minimum": 0
+            },
+            "energy": {
+              "description": "Energy of the head at the end of its course (J).",
+              "type": "number",
+              "minimum": 0
+            },
+            "cost": {
+              "description": "Energy a strike takes from the batteries (kJ).",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "reach",
+            "radius",
+            "rest",
+            "end",
+            "strike",
+            "recover",
+            "energy",
+            "cost"
+          ]
+        },
+        "plate": {
+          "description": "A flipper's plate: a ram lifts it from `rest` to `end` and throws what is on it.",
+          "type": "object",
+          "properties": {
+            "length": {
+              "description": "Length from its pivot (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "half": {
+              "description": "Half width along the pivot (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "rest": {
+              "description": "Angle at rest (rad; negative: wedged toward the ground).",
+              "type": "number"
+            },
+            "end": {
+              "description": "Angle at the end of the lift (rad).",
+              "type": "number"
+            },
+            "strike": {
+              "description": "Duration of the lift (s).",
+              "type": "number",
+              "minimum": 0
+            },
+            "lower": {
+              "description": "Time to come down (s).",
+              "type": "number",
+              "minimum": 0
+            },
+            "reload": {
+              "description": "The ram is ready again this long after the lift (s).",
+              "type": "number",
+              "minimum": 0
+            },
+            "energy": {
+              "description": "Work of the ram over its whole course (J).",
+              "type": "number",
+              "minimum": 0
+            },
+            "cost": {
+              "description": "Energy a lift takes from the batteries (kJ).",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "length",
+            "half",
+            "rest",
+            "end",
+            "strike",
+            "lower",
+            "reload",
+            "energy",
+            "cost"
+          ]
+        },
+        "flail": {
+          "description": "A flail: a ball on a chain hung from a crank that the motor turns.",
+          "type": "object",
+          "properties": {
+            "crank": {
+              "description": "Radius of the crank (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "inertia": {
+              "description": "Inertia of the crank and hub (kg·m²): its gyroscope.",
+              "type": "number",
+              "minimum": 0
+            },
+            "speed": {
+              "description": "Speed of the crank at full (rad/s).",
+              "type": "number",
+              "minimum": 0
+            },
+            "spinUp": {
+              "description": "Time to launch the ball (s).",
+              "type": "number",
+              "minimum": 0
+            },
+            "chain": {
+              "description": "Length of the chain (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "links": {
+              "description": "Links drawn.",
+              "type": "integer",
+              "minimum": 0
+            },
+            "mass": {
+              "description": "Mass of the ball (kg).",
+              "type": "number",
+              "minimum": 0
+            },
+            "radius": {
+              "description": "Radius of the ball (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "restitution": {
+              "description": "Bounce of the ball (0: soft; 1: elastic).",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "friction": {
+              "description": "Share of its speed along what it hits that it keeps.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "drag": {
+              "description": "Air drag on the ball (share of its speed lost per second).",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "crank",
+            "inertia",
+            "speed",
+            "spinUp",
+            "chain",
+            "links",
+            "mass",
+            "radius",
+            "restitution",
+            "friction",
+            "drag"
+          ]
+        },
+        "jaw": {
+          "description": "A crusher jaw: two jaws that close on what is in their mouth, crush it and drag it.",
+          "type": "object",
+          "properties": {
+            "length": {
+              "description": "Length of the jaws from their pivot (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "half": {
+              "description": "Half width along the pivot (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "open": {
+              "description": "Half opening, open (rad).",
+              "type": "number",
+              "minimum": 0
+            },
+            "shut": {
+              "description": "Half opening, closed on nothing (rad).",
+              "type": "number",
+              "minimum": 0
+            },
+            "close": {
+              "description": "Time to close (s).",
+              "type": "number",
+              "minimum": 0
+            },
+            "reopen": {
+              "description": "Time to reopen (s).",
+              "type": "number",
+              "minimum": 0
+            },
+            "cooldown": {
+              "description": "Pause before a new bite (s).",
+              "type": "number",
+              "minimum": 0
+            },
+            "mouth": {
+              "description": "The mouth: between these distances from the pivot (m), what is there can be gripped.",
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
+              }
+            },
+            "strength": {
+              "description": "Force the grip holds (N); beyond, it slips.",
+              "type": "number",
+              "minimum": 0
+            },
+            "slip": {
+              "description": "After this much slipping (s), it lets go.",
+              "type": "number",
+              "minimum": 0
+            },
+            "tear": {
+              "description": "Gap (m) between the two points of the grip beyond which it tears off.",
+              "type": "number",
+              "minimum": 0
+            },
+            "crush": {
+              "description": "Damage per second of the crushing.",
+              "type": "number",
+              "minimum": 0
+            },
+            "bite": {
+              "description": "Damage of the bite that grips.",
+              "type": "number",
+              "minimum": 0
+            },
+            "power": {
+              "description": "Power of the ram while it squeezes (kW).",
+              "type": "number",
+              "minimum": 0
+            },
+            "hold": {
+              "description": "Longest grip (s).",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "length",
+            "half",
+            "open",
+            "shut",
+            "close",
+            "reopen",
+            "cooldown",
+            "mouth",
+            "strength",
+            "slip",
+            "tear",
+            "crush",
+            "bite",
+            "power",
+            "hold"
+          ]
+        },
+        "thrust": {
+          "description": "A point that thrusts out along the block's front, then retracts.",
+          "type": "object",
+          "properties": {
+            "retracted": {
+              "description": "Distance of the point from the hub, retracted (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "reach": {
+              "description": "Distance of the point from the hub, out (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "radius": {
+              "description": "Radius of the point (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "strike": {
+              "description": "Time to thrust (s).",
+              "type": "number",
+              "minimum": 0
+            },
+            "recover": {
+              "description": "Time to retract (s).",
+              "type": "number",
+              "minimum": 0
+            },
+            "energy": {
+              "description": "Energy of the hit (J).",
+              "type": "number",
+              "minimum": 0
+            },
+            "cost": {
+              "description": "Energy a thrust takes from the batteries (kJ).",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "retracted",
+            "reach",
+            "radius",
+            "strike",
+            "recover",
+            "energy",
+            "cost"
+          ]
+        },
+        "field": {
+          "description": "A field around the hull of its part: it strikes what comes into a margin around the blocks.",
+          "type": "object",
+          "properties": {
+            "margin": {
+              "description": "Margin around the blocks covered (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "radius": {
+              "description": "It covers the blocks within this radius of the projector (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "contacts": {
+              "description": "Contacts struck per hit, at most.",
+              "type": "integer",
+              "minimum": 0
+            },
+            "drain": {
+              "description": "Share of its energy an enemy rotor rubbing against it loses per hit.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "repel": {
+              "description": "Impulse that pushes back an enemy melee weapon, per hit (N·s).",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "margin",
+            "radius",
+            "contacts",
+            "drain",
+            "repel"
+          ]
+        },
+        "quench": {
+          "description": "An energy weapon that goes out without power or under water.",
+          "type": "boolean"
+        },
+        "hit": {
+          "$ref": "#/$defs/meleeHit"
+        },
+        "engage": {
+          "description": "Distance at which the AI engages with it (m, between the robots' centers).",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "names",
+        "look",
+        "motion",
+        "axis",
+        "hub",
+        "hit",
+        "engage"
+      ]
+    },
+    "propType": {
+      "description": "A prop of the scenery: a physical body that can be pushed, broken, that reacts. Its 3D look can come from a glTF model (docs/models.md).",
+      "type": "object",
+      "properties": {
+        "names": {
+          "$ref": "#/$defs/names"
+        },
+        "shape": {
+          "description": "Its collision shape.",
+          "anyOf": [
+            {
+              "description": "A cube.",
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "box"
+                },
+                "half": {
+                  "description": "Half side (m).",
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "kind",
+                "half"
+              ]
+            },
+            {
+              "description": "An upright cylinder (a map spot may scale it).",
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "cylinder"
+                },
+                "radius": {
+                  "description": "Radius (m).",
+                  "type": "number",
+                  "minimum": 0
+                },
+                "halfHeight": {
+                  "description": "Half height (m).",
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "kind",
+                "radius",
+                "halfHeight"
+              ]
+            },
+            {
+              "description": "A box whose dimensions each spot gives (a wall, a roof; a car is 4.2 × 1.44 × 1.84 m).",
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "slab"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            }
+          ]
+        },
+        "mass": {
+          "description": "Mass (kg); for a slab, density (kg/m³).",
+          "type": "number",
+          "minimum": 0
+        },
+        "friction": {
+          "description": "Friction coefficient.",
+          "type": "number",
+          "minimum": 0
+        },
+        "hp": {
+          "description": "Hit points (for a slab, per m² of its largest face): at 0 it breaks, explodes or bolts.",
+          "type": "number",
+          "minimum": 0
+        },
+        "resist": {
+          "$ref": "#/$defs/resistances"
+        },
+        "explosion": {
+          "description": "Explosion when it gives way (after `fuse` s): neighboring explosions can set it off in a chain.",
+          "$ref": "#/$defs/explosion"
+        },
+        "fuse": {
+          "description": "Delay between the break and the explosion (s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "vent": {
+          "description": "A gas leak: once punctured, the jet propels it along its axis, spinning, then it explodes.",
+          "type": "object",
+          "properties": {
+            "thrust": {
+              "description": "Thrust (N).",
+              "type": "number",
+              "minimum": 0
+            },
+            "duration": {
+              "description": "Duration (s).",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "thrust",
+            "duration"
+          ]
+        },
+        "shatters": {
+          "description": "It breaks into pieces when it gives way.",
+          "type": "boolean"
+        },
+        "anchored": {
+          "description": "Anchored: a fixed body that nothing pushes, until it is released or topples.",
+          "type": "boolean"
+        },
+        "topples": {
+          "description": "It topples instead of breaking the first time it gives way, keeping this share of its hit points.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "burns": {
+          "description": "Wood: it catches fire, loses hit points, chars, and goes out if not rekindled.",
+          "type": "object",
+          "properties": {
+            "time": {
+              "description": "Time before it goes out (s).",
+              "type": "number",
+              "minimum": 0
+            },
+            "reach": {
+              "description": "Reach of its flames beyond its surface (m): the neighbors it can set alight.",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "time",
+            "reach"
+          ]
+        }
+      },
+      "required": [
+        "names",
+        "shape",
+        "mass",
+        "friction",
+        "hp"
+      ]
+    },
+    "robot": {
+      "description": "A preset robot: its design, its color and its driving settings.",
+      "type": "object",
+      "properties": {
+        "names": {
+          "$ref": "#/$defs/names"
+        },
+        "traits": {
+          "description": "Its short description in each language.",
+          "$ref": "#/$defs/names"
+        },
+        "cost": {
+          "description": "Build cost of its design (blocks and wheels).",
+          "type": "number",
+          "minimum": 0
+        },
+        "mass": {
+          "description": "Mass of its design (kg).",
+          "type": "number",
+          "minimum": 0
+        },
+        "design": {
+          "$ref": "#/$defs/design"
+        },
+        "color": {
+          "description": "Color of its tinted blocks, #rrggbb.",
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "speed": {
+          "description": "Target cruise speed (m/s): on the ground, its wheels and weight limit it; hovering, its top horizontal speed; a plane, its airspeed.",
+          "type": "number",
+          "minimum": 0
+        },
+        "turn": {
+          "description": "Differential steering: speed difference between its left and right sides to turn (m/s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "behavior": {
+          "description": "What its AI does when hit: flee, or charge (a robot made for melee).",
+          "enum": [
+            "flee",
+            "charge"
+          ]
+        },
+        "mobility": {
+          "description": "How it moves, which picks its AI pilot: on the ground, hovering (rotors), or flying like a plane.",
+          "enum": [
+            "ground",
+            "hover",
+            "plane"
+          ]
+        }
+      },
+      "required": [
+        "names",
+        "traits",
+        "cost",
+        "mass",
+        "design",
+        "color",
+        "speed",
+        "turn",
+        "behavior",
+        "mobility"
+      ]
+    },
+    "design": {
+      "description": "A robot design, as the garage saves it (the same as schemas/robot.schema.json): blocks on a grid of 0.5 m cells, wheels on their faces. Frame: +z forward, +x left, +y up.",
+      "type": "object",
+      "properties": {
+        "blocks": {
+          "description": "The blocks, exactly one of them a cockpit.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/block"
+          },
+          "contains": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "cockpit"
+              }
+            }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        "wheels": {
+          "description": "The wheels and track rollers.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/wheel"
+          }
+        }
+      },
+      "required": [
+        "blocks",
+        "wheels"
+      ]
+    },
+    "axis": {
+      "description": "One of the robot's six axes.",
+      "type": "string",
+      "enum": [
+        "+x",
+        "-x",
+        "+y",
+        "-y",
+        "+z",
+        "-z"
+      ]
+    },
+    "facing": {
+      "description": "Where the block's top and front point, in the robot's frame (two perpendicular axes); without it, up +y and forward +z. An engine pushes toward its top; a wing lifts toward its top, the air meets its front.",
+      "type": "object",
+      "properties": {
+        "up": {
+          "$ref": "#/$defs/axis"
+        },
+        "forward": {
+          "$ref": "#/$defs/axis"
+        }
+      },
+      "required": [
+        "up",
+        "forward"
+      ],
+      "anyOf": [
+        {
+          "properties": {
+            "up": {
+              "const": "+x"
+            },
+            "forward": {
+              "enum": [
+                "+y",
+                "-y",
+                "+z",
+                "-z"
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            "up": {
+              "const": "-x"
+            },
+            "forward": {
+              "enum": [
+                "+y",
+                "-y",
+                "+z",
+                "-z"
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            "up": {
+              "const": "+y"
+            },
+            "forward": {
+              "enum": [
+                "+x",
+                "-x",
+                "+z",
+                "-z"
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            "up": {
+              "const": "-y"
+            },
+            "forward": {
+              "enum": [
+                "+x",
+                "-x",
+                "+z",
+                "-z"
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            "up": {
+              "const": "+z"
+            },
+            "forward": {
+              "enum": [
+                "+x",
+                "-x",
+                "+y",
+                "-y"
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            "up": {
+              "const": "-z"
+            },
+            "forward": {
+              "enum": [
+                "+x",
+                "-x",
+                "+y",
+                "-y"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "block": {
+      "description": "A block on the grid.",
+      "type": "object",
+      "properties": {
+        "x": {
+          "description": "X of its cell (an integer; one cell is 0.5 m).",
+          "type": "integer"
+        },
+        "y": {
+          "description": "Y of its cell.",
+          "type": "integer"
+        },
+        "z": {
+          "description": "Z of its cell.",
+          "type": "integer"
+        },
+        "type": {
+          "description": "The block type.",
+          "type": "string",
+          "enum": [
+            "frame",
+            "armorLight",
+            "armor",
+            "armorHeavy",
+            "wedgeLight",
+            "wedge",
+            "wedgeHeavy",
+            "cornerLight",
+            "corner",
+            "cornerHeavy",
+            "innerCornerLight",
+            "innerCorner",
+            "roundLight",
+            "round",
+            "roundCornerLight",
+            "roundCorner",
+            "slopeLowLight",
+            "slopeLow",
+            "slopeHighLight",
+            "slopeHigh",
+            "slabLight",
+            "slab",
+            "armorReactive",
+            "cockpit",
+            "thruster",
+            "engine",
+            "wing",
+            "flap",
+            "gunTurret",
+            "sniperTurret",
+            "cannonTurret",
+            "missileLauncher",
+            "flakLauncher",
+            "mineLayer",
+            "empMineLayer",
+            "fireMineLayer",
+            "smokeMineLayer",
+            "bounceMineLayer",
+            "aaMineLayer",
+            "remoteMineLayer",
+            "sensorMineLayer",
+            "stickyMineLayer",
+            "repairTurret",
+            "naniteLauncher",
+            "barrierProjector",
+            "bombBay",
+            "rotor",
+            "propeller",
+            "jet",
+            "hoverPad",
+            "leg",
+            "battery",
+            "repairModule",
+            "flareLauncher",
+            "radar",
+            "headlight",
+            "beacon",
+            "navLight",
+            "strobe",
+            "antiCollision",
+            "rotatingLight",
+            "policeBar",
+            "jammer",
+            "flamerTurret",
+            "empTurret",
+            "smokeLauncher",
+            "laserTurret",
+            "railTurret",
+            "shotgunTurret",
+            "rocketPod",
+            "warheadLauncher",
+            "lockonLauncher",
+            "plasmaTurret",
+            "spinner",
+            "hammer",
+            "verticalSpinner",
+            "drum",
+            "shellSpinner",
+            "flipper",
+            "flail",
+            "jaw",
+            "laserBlade",
+            "plasmaWhip",
+            "shockLance",
+            "crusherField",
+            "saw",
+            "drill",
+            "shield"
+          ]
+        },
+        "facing": {
+          "$ref": "#/$defs/facing"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "z",
+        "type"
+      ]
+    },
+    "wheel": {
+      "description": "A wheel mounted on a face of its supporting block (x, y, z): on the left or right side (dx = ±1), the front or back face (dz = ±1), or underneath (dy = -1). Its axle always runs along x.",
+      "type": "object",
+      "properties": {
+        "x": {
+          "description": "X of the supporting block's cell.",
+          "type": "integer"
+        },
+        "y": {
+          "description": "Y of the supporting block's cell.",
+          "type": "integer"
+        },
+        "z": {
+          "description": "Z of the supporting block's cell.",
+          "type": "integer"
+        },
+        "dx": {
+          "description": "1: on the left side (+x); -1: on the right side; 0 otherwise.",
+          "enum": [
+            -1,
+            0,
+            1
+          ]
+        },
+        "dz": {
+          "description": "1: on the front face (+z); -1: on the back face; 0 otherwise.",
+          "enum": [
+            -1,
+            0,
+            1
+          ]
+        },
+        "dy": {
+          "description": "-1: under the block; absent (or 0): on a side or face.",
+          "enum": [
+            -1,
+            0
+          ]
+        },
+        "type": {
+          "description": "The wheel type.",
+          "type": "string",
+          "enum": [
+            "standard",
+            "steered",
+            "small",
+            "smallSteered",
+            "heavy",
+            "heavySteered",
+            "caster",
+            "track"
+          ]
+        },
+        "shift": {
+          "description": "Offset along the face, in half cells.",
+          "type": "integer",
+          "minimum": -1,
+          "maximum": 1
+        },
+        "rise": {
+          "description": "A track roller on the left or right side: raised or lowered by this many cells.",
+          "type": "integer",
+          "minimum": -2,
+          "maximum": 2
+        },
+        "layer": {
+          "description": "A track roller on the left or right side: laid on this many rollers outward (a wider track).",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "steer": {
+          "description": "Former format: a steered wheel was a fixed wheel with steer: true. The game upgrades it to the steered type.",
+          "type": "boolean",
+          "deprecated": true
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "z",
+        "dx",
+        "dz",
+        "type"
+      ],
+      "anyOf": [
+        {
+          "properties": {
+            "dx": {
+              "enum": [
+                -1,
+                1
+              ]
+            },
+            "dz": {
+              "const": 0
+            },
+            "dy": {
+              "const": 0
+            }
+          }
+        },
+        {
+          "properties": {
+            "dx": {
+              "const": 0
+            },
+            "dz": {
+              "enum": [
+                -1,
+                1
+              ]
+            },
+            "dy": {
+              "const": 0
+            }
+          }
+        },
+        {
+          "required": [
+            "dy"
+          ],
+          "properties": {
+            "dx": {
+              "const": 0
+            },
+            "dz": {
+              "const": 0
+            },
+            "dy": {
+              "const": -1
+            }
+          }
+        }
+      ],
+      "if": {
+        "anyOf": [
+          {
+            "required": [
+              "rise"
+            ]
+          },
+          {
+            "required": [
+              "layer"
+            ]
+          }
+        ]
+      },
+      "then": {
+        "properties": {
+          "type": {
+            "enum": [
+              "track"
+            ]
+          },
+          "dx": {
+            "enum": [
+              -1,
+              1
+            ]
+          }
+        }
+      }
+    }
+  }
+}

@@ -6,6 +6,13 @@ import { LOOP_PAD } from "./samples";
  * qu'un ne revienne, jamais deux fois de suite le même), un fondu enchaîné de `CHAIN_FADE` s passant
  * de l'un à l'autre ; en fin de partie, un court motif de victoire ou de défaite.
  *
+ * Le joueur peut passer au morceau suivant ou revenir au précédent (`next`, `previous` : le lecteur
+ * des menus, les touches en partie) : chaque écran a sa liste de lecture (`Playlist` : le sac pour
+ * les nouveaux morceaux, et un court historique pour revenir en arrière), et le saut se fait en
+ * fondu de `SKIP_FADE` s. Un morceau précédent déjà libéré est préparé de nouveau : celui qu'on
+ * entend continue jusqu'à ce qu'il soit prêt (`MusicNow.pending`). Chaque morceau a un titre, dans
+ * chaque langue (`music.title.<fichier>`) ; `onChange` annonce ce qui change (hud/nowPlaying.ts).
+ *
  * Les morceaux durent de 1 à 4 minutes : décodés, ils pèseraient ~0,4 Mo par seconde (~96 Mo pour
  * 4 min, le double avec le suivant). Ils sont donc lus en flux : un élément <audio> (sur une URL
  * `blob:` du fichier compressé, téléchargé quand le morceau est préparé) branché au bus par
@@ -14,9 +21,10 @@ import { LOOP_PAD } from "./samples";
  * le suivant de l'écran en cours, plus le premier de chacun des autres écrans (préparé d'avance :
  * élément créé, `canplaythrough` atteint), soit quatre morceaux, cinq pendant un fondu : ~15 Mo au
  * plus (`compressedMegabytes`). Un morceau fini est libéré (élément vidé, nœud débranché, URL
- * révoquée). Les motifs, qui doivent partir à l'instant, restent décodés (~3 Mo chacun :
- * `decodedMegabytes`). Sur une machine à peu de mémoire (`navigator.deviceMemory` ≤ 4), le garage
- * n'est pas préparé d'avance.
+ * révoquée), sauf s'il sert encore (le suivant, après un retour en arrière : il est mis en pause).
+ * Les motifs, qui doivent partir à l'instant, restent décodés (~3 Mo chacun : `decodedMegabytes`).
+ * Sur une machine à peu de mémoire (`navigator.deviceMemory` ≤ 4), le garage n'est pas préparé
+ * d'avance.
  *
  * Préparation (`preload`) : les motifs et le premier morceau de l'accueil pendant l'écran de
  * chargement, puis, sans les attendre, celui de la partie et celui du garage ; `prepare(theme)`
@@ -68,6 +76,10 @@ export const STINGERS: Record<StingerKind, readonly MusicKey[]> = {
 const FADE = 1.5;
 /** Fondu enchaîné d'un morceau au suivant du même écran (s). */
 export const CHAIN_FADE = 3;
+/** Fondu d'un saut demandé par le joueur (morceau suivant, précédent) : plus court, il répond tout de suite (s). */
+export const SKIP_FADE = 1.2;
+/** Morceaux gardés dans l'historique de chaque écran, pour revenir en arrière. */
+export const HISTORY = 8;
 /**
  * Marge (s) : le fondu enchaîné finit avant la marge de fin du morceau, et l'heure de lecture
  * n'arrive que par `timeupdate` (toutes les ~0,25 s).
@@ -78,13 +90,23 @@ const LOOP_BACK = 0.4;
 /** Au plus tant (s) d'attente pour préparer un morceau (écran de chargement d'une partie). */
 const PREPARE_WAIT = 15;
 
-/** Un fichier de musique : un morceau et sa variante (« music-menu-2 »). */
-export type Track = `${MusicKey}-${number}`;
-const trackOf = (key: MusicKey, n: number): Track => `${key}-${n}`;
+/** Les nombres de 1 à N (les variantes d'un morceau). */
+type UpTo<N extends number, A extends unknown[] = []> = A["length"] extends N ? never : [...A, unknown]["length"] | UpTo<N, [...A, unknown]>;
+
+/**
+ * Un fichier de musique : un morceau et sa variante (« music-menu-2 »), d'après `MUSIC_TRACKS`.
+ * Chacun a son titre dans chaque langue (`music.title.<fichier>`, exhaustif : TypeScript réclame
+ * celui d'une variante ajoutée).
+ */
+export type Track = { [K in MusicKey]: `${K}-${UpTo<(typeof MUSIC_TRACKS)[K]>}` }[MusicKey];
+const trackOf = (key: MusicKey, n: number): Track => `${key}-${n}` as Track;
 
 /** Toutes les variantes de ces morceaux. */
 export const tracksOf = (keys: readonly MusicKey[]): Track[] =>
   keys.flatMap((key) => Array.from({ length: MUSIC_TRACKS[key] }, (_, i) => trackOf(key, i + 1)));
+
+/** Le morceau d'un fichier (« music-menu-2 » → « music-menu »). */
+const keyOf = (track: Track): MusicKey => track.slice(0, track.lastIndexOf("-")) as MusicKey;
 
 /**
  * Sac mélangé : les éléments sortent dans un ordre au hasard, chacun une fois par tour, et un tour
@@ -101,6 +123,11 @@ export class ShuffleBag<T> {
     if (!items.length) throw new Error("Sac mélangé vide");
     this.items = items;
     this.random = random;
+  }
+
+  /** Nombre d'éléments différents. */
+  get size(): number {
+    return this.items.length;
   }
 
   peek(): T {
@@ -130,6 +157,112 @@ export class ShuffleBag<T> {
   }
 }
 
+/**
+ * Liste de lecture d'un écran, dans l'ordre où on l'entend : les nouveaux morceaux viennent du sac
+ * mélangé ; un historique (`HISTORY` morceaux au plus) permet de revenir en arrière (`previous`),
+ * puis de repartir en avant (`next` rejoue d'abord ce qu'on a quitté en revenant, puis reprend le
+ * sac). `current` : le morceau voulu (celui qu'on entend, ou celui qu'on prépare pour le remplacer) ;
+ * null quand l'écran s'est tu (`stop` : il passe derrière, l'écran reprendra au suivant). Jamais
+ * deux fois de suite le même morceau, s'il y en a au moins deux.
+ */
+export class Playlist<T> {
+  private readonly bag: ShuffleBag<T>;
+  private readonly limit: number;
+  /** Morceaux entendus avant celui en cours, le plus récent en dernier. */
+  private readonly behind: T[] = [];
+  /** Morceaux quittés en revenant en arrière, le prochain à rejouer en dernier. */
+  private readonly ahead: T[] = [];
+  private playing: T | null = null;
+
+  constructor(items: readonly T[], random: () => number = Math.random, limit = HISTORY) {
+    this.bag = new ShuffleBag(items, random);
+    this.limit = limit;
+  }
+
+  /** Le morceau voulu (null : l'écran s'est tu). */
+  get current(): T | null {
+    return this.playing;
+  }
+
+  /**
+   * Le prochain morceau, sans y passer : celui qu'on a quitté en revenant en arrière, sinon le
+   * prochain du sac, jamais le dernier entendu (le sac le proposerait après un retour en arrière, ou
+   * quand un suivant illisible a été écarté en fin de tour : on le saute, il reviendra au tour suivant).
+   */
+  peekNext(): T {
+    const replay = this.ahead.at(-1);
+    if (replay !== undefined) return replay;
+    const last = this.playing ?? this.behind.at(-1);
+    if (this.bag.size > 1 && this.bag.peek() === last) this.bag.take();
+    return this.bag.peek();
+  }
+
+  /** Passe au morceau suivant (celui de `peekNext`) ; celui en cours passe derrière. */
+  next(): T {
+    const track = this.peekNext();
+    if (this.ahead.length) this.ahead.pop();
+    else this.bag.take();
+    this.remember(this.playing);
+    this.playing = track;
+    return track;
+  }
+
+  /** Le morceau d'avant, auquel `previous` reviendrait (undefined : aucun). */
+  peekPrevious(): T | undefined {
+    return this.behind.at(-1);
+  }
+
+  /** Revient au morceau d'avant ; celui en cours passe devant (`next` y repartira). Undefined : rien derrière. */
+  previous(): T | undefined {
+    const track = this.behind.pop();
+    if (track === undefined) return undefined;
+    if (this.playing !== null) this.ahead.push(this.playing);
+    this.playing = track;
+    return track;
+  }
+
+  /** L'écran s'est tu : le morceau en cours passe derrière ; il reprendra au suivant. */
+  stop(): void {
+    this.remember(this.playing);
+    this.playing = null;
+  }
+
+  /**
+   * Revient au morceau `track` en parcourant l'historique (en arrière, ou en avant), le plus proche
+   * d'abord : un morceau demandé illisible, on reste sur celui qu'on entend. Faux s'il n'y est pas.
+   */
+  seek(track: T): boolean {
+    if (this.playing === track) return true;
+    if (this.behind.includes(track)) {
+      while (this.playing !== track) this.previous();
+      return true;
+    }
+    if (this.ahead.includes(track)) {
+      while (this.playing !== track) this.next();
+      return true;
+    }
+    return false;
+  }
+
+  /** Écarte le prochain morceau (illisible) : il ne reviendra qu'au tour suivant du sac. */
+  discardNext(): void {
+    this.peekNext();
+    if (this.ahead.length) this.ahead.pop();
+    else this.bag.take();
+  }
+
+  /** L'historique (essais, console) : derrière, du plus ancien au plus récent ; devant, du prochain au dernier. */
+  snapshot(): { behind: T[]; ahead: T[] } {
+    return { behind: [...this.behind], ahead: [...this.ahead].reverse() };
+  }
+
+  private remember(track: T | null): void {
+    if (track === null) return;
+    this.behind.push(track);
+    if (this.behind.length > this.limit) this.behind.shift();
+  }
+}
+
 /** État de préparation d'un morceau. */
 export type StreamState = "loading" | "ready" | "failed";
 
@@ -145,6 +278,32 @@ export function chainMove(left: number, next: StreamState | null): "wait" | "cha
   return left <= LOOP_BACK ? "loop" : "wait";
 }
 
+/** Ce que joue la musique, pour le lecteur (hud/nowPlaying.ts) et les paramètres. */
+export interface MusicNow {
+  /** Le morceau qu'on entend (null : rien, ou un écran qui attend le geste du joueur). */
+  readonly track: Track | null;
+  /** Son écran ; null pour un motif de fin de partie. */
+  readonly theme: MusicTheme | null;
+  /** Le motif de fin de partie qu'on entend. */
+  readonly stinger: StingerKind | null;
+  /** Le morceau demandé (suivant, précédent) qu'on prépare encore : celui qu'on entend continue d'ici là. */
+  readonly pending: Track | null;
+  /** Le morceau auquel `previous` reviendrait (null : aucun). */
+  readonly previous: Track | null;
+  /** On peut changer de morceau (un écran qui en a plusieurs, et dont la musique est celle voulue). */
+  readonly canSkip: boolean;
+}
+
+/**
+ * Ce qui change : un morceau commence (`start`), un morceau demandé se prépare (`loading`), il est
+ * illisible (`failed` : on reste sur celui qu'on entend, `track` dit lequel a échoué), il n'y a pas
+ * de morceau précédent (`none`), la musique se tait (`stop`).
+ */
+export type MusicChange = "start" | "loading" | "failed" | "none" | "stop";
+
+/** Écoute du lecteur : ce que joue la musique, ce qui vient de changer, et si le joueur l'a demandé. */
+export type MusicListener = (now: MusicNow, change: MusicChange, manual: boolean, track: Track | null) => void;
+
 /** Un morceau lu en flux. */
 interface Stream {
   track: Track;
@@ -158,11 +317,15 @@ interface Stream {
   bytes: number;
   url: string | null;
   released: boolean;
+  /** Fondu de sortie en cours : à sa fin, le morceau est libéré, ou mis en pause s'il sert encore (0 : aucun). */
+  timer: number;
 }
 
 interface Voice {
   src: AudioBufferSourceNode;
   gain: GainNode;
+  track: Track;
+  kind: StingerKind;
 }
 
 export class Music {
@@ -172,21 +335,27 @@ export class Music {
   /** Ce qu'on veut entendre (un écran, un motif, ou rien) ; un chargement dépassé est abandonné. */
   private wanted: MusicTheme | MusicKey | null = null;
   private request = 0;
-  /** Le morceau en cours et son écran. */
+  /** Le morceau qu'on entend et son écran. */
   private current: { stream: Stream; theme: MusicTheme } | null = null;
   /** Le morceau suivant de l'écran en cours, préparé d'avance. */
   private following: Stream | null = null;
+  /** Le morceau demandé par le joueur (suivant, précédent), qu'on prépare encore. */
+  private pending: Stream | null = null;
+  /** Sauts demandés : un saut dépassé par un autre est abandonné. */
+  private jumps = 0;
   /** Le premier morceau de chaque autre écran, préparé d'avance. */
   private readonly upcoming = new Map<MusicTheme, Stream>();
   /** Morceaux préparés ou en cours (un élément chacun). */
   private readonly streams = new Map<Track, Stream>();
-  private readonly bags = new Map<MusicTheme, ShuffleBag<Track>>();
+  private readonly playlists = new Map<MusicTheme, Playlist<Track>>();
   private readonly stingerBags = new Map<StingerKind, ShuffleBag<Track>>();
   /** Motifs décodés, ou en train de l'être. */
   private readonly decoded = new Map<Track, Promise<AudioBuffer | null>>();
   private stingerVoice: Voice | null = null;
   /** Peu de mémoire : le garage n'est pas préparé d'avance. */
   private readonly frugal: boolean;
+  /** Le lecteur écoute (voir `MusicListener`). */
+  onChange: MusicListener | null = null;
 
   constructor(ctx: AudioContext, out: AudioNode, base: string) {
     this.ctx = ctx;
@@ -228,8 +397,10 @@ export class Music {
     // On revient à l'écran dont la musique joue encore (on l'avait quitté avant que l'autre parte)
     if (theme && this.current?.theme === theme) return;
     if (!theme) {
+      const audible = !!this.current || !!this.stingerVoice;
       this.endScreen();
       this.fadeStinger();
+      if (audible) this.emit("stop", false);
       return;
     }
     void this.begin(theme, request, 0);
@@ -240,9 +411,11 @@ export class Music {
     let bag = this.stingerBags.get(kind);
     if (!bag) this.stingerBags.set(kind, (bag = new ShuffleBag(tracksOf(STINGERS[kind]))));
     const track = bag.take();
-    this.wanted = track.slice(0, track.lastIndexOf("-")) as MusicKey;
+    this.wanted = keyOf(track);
     const request = ++this.request;
+    const audible = !!this.current;
     this.endScreen();
+    if (audible) this.emit("stop", false);
     void this.decode(track).then((buffer) => {
       // Un autre morceau a été demandé pendant le chargement
       if (!buffer || request !== this.request) return;
@@ -255,8 +428,47 @@ export class Music {
       gain.gain.linearRampToValueAtTime(1, t + 0.05);
       src.connect(gain).connect(this.bus);
       src.start(t);
-      this.stingerVoice = { src, gain };
+      const voice: Voice = { src, gain, track, kind };
+      src.onended = () => {
+        if (this.stingerVoice !== voice) return;
+        this.stingerVoice = null;
+        this.emit("stop", false);
+      };
+      this.stingerVoice = voice;
+      this.emit("start", false);
     });
+  }
+
+  /**
+   * Passe au morceau suivant de l'écran (le prochain du sac, ou celui qu'on avait quitté en revenant
+   * en arrière), en fondu : tout de suite s'il est prêt, sinon dès qu'il l'est. Faux sans musique
+   * d'écran (un motif, un écran qui se prépare). Console : `__casse.game.sound.nextMusic()`.
+   */
+  next(): boolean {
+    return this.jump(1);
+  }
+
+  /** Revient au morceau d'avant de l'écran (son historique), de même ; faux s'il n'y en a pas. */
+  previous(): boolean {
+    return this.jump(-1);
+  }
+
+  /** Ce que joue la musique maintenant (voir `MusicNow`). */
+  now(): MusicNow {
+    const cur = this.current;
+    if (!cur) {
+      const voice = this.stingerVoice;
+      return { track: voice?.track ?? null, theme: null, stinger: voice?.kind ?? null, pending: null, previous: null, canSkip: false };
+    }
+    const list = this.playlist(cur.theme);
+    return {
+      track: cur.stream.track,
+      theme: cur.theme,
+      stinger: null,
+      pending: this.pending?.track ?? null,
+      previous: list.peekPrevious() ?? null,
+      canSkip: cur.theme === this.wanted && tracksOf(THEMES[cur.theme]).length > 1,
+    };
   }
 
   /** Le premier morceau de l'écran, préparé, puis lancé (s'il est encore voulu). */
@@ -264,11 +476,12 @@ export class Music {
     const stream = this.upcomingStream(theme);
     const ok = await stream.ready;
     if (request !== this.request) return;
+    const list = this.playlist(theme);
     if (!ok) {
       // Illisible : on passe au suivant du sac (une fois par morceau de l'écran, pas plus)
-      this.upcoming.delete(theme);
-      this.bag(theme).take();
-      this.release(stream);
+      if (this.upcoming.get(theme) === stream) this.upcoming.delete(theme);
+      list.discardNext();
+      this.retire(stream);
       if (attempt < tracksOf(THEMES[theme]).length) void this.begin(theme, request, attempt + 1);
       return;
     }
@@ -278,35 +491,83 @@ export class Music {
     this.endScreen();
     this.fadeStinger();
     this.upcoming.delete(theme);
-    this.bag(theme).take();
+    list.next();
     this.launch(stream, FADE, false);
     this.current = { stream, theme };
     this.prepareFollowing();
+    this.emit("start", false);
   }
 
-  /** Prépare le morceau qui suivra celui en cours (pas lui-même : un écran d'un seul morceau le reprend). */
-  private prepareFollowing(): void {
-    const cur = this.current!;
-    const bag = this.bag(cur.theme);
-    // Le sac propose le morceau en cours (un suivant illisible a été écarté en fin de tour) : on le saute
-    if (bag.peek() === cur.stream.track && tracksOf(THEMES[cur.theme]).length > 1) bag.take();
-    const next = bag.peek();
-    this.following = next === cur.stream.track ? null : this.stream(next);
-  }
-
-  /** Lance un morceau à sa marge de début, avec un fondu d'entrée (en puissance constante si `curve`). */
-  private launch(stream: Stream, fade: number, curve: boolean): void {
-    const t = this.ctx.currentTime;
-    const g = stream.gain.gain;
-    g.cancelScheduledValues(t);
-    if (curve) {
-      setCurve(g, t, fade, (x) => Math.sin((Math.PI / 2) * x));
-    } else {
-      g.setValueAtTime(0, t);
-      g.linearRampToValueAtTime(1, t + fade);
+  /**
+   * Un saut demandé par le joueur : la liste de lecture avance (ou recule) tout de suite ; le
+   * morceau qu'on entend s'efface dès que l'autre est prêt. Un nouveau saut avant cela remplace le
+   * précédent ; un changement d'écran l'abandonne.
+   */
+  private jump(direction: 1 | -1): boolean {
+    const cur = this.current;
+    // Pas de musique d'écran, ou un autre écran se prépare : rien à sauter
+    if (!cur || cur.theme !== this.wanted) return false;
+    const list = this.playlist(cur.theme);
+    if (tracksOf(THEMES[cur.theme]).length < 2) return false;
+    const track = direction > 0 ? list.next() : list.previous();
+    if (track === undefined) {
+      this.emit("none", true);
+      return false;
     }
+    const id = ++this.jumps;
+    const request = this.request;
+    const old = this.pending;
+    this.pending = null;
+    if (track === cur.stream.track) {
+      // Revenu au morceau qu'on entend (le joueur a changé d'avis avant que l'autre soit prêt)
+      if (old) this.retire(old);
+      this.prepareFollowing();
+      this.emit("start", true);
+      return true;
+    }
+    const stream = this.stream(track);
+    this.pending = stream;
+    if (old && old !== stream) this.retire(old);
+    this.prepareFollowing();
+    if (stream.state !== "ready") this.emit("loading", true);
+    void stream.ready.then((ok) => {
+      // Un autre saut, un autre écran entre-temps : ils ont pris la main
+      if (id !== this.jumps || request !== this.request || this.current !== cur) return;
+      this.pending = null;
+      if (!ok) {
+        // Illisible : on reste sur le morceau qu'on entend (la liste y revient)
+        list.seek(cur.stream.track);
+        this.retire(stream);
+        this.prepareFollowing();
+        this.emit("failed", true, track);
+        return;
+      }
+      this.crossfade(cur.theme, cur.stream, stream, SKIP_FADE, true);
+    });
+    return true;
+  }
+
+  /** Prépare le morceau qui suivra (pas celui qu'on entend : un écran d'un seul morceau le reprend). */
+  private prepareFollowing(): void {
+    const cur = this.current;
+    if (!cur) return;
+    const next = this.playlist(cur.theme).peekNext();
+    const old = this.following;
+    this.following = next === cur.stream.track ? null : this.stream(next);
+    if (old && old !== this.following) this.retire(old);
+  }
+
+  /**
+   * Lance un morceau, avec un fondu d'entrée (en puissance constante si `curve`) : à sa marge de
+   * début, ou là où il en est s'il s'efface encore (on y revient aussitôt).
+   */
+  private launch(stream: Stream, fade: number, curve: boolean): void {
+    window.clearTimeout(stream.timer);
+    stream.timer = 0;
+    const v = stream.gain.gain.value;
+    ramp(stream.gain.gain, this.ctx.currentTime, fade, curve ? (x) => v + (1 - v) * Math.sin((Math.PI / 2) * x) : null, v, 1);
     const el = stream.el;
-    el.currentTime = LOOP_PAD;
+    if (el.paused) el.currentTime = LOOP_PAD;
     el.ontimeupdate = () => this.tick(stream);
     el.play().catch((err: unknown) => {
       if ((err as { name?: string }).name !== "NotAllowedError") return;
@@ -321,6 +582,18 @@ export class Music {
     });
   }
 
+  /** Efface un morceau (en puissance constante si `curve`) ; à la fin du fondu, il est libéré ou mis en pause (`retire`). */
+  private fadeOut(stream: Stream, fade: number, curve: boolean): void {
+    stream.el.ontimeupdate = null;
+    const v = stream.gain.gain.value;
+    ramp(stream.gain.gain, this.ctx.currentTime, fade, curve ? (x) => v * Math.cos((Math.PI / 2) * x) : null, v, 0);
+    window.clearTimeout(stream.timer);
+    stream.timer = window.setTimeout(() => {
+      stream.timer = 0;
+      this.retire(stream);
+    }, (fade + 0.3) * 1000);
+  }
+
   /** Heure de lecture du morceau en cours : enchaîner, reprendre à son début, ou attendre. */
   private tick(stream: Stream): void {
     const cur = this.current;
@@ -329,17 +602,19 @@ export class Music {
     const left = el.duration - LOOP_PAD - el.currentTime;
     if (!Number.isFinite(left)) return;
     const next = this.following;
-    // Un autre écran est voulu (il se prépare) : on n'enchaîne plus, on reprend au début en l'attendant
-    const move = cur.theme === this.wanted ? chainMove(left, next ? next.state : null) : chainMove(left, null);
+    // Un autre écran est voulu (il se prépare), ou le joueur a demandé un autre morceau (il se
+    // prépare) : on n'enchaîne plus, on reprend au début en l'attendant
+    const move = cur.theme === this.wanted && !this.pending ? chainMove(left, next ? next.state : null) : chainMove(left, null);
     switch (move) {
       case "chain":
-        this.chain(cur.theme, stream, next!, Math.max(0.5, Math.min(CHAIN_FADE, left - 0.1)));
+        this.playlist(cur.theme).next();
+        this.crossfade(cur.theme, stream, next!, Math.max(0.5, Math.min(CHAIN_FADE, left - 0.1)), false);
         break;
       case "replace":
         // Illisible : on l'écarte (il reviendra au tour suivant du sac) et on en prépare un autre
-        this.bag(cur.theme).take();
+        this.playlist(cur.theme).discardNext();
         this.following = null;
-        this.release(next!);
+        this.retire(next!);
         this.prepareFollowing();
         break;
       case "loop":
@@ -351,49 +626,36 @@ export class Music {
     }
   }
 
-  /** Passe tout de suite au morceau suivant, s'il est prêt (essais, console : `__casse.game.sound.skipMusic()`). */
-  skip(): boolean {
-    const cur = this.current;
-    if (!cur || this.following?.state !== "ready") return false;
-    this.chain(cur.theme, cur.stream, this.following, CHAIN_FADE);
-    return true;
-  }
-
-  /** Fondu enchaîné du morceau en cours au suivant du même écran. */
-  private chain(theme: MusicTheme, from: Stream, to: Stream, fade: number): void {
-    this.bag(theme).take();
-    const t = this.ctx.currentTime;
-    const g = from.gain.gain;
-    const v = g.value;
-    g.cancelScheduledValues(t);
-    setCurve(g, t, fade, (x) => v * Math.cos((Math.PI / 2) * x));
-    from.el.ontimeupdate = null;
-    setTimeout(() => this.release(from), (fade + 0.3) * 1000);
+  /** Fondu enchaîné du morceau qu'on entend à un autre du même écran (`manual` : demandé par le joueur). */
+  private crossfade(theme: MusicTheme, from: Stream, to: Stream, fade: number, manual: boolean): void {
+    this.fadeOut(from, fade, true);
     this.launch(to, fade, true);
     this.current = { stream: to, theme };
     this.prepareFollowing();
+    this.emit("start", manual);
   }
 
   /** L'écran s'achève : son morceau s'efface ; le suivant préparé servira la prochaine fois. */
   private endScreen(): void {
+    const pending = this.pending;
+    this.pending = null;
+    // Un saut en cours est abandonné
+    this.jumps++;
+    if (pending) this.retire(pending);
     const cur = this.current;
     if (!cur) return;
     this.current = null;
     const { stream, theme } = cur;
-    stream.el.ontimeupdate = null;
-    const t = this.ctx.currentTime;
-    const g = stream.gain.gain;
-    g.cancelScheduledValues(t);
-    g.setValueAtTime(g.value, t);
-    g.linearRampToValueAtTime(0, t + FADE);
-    setTimeout(() => this.release(stream), (FADE + 0.3) * 1000);
+    const list = this.playlist(theme);
+    list.stop();
+    this.fadeOut(stream, FADE, false);
     const following = this.following;
     this.following = null;
     if (!following) return;
-    if (!(this.frugal && theme === "garage") && !this.upcoming.has(theme) && following.track === this.bag(theme).peek()) {
+    if (!(this.frugal && theme === "garage") && !this.upcoming.has(theme) && following.track === list.peekNext()) {
       this.upcoming.set(theme, following);
     } else {
-      this.release(following);
+      this.retire(following);
     }
   }
 
@@ -408,18 +670,25 @@ export class Music {
     old.src.stop(t + FADE + 0.05);
   }
 
-  private bag(theme: MusicTheme): ShuffleBag<Track> {
-    let bag = this.bags.get(theme);
-    if (!bag) this.bags.set(theme, (bag = new ShuffleBag(tracksOf(THEMES[theme]))));
-    return bag;
+  private emit(change: MusicChange, manual: boolean, track: Track | null = null): void {
+    this.onChange?.(this.now(), change, manual, track);
   }
 
-  /** Le premier morceau d'un écran, préparé d'avance (le prochain de son sac). */
+  private playlist(theme: MusicTheme): Playlist<Track> {
+    let list = this.playlists.get(theme);
+    if (!list) this.playlists.set(theme, (list = new Playlist(tracksOf(THEMES[theme]))));
+    return list;
+  }
+
+  /** Le premier morceau d'un écran, préparé d'avance (le prochain de sa liste de lecture). */
   private upcomingStream(theme: MusicTheme): Stream {
+    const next = this.playlist(theme).peekNext();
     let stream = this.upcoming.get(theme);
-    if (!stream || stream.released) {
-      stream = this.stream(this.bag(theme).peek());
+    if (!stream || stream.released || stream.track !== next) {
+      const old = stream;
+      stream = this.stream(next);
       this.upcoming.set(theme, stream);
+      if (old && old !== stream) this.retire(old);
     }
     return stream;
   }
@@ -436,7 +705,7 @@ export class Music {
     const gain = this.ctx.createGain();
     gain.gain.value = 0;
     node.connect(gain).connect(this.bus);
-    const stream: Stream = { track, el, node, gain, state: "loading", ready: Promise.resolve(false), bytes: 0, url: null, released: false };
+    const stream: Stream = { track, el, node, gain, state: "loading", ready: Promise.resolve(false), bytes: 0, url: null, released: false, timer: 0 };
     stream.ready = fetch(`${this.base}sounds/${track}.ogg`)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -462,10 +731,31 @@ export class Music {
     return stream;
   }
 
+  /** Ce morceau sert-il encore (le suivant, le premier d'un écran, le saut demandé) ? */
+  private needed(stream: Stream): boolean {
+    return this.following === stream || this.pending === stream || [...this.upcoming.values()].includes(stream);
+  }
+
+  /**
+   * Un morceau dont on n'a plus besoin tout de suite : s'il s'efface encore, la fin de son fondu en
+   * décidera ; s'il sert encore, il est mis en pause (il reprendra à son début) ; sinon, libéré.
+   */
+  private retire(stream: Stream): void {
+    if (stream.released || stream.timer || this.current?.stream === stream) return;
+    if (this.needed(stream)) {
+      stream.el.ontimeupdate = null;
+      stream.el.pause();
+      return;
+    }
+    this.release(stream);
+  }
+
   /** Libère un morceau dont plus personne n'a besoin (ni en cours, ni suivant, ni préparé). */
   private release(stream: Stream): void {
-    if (stream.released || this.current?.stream === stream || this.following === stream || [...this.upcoming.values()].includes(stream)) return;
+    if (stream.released || this.current?.stream === stream || this.needed(stream)) return;
     stream.released = true;
+    window.clearTimeout(stream.timer);
+    stream.timer = 0;
     this.streams.delete(stream.track);
     const el = stream.el;
     el.ontimeupdate = null;
@@ -523,28 +813,43 @@ export class Music {
   }
 
   /** Ce qui joue et ce qui est prêt (essais, console : `__casse.game.sound.musicState()`). */
-  debugState(): { wanted: string | null; current: string | null; at: number; following: string | null; upcoming: Record<string, string>; streams: string[]; compressedMb: number } {
+  debugState(): {
+    wanted: string | null; current: string | null; at: number; following: string | null; pending: string | null;
+    upcoming: Record<string, string>; streams: string[]; history: { behind: Track[]; ahead: Track[] } | null; compressedMb: number;
+  } {
+    const cur = this.current;
     return {
       wanted: this.wanted,
-      current: this.current?.stream.track ?? null,
-      at: this.current?.stream.el.currentTime ?? 0,
+      current: cur?.stream.track ?? null,
+      at: cur?.stream.el.currentTime ?? 0,
       following: this.following ? `${this.following.track} (${this.following.state})` : null,
+      pending: this.pending ? `${this.pending.track} (${this.pending.state})` : null,
       upcoming: Object.fromEntries([...this.upcoming].map(([theme, s]) => [theme, `${s.track} (${s.state})`])),
       streams: [...this.streams.keys()],
+      history: cur ? this.playlist(cur.theme).snapshot() : null,
       compressedMb: Math.round(this.compressedMegabytes() * 10) / 10,
     };
   }
 }
 
-/** Une courbe de gain de `t` à `t + d` (f de 0 à 1), sinon une rampe linéaire vers sa fin. */
-function setCurve(param: AudioParam, t: number, d: number, f: (x: number) => number): void {
-  const n = 64;
-  const curve = new Float32Array(n);
-  for (let i = 0; i < n; i++) curve[i] = f(i / (n - 1));
-  try {
-    param.setValueCurveAtTime(curve, t, d);
-  } catch {
-    param.setValueAtTime(curve[0], t);
-    param.linearRampToValueAtTime(curve[n - 1], t + d);
+/**
+ * Un fondu de gain de `t` à `t + d`, de `from` à `to`, en suivant `f` (de 0 à 1 ; null : une rampe
+ * linéaire). Les automatisations en cours sont annulées d'abord (la valeur a été lue avant : pas de
+ * saut) ; sans courbe possible, une rampe linéaire.
+ */
+function ramp(param: AudioParam, t: number, d: number, f: ((x: number) => number) | null, from: number, to: number): void {
+  param.cancelScheduledValues(t);
+  if (f) {
+    const n = 64;
+    const curve = new Float32Array(n);
+    for (let i = 0; i < n; i++) curve[i] = f(i / (n - 1));
+    try {
+      param.setValueCurveAtTime(curve, t, d);
+      return;
+    } catch {
+      // (une courbe refusée : la rampe ci-dessous)
+    }
   }
+  param.setValueAtTime(from, t);
+  param.linearRampToValueAtTime(to, t + d);
 }

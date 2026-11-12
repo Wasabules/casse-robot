@@ -9,6 +9,7 @@ import type { GroundFire, Prop } from "../sim/entities";
 import type { Simulation } from "../sim/simulation";
 import { burnable, extinguish, extinguishProp, flammability, ignite, igniteProp, removeGroundFire } from "./burning";
 import { DamageBatch, inflict } from "./damage";
+import { dcos, dsin } from "../math/det";
 
 /*
  * Feu. Un bloc en feu perd des points de structure (dégâts `fire`, que les blindages lourds
@@ -94,7 +95,7 @@ function burnProps(sim: Simulation): { batch: DamageBatch; dir: Vec3 }[] {
     batch.cause = "fire";
     batch.add({ kind: "prop", prop }, PROP_FIRE_DPS * TICK, "fire");
     const angle = rand(0, Math.PI * 2);
-    out.push({ batch, dir: vec3(Math.cos(angle), 0, Math.sin(angle)) });
+    out.push({ batch, dir: vec3(dcos(angle), 0, dsin(angle)) });
     const step = Math.floor(prop.charred * CHAR_STEPS);
     prop.charred = Math.min(1, prop.charred + TICK / CHAR_TIME);
     if (Math.floor(prop.charred * CHAR_STEPS) !== step) sim.emit({ type: "propFire", prop });

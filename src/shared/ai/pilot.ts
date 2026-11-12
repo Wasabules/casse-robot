@@ -10,6 +10,7 @@ import { liveThrusters } from "../robot/queries";
 import { groundLevel } from "../arena/layout";
 import type { AiState, Bot } from "../sim/entities";
 import type { Simulation } from "../sim/simulation";
+import { dcos, dsin } from "../math/det";
 
 /** Guidage L1 : distance du point visé sur le circuit (m), et distance minimale prise en compte. */
 const L1_DISTANCE = 30;
@@ -363,13 +364,13 @@ function mouseTarget(f: Instruments, c: MouseFlight): Vec3 {
   if (Math.abs(turn) >= 0.05) {
     // Autour de la verticale, > 0 vers la gauche : l'avant (0, 0, 1) va vers (1, 0, 0)
     const a = turn * KEY_TURN;
-    d = vec3(d.x * Math.cos(a) + d.z * Math.sin(a), 0, -d.x * Math.sin(a) + d.z * Math.cos(a));
+    d = vec3(d.x * dcos(a) + d.z * dsin(a), 0, -d.x * dsin(a) + d.z * dcos(a));
   }
   if (Math.abs(pitch) >= 0.05) {
     // Dans le plan du nez et du haut de l'avion : au-dessus pour cabrer, dessous pour piquer
     const a = pitch * (pitch > 0 ? KEY_PULL : KEY_PUSH);
     const nose = Math.abs(turn) >= 0.05 ? norm(add(f.forward, scale(sub(d, f.forward), 0.5))) : f.forward;
-    d = norm(add(scale(nose, Math.cos(a)), scale(f.up, Math.sin(a))));
+    d = norm(add(scale(nose, dcos(a)), scale(f.up, dsin(a))));
   }
   return d;
 }
@@ -397,7 +398,7 @@ function instructor(bot: Bot, f: Instruments, d: Vec3, dt: number, trimming = tr
   const w = clamp((off - LEVEL_OFF) / BANK_SPAN, 0, 1);
   // Roulis qui met la direction au-dessus (> 0 : à droite) ; ou dessous, pour pousser
   const pull = Math.atan2(x, y);
-  const push = Math.atan2(Math.sin(pull - Math.PI), Math.cos(pull - Math.PI));
+  const push = Math.atan2(dsin(pull - Math.PI), dcos(pull - Math.PI));
   const pushing = off < PUSH_MAX && Math.abs(push) < Math.abs(pull);
   let rollTo = pushing ? push : pull;
   // Une direction à peu près à l'horizontale, de côté ou derrière : il ne s'incline pas plus que ce
@@ -417,7 +418,7 @@ function instructor(bot: Bot, f: Instruments, d: Vec3, dt: number, trimming = tr
     const limit = clamp(sustainableBank(bot, f.airspeed), MIN_HARD_BANK, HARD_BANK) * f.low * sinking;
     if (Math.abs(lean) > limit) {
       const b = (lean >= 0 ? 1 : -1) * limit;
-      const lift = add(scale(upright, Math.cos(b)), scale(aside, Math.sin(b)));
+      const lift = add(scale(upright, dcos(b)), scale(aside, dsin(b)));
       rollTo = Math.atan2(dot(lift, right), dot(lift, up));
     }
   }
@@ -427,7 +428,7 @@ function instructor(bot: Bot, f: Instruments, d: Vec3, dt: number, trimming = tr
   const rollError = w * rollTo - (1 - w) * level * bank;
   // Profondeur : une fois la direction au-dessus (ou dessous), tirer (pousser) de son écart ; presque
   // droit devant, l'écart de la trajectoire en tangage. Le trim annule ce qui reste en vol presque droit
-  const aligned = Math.max(0, Math.cos(rollTo));
+  const aligned = Math.max(0, dcos(rollTo));
   const direct = Math.atan2(y, z);
   // Incidence : la vitesse sous le nez (> 0) ; voir AOA_LIMIT
   const aoa = speed > 3 ? Math.atan2(-dot(f.v, f.up), dot(f.v, f.forward)) : 0;
@@ -502,7 +503,7 @@ function bankToward(f: Instruments, target: Vec3, limit = f.maxBank): number {
   const tx = target.x - f.com.x;
   const tz = target.z - f.com.z;
   const eta = bearing(track.x / fl, track.z / fl, tx, tz); // > 0 : le point est à gauche
-  const lateral = (2 * f.airspeed * f.airspeed * Math.sin(clamp(eta, -Math.PI / 2, Math.PI / 2))) / Math.max(L1_MIN, Math.hypot(tx, tz));
+  const lateral = (2 * f.airspeed * f.airspeed * dsin(clamp(eta, -Math.PI / 2, Math.PI / 2))) / Math.max(L1_MIN, Math.hypot(tx, tz));
   return clamp(-Math.atan(lateral / GRAVITY), -limit, limit);
 }
 
@@ -595,7 +596,7 @@ function flightControls(bot: Bot, f: Instruments, dt: number, bankWanted: number
   const turnRate = (-GRAVITY * Math.tan(bank)) / f.airspeed;
   // En virage, l'aile doit porter 1/cos(inclinaison) fois le poids : le pilote tire sur la
   // profondeur d'autant (sans quoi, incliné à 60°, l'avion s'enfonce et pique)
-  const loadPull = TURN_PULL * (1 / Math.max(0.35, Math.cos(bank)) - 1);
+  const loadPull = TURN_PULL * (1 / Math.max(0.35, dcos(bank)) - 1);
   const stick = [
     2.5 * (bankWanted - bank) - 1.2 * dot(f.w, f.forward),
     2.5 * pitchError - 0.6 * dot(f.w, f.right) + ai.trim + loadPull,
@@ -686,5 +687,5 @@ function circuitPoint(p: Vec3, R: number): Vec3 {
   const r = Math.hypot(p.x, p.z) || 0.001;
   const cos = clamp((r * r + R * R - L1_DISTANCE * L1_DISTANCE) / (2 * r * R), -1, 1);
   const angle = Math.atan2(p.z, p.x) + Math.max(Math.acos(cos), 0.35);
-  return vec3(Math.cos(angle) * R, 0, Math.sin(angle) * R);
+  return vec3(dcos(angle) * R, 0, dsin(angle) * R);
 }

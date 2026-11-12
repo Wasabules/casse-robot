@@ -1,0 +1,57 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Dépôt",
+    "names": {"en":"Depot"},
+    "author": "Casse-Robot",
+    "description": "Quatre piliers, deux rampes, des caisses et des barils explosifs.",
+    "descriptions": {"en":"Four pillars, two ramps, crates and explosive barrels."},
+    "license": "AGPL-3.0-or-later"
+  },
+  "bounds": {"half":36,"roam":29,"spawnLine":29,"spawnSpread":24,"circuit":35,"airFloor":0},
+  "limits": {"bound":0},
+  "sky": {"color":"#c7d1d6","fog":0.009},
+  "ambience": "depot",
+  "zones": [
+    {"label":"A","x":-20,"z":4,"y":0,"radius":5},
+    {"label":"B","x":0,"z":0,"y":0,"radius":6},
+    {"label":"C","x":20,"z":-4,"y":0,"radius":5}
+  ],
+  "boxes": [
+    {"kind":"wall","x":0,"z":-36,"y":0.6,"size":[73,1.2,1]},
+    {"kind":"wall","x":-36,"z":0,"y":0.6,"size":[1,1.2,73]},
+    {"kind":"wall","x":0,"z":36,"y":0.6,"size":[73,1.2,1]},
+    {"kind":"wall","x":36,"z":0,"y":0.6,"size":[1,1.2,73]},
+    {"kind":"ramp","x":0,"z":20.12913506501679,"y":-0.08704327559680702,"size":[6,1.8,9],"pitch":-11.459155902616464},
+    {"kind":"ramp","x":-21.87086493498321,"z":-8,"y":-0.08704327559680702,"size":[9,1.8,6],"roll":11.459155902616464},
+    {"kind":"pillar","x":12,"z":12,"y":1.5,"size":[1.6,3,1.6]},
+    {"kind":"pillar","x":-12,"z":14,"y":1.5,"size":[1.6,3,1.6]},
+    {"kind":"pillar","x":14,"z":-14,"y":1.5,"size":[1.6,3,1.6]},
+    {"kind":"pillar","x":-10,"z":-18,"y":1.5,"size":[1.6,3,1.6]}
+  ],
+  "props": [
+    {"type":"crate","x":-6,"z":6,"y":0},
+    {"type":"crate","x":-6,"z":7.05,"y":0},
+    {"type":"crate","x":-6,"z":6.5,"y":1},
+    {"type":"crate","x":7,"z":-4,"y":0},
+    {"type":"crate","x":8.05,"z":-4,"y":0},
+    {"type":"crate","x":7.5,"z":-4,"y":1},
+    {"type":"crate","x":20,"z":20,"y":0},
+    {"type":"crate","x":21.05,"z":20,"y":0},
+    {"type":"crate","x":-20,"z":22,"y":0},
+    {"type":"barrel","x":9.6,"z":12,"y":0},
+    {"type":"barrel","x":10.4,"z":13.2,"y":0},
+    {"type":"barrel","x":12,"z":9.6,"y":0},
+    {"type":"barrel","x":-9.6,"z":14,"y":0},
+    {"type":"barrel","x":13,"z":-11.8,"y":0},
+    {"type":"barrel","x":-8,"z":-16,"y":0},
+    {"type":"barrel","x":-7.2,"z":-17,"y":0},
+    {"type":"barrel","x":1.5,"z":9,"y":0},
+    {"type":"barrel","x":-14,"z":1.5,"y":0},
+    {"type":"barrel","x":16,"z":3,"y":0},
+    {"type":"gas","x":4,"z":-6,"y":0},
+    {"type":"gas","x":-5,"z":4,"y":0},
+    {"type":"gas","x":6,"z":5,"y":0},
+    {"type":"gas","x":-3,"z":-11,"y":0}
+  ]
+}

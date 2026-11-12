@@ -2,6 +2,7 @@ import { BLOCK_SIZE, PLATE_THICKNESS } from "../config";
 import { shapeFraction, type ShapeId } from "./shapes";
 import type { MeleeId } from "./melee";
 import type { DamageType, WeaponId } from "./weapons";
+import { dpow } from "../math/det";
 
 /**
  * Caractéristiques d'un type de bloc.
@@ -623,6 +624,6 @@ export function blockShape(type: BlockType): ShapeId | null {
 export function blockDensity(type: BlockType): number {
   const def = blockDef(type);
   const shape = blockShape(type);
-  const volume = def.shape === "plate" ? BLOCK_SIZE * BLOCK_SIZE * PLATE_THICKNESS : BLOCK_SIZE ** 3 * (shape ? shapeFraction(shape) : 1);
+  const volume = def.shape === "plate" ? BLOCK_SIZE * BLOCK_SIZE * PLATE_THICKNESS : dpow(BLOCK_SIZE, 3) * (shape ? shapeFraction(shape) : 1);
   return def.mass / volume;
 }

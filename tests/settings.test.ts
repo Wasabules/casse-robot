@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { assignBinding, BINDINGS_VERSION, DEFAULT_BINDINGS } from "../src/client/input/bindings";
-import { DEFAULT_SETTINGS, GRAPHICS_PRESETS, graphicsPreset, parseSettings } from "../src/client/settings";
+import { DEFAULT_SETTINGS, defaultSettings, firstRunPreset, GRAPHICS_PRESETS, graphicsPreset, parseSettings, requestedRenderer } from "../src/client/settings";
 
 describe("Réglages du joueur", () => {
   it("sans réglages enregistrés, ou illisibles : les réglages par défaut", () => {
@@ -111,5 +111,37 @@ describe("Réglages du joueur", () => {
     expect(s.glow).toBe(false);
     expect(s.lights).toBe(false);
     expect(s.heatHaze).toBe(DEFAULT_SETTINGS.heatHaze);
+  });
+
+  it("au premier lancement, les graphismes les plus légers sur un téléphone ou une petite machine, les moyens ailleurs", () => {
+    // Un téléphone : un doigt, un petit écran, quelle que soit sa puissance
+    expect(firstRunPreset({ coarse: true, screen: 390, memory: 8, cores: 8 })).toBe("low");
+    expect(firstRunPreset({ coarse: true, screen: 412 })).toBe("low");
+    // Une tablette : légère si elle est modeste, moyenne sinon (mémoire inconnue : Safari)
+    expect(firstRunPreset({ coarse: true, screen: 820, memory: 4, cores: 8 })).toBe("low");
+    expect(firstRunPreset({ coarse: true, screen: 820, cores: 4 })).toBe("low");
+    expect(firstRunPreset({ coarse: true, screen: 1024, memory: 8, cores: 8 })).toBe("medium");
+    expect(firstRunPreset({ coarse: true, screen: 1024 })).toBe("medium");
+    // Un ordinateur : moyen, sauf une très petite machine
+    expect(firstRunPreset({ coarse: false, screen: 1080, memory: 8, cores: 8 })).toBe("medium");
+    expect(firstRunPreset({ coarse: false, screen: 1080, memory: 4, cores: 4 })).toBe("medium");
+    expect(firstRunPreset({ coarse: false, screen: 768 })).toBe("medium");
+    expect(firstRunPreset({ coarse: false, screen: 768, memory: 2 })).toBe("low");
+    expect(firstRunPreset({ coarse: false, screen: 768, cores: 2 })).toBe("low");
+    // Les réglages par défaut de cette machine : ceux de toujours, aux graphismes choisis
+    const phone = defaultSettings({ coarse: true, screen: 390 });
+    expect(graphicsPreset(phone)).toBe("low");
+    expect({ ...phone, ...GRAPHICS_PRESETS.medium }).toEqual(DEFAULT_SETTINGS);
+    expect(defaultSettings({ coarse: false, screen: 1080, memory: 8, cores: 8 })).toEqual(DEFAULT_SETTINGS);
+  });
+
+  it("le moteur de rendu : WebGL par défaut, WebGPU gardé, une valeur inconnue ignorée ; l'adresse peut l'imposer", () => {
+    expect(parseSettings(null).renderer).toBe("webgl");
+    expect(parseSettings(JSON.stringify({ renderer: "webgpu" })).renderer).toBe("webgpu");
+    expect(parseSettings(JSON.stringify({ renderer: "vulkan" })).renderer).toBe("webgl");
+    expect(requestedRenderer("webgl", "?renderer=webgpu")).toBe("webgpu");
+    expect(requestedRenderer("webgpu", "?sim=page&renderer=webgl")).toBe("webgl");
+    expect(requestedRenderer("webgpu", "?renderer=metal")).toBe("webgpu");
+    expect(requestedRenderer("webgl", "")).toBe("webgl");
   });
 });

@@ -63,6 +63,8 @@ export const maps = {
     paths: "paths",
     points: "points",
     languages: "languages",
+    navPoints: "nav graph points",
+    navLinks: "nav graph links",
   } as const satisfies Record<MapCounted, Message>),
   ...section("heightmap", {
     notPng: "This isn't a PNG image.",

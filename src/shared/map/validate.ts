@@ -8,6 +8,7 @@ import { MAP_LIMITS, type MapFile, type MapIssue, type MapTeam } from "./format"
 import { mapKey } from "./key";
 import { isDynamicProp } from "./prefabs";
 import { readMap, readMapText } from "./read";
+import { dcos, dsin } from "../math/det";
 
 /*
  * Validation d'une carte, la même dans le navigateur et sur le serveur : sa forme et ses bornes
@@ -130,6 +131,7 @@ export function validateArena(map: MapFile, arena: ArenaLayout): MapIssue[] {
   });
   (map.places ?? []).forEach((p, i) => !inside(p.x, p.z) && fail({ code: "outside", path: `places[${i}]` }));
   (map.vents ?? []).forEach((v, i) => !inside(v.x, v.z) && fail({ code: "outside", path: `vents[${i}]` }));
+  (map.navGraph?.points ?? []).forEach(([x, z], i) => !inside(x, z) && fail({ code: "outside", path: `navGraph.points[${i}]` }));
 
   // Les zones : une à cinq, des lettres différentes, dans la zone de jeu, que l'IA atteint
   const labels = new Set(map.zones.map((z) => z.label));
@@ -140,11 +142,11 @@ export function validateArena(map: MapFile, arena: ArenaLayout): MapIssue[] {
   const grid = navGrid(arena);
   for (const zone of arena.zones) {
     const { x, z } = zone.pos;
-    const reachable = grid
-      ? ring(x, z, zone.radius).some(([px, pz]) => isOpen(grid, px, pz))
-      // Sans grille : il suffit qu'elle ne soit pas enfermée dans une boîte du décor
-      : !arena.boxes.some((b) => solid(b) && b.pos.y + b.half.y > zone.pos.y + 0.5 && b.pos.y - b.half.y < zone.pos.y + 1
-        && Math.abs(x - b.pos.x) < footprint(b).x && Math.abs(z - b.pos.z) < footprint(b).z);
+    // Sans grille : il suffit qu'un point de son disque ne soit pas enfermé dans une boîte du décor (la
+    // zone C de la Cité entoure le monument de la place : son centre est dans son socle)
+    const enclosed = (px: number, pz: number): boolean => arena.boxes.some((b) => solid(b) && b.pos.y + b.half.y > zone.pos.y + 0.5
+      && b.pos.y - b.half.y < zone.pos.y + 1 && Math.abs(px - b.pos.x) < footprint(b).x && Math.abs(pz - b.pos.z) < footprint(b).z);
+    const reachable = ring(x, z, zone.radius).some(([px, pz]) => (grid ? isOpen(grid, px, pz) : !enclosed(px, pz)));
     if (!reachable) fail({ code: "zoneUnreachable", zone: zone.label });
   }
 
@@ -193,7 +195,7 @@ function ring(x: number, z: number, r: number): [number, number][] {
   for (const k of [0.5, 1]) {
     for (let i = 0; i < 12; i++) {
       const a = (i / 12) * Math.PI * 2;
-      out.push([x + Math.cos(a) * r * k, z + Math.sin(a) * r * k]);
+      out.push([x + dcos(a) * r * k, z + dsin(a) * r * k]);
     }
   }
   return out;

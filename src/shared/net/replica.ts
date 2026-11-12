@@ -2,7 +2,7 @@ import type { Collider, RigidBody } from "@dimforge/rapier3d-compat";
 import { ARENAS, DEFAULT_ARENA, isArenaId, isMapKey, spotPose, type ArenaLayout, type MapKey } from "../arena/layout";
 import { BLOCK_TYPES } from "../catalog/blocks";
 import { propHalf, propHp } from "../catalog/props";
-import { weaponDef } from "../catalog/weapons";
+import { weaponDef, type WeaponId } from "../catalog/weapons";
 import { wheelDef } from "../catalog/wheels";
 import { cellKey, type WheelMount } from "../design/robotDesign";
 import { clamp } from "../math/scalar";
@@ -10,12 +10,13 @@ import { add, scale, sub, vec3, type Quat, type Vec3 } from "../math/vec";
 import { addThruster, addThrusters, newBlock, newBot, registerOrgans, wheelLocalPos } from "../robot/lifecycle";
 import { applyMechanics } from "../combat/mechanics";
 import { flapRuns } from "../robot/surfaces";
-import type { Barrier, Block, Bot, Debris, GroundFire, Part, Projectile, Prop, SmokeCloud, Team, Wheel, WheelBody } from "../sim/entities";
+import type { ArmState, Barrier, Block, Bot, Debris, GroundFire, Part, Projectile, Prop, SmokeCloud, Team, Wheel, WheelBody } from "../sim/entities";
 import type { SimEvent, SimListener } from "../sim/events";
 import { newZones, type Match, type MatchRules } from "../sim/match";
 import type { World } from "../sim/world";
 import { decodeFrame, INTERP_DELAY, type BotDesc, type FrameHeader, type LockState, type NetEvent } from "./protocol";
 import { readSnapshot, type BodyPose, type Snapshot } from "./snapshot";
+import { dcos, dsin } from "../math/det";
 
 /*
  * Côté client : réplique du monde du serveur. Elle reconstruit les mêmes entités (robots,
@@ -79,7 +80,7 @@ interface Frame {
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 const lerpVec = (a: Vec3, b: Vec3, t: number): Vec3 => add(a, scale(sub(b, a), t));
 /** Écart angulaire le plus court de a à b (rad). */
-const angleDelta = (a: number, b: number): number => Math.atan2(Math.sin(b - a), Math.cos(b - a));
+const angleDelta = (a: number, b: number): number => Math.atan2(dsin(b - a), dcos(b - a));
 
 /** Interpolation sphérique normalisée (nlerp) : suffisante entre deux images rapprochées. */
 function nlerp(a: Quat, b: Quat, t: number): Quat {
@@ -116,6 +117,17 @@ export class Replica implements World {
   private readonly maps = new Map<MapKey, ArenaLayout>();
   /** Blocs détruits depuis l'arrivée du joueur (statistique du HUD). */
   destroyedCount = 0;
+  /**
+   * Retard de l'instant affiché sur la dernière image reçue (s) : INTERP_DELAY du serveur de jeu ;
+   * bien plus court pour une partie solo, dont les images arrivent à chaque image (net/session.ts).
+   */
+  delay = INTERP_DELAY;
+  /** Partie solo : nombre de nouveaux mondes reçus (images `reset` appliquées). */
+  resets = 0;
+  /** Partie solo : l'état des armes de la caméra libre (son HUD), d'après la dernière image. */
+  freeArms: ReadonlyMap<WeaponId, ArmState> | null = null;
+  /** Partie solo, mesure active : temps cumulés de chaque étape des pas reçus, et leur nombre (la mesure du rendu). */
+  readonly simProfile = { times: {} as Record<string, number>, steps: 0 };
 
   private readonly listeners = new Set<SimListener>();
   private readonly botsById = new Map<number, Bot>();
@@ -177,6 +189,12 @@ export class Replica implements World {
   receive(bytes: Uint8Array): void {
     const { header, snapshot } = decodeFrame(bytes);
     const snap = readSnapshot(snapshot);
+    // Partie solo, un nouveau monde : il s'affiche tout de suite (comme une première image), même partie figée
+    if (header.reset) {
+      this.queue.length = 0;
+      this.current = null;
+      this.clock = null;
+    }
     this.queue.push({ time: snap.time, header, snap });
   }
 
@@ -187,7 +205,7 @@ export class Replica implements World {
   advance(dt: number): void {
     const newest = this.queue.at(-1) ?? this.current;
     if (!newest) return;
-    const target = newest.time - INTERP_DELAY;
+    const target = newest.time - this.delay;
     if (this.clock === null || Math.abs(target - this.clock) > RESYNC) this.clock = target;
     else this.clock += dt + (target - this.clock) * CATCH_UP;
     // La première image s'affiche tout de suite, même si elle est plus récente que l'instant visé
@@ -212,6 +230,15 @@ export class Replica implements World {
 
   /** Oublie tout (fin de la session) : les vues reçoivent les retraits de toutes les entités. */
   clear(): void {
+    this.forgetWorld();
+    this.queue.length = 0;
+    this.current = null;
+    this.clock = null;
+    this.match = null;
+  }
+
+  /** Retire toutes les entités (les vues en reçoivent les retraits). */
+  private forgetWorld(): void {
     for (const bot of [...this.bots]) this.removeBot(bot);
     for (const id of [...this.propsById.keys()]) this.onNet({ t: "propGone", id });
     for (const id of [...this.debrisById.keys()]) this.onNet({ t: "debrisGone", id });
@@ -219,10 +246,6 @@ export class Replica implements World {
     for (const id of [...this.smokesById.keys()]) this.onNet({ t: "smokeGone", id });
     for (const id of [...this.barriersById.keys()]) this.onNet({ t: "barrierGone", id, broken: false });
     for (const id of [...this.groundFiresById.keys()]) this.onNet({ t: "groundFireGone", id });
-    this.queue.length = 0;
-    this.current = null;
-    this.clock = null;
-    this.match = null;
   }
 
   private emit(e: SimEvent): void {
@@ -232,11 +255,23 @@ export class Replica implements World {
   // --- Images ---
 
   private apply(frame: Frame): void {
+    // Partie solo : un nouveau monde (une autre partie, une autre vague) remplace l'ancien
+    if (frame.header.reset) {
+      this.forgetWorld();
+      this.resets++;
+    }
     this.current = frame;
     for (const e of frame.header.events) this.onNet(e, frame.snap);
     this.player = frame.header.you !== null ? this.botsById.get(frame.header.you) ?? null : null;
     this.applyStates(frame.snap);
     this.applyLock(frame.header.lock ?? null);
+    // Partie solo : ce que les images du serveur n'ont pas
+    if (frame.header.arms) this.freeArms = new Map(frame.header.arms);
+    const profile = frame.header.profile;
+    if (profile) {
+      for (const [k, t] of Object.entries(profile.times)) this.simProfile.times[k] = (this.simProfile.times[k] ?? 0) + t;
+      this.simProfile.steps += profile.steps;
+    }
   }
 
   /** Verrouillage en cours de l'arme du joueur, que lit son HUD (voir combat/lock.ts). */
@@ -384,7 +419,8 @@ export class Replica implements World {
         const ua = from.supports.get(support.block.id);
         if (!ua) continue;
         const ub = to.supports.get(support.block.id) ?? ua;
-        support.contact = lerp(ua.contact, ub.contact, t);
+        // (un appui en l'air a une distance au sol infinie : entre l'air et le sol, pas de moyenne, NaN)
+        support.contact = Number.isFinite(ua.contact) && Number.isFinite(ub.contact) ? lerp(ua.contact, ub.contact, t) : t < 0.5 ? ua.contact : ub.contact;
         support.force = lerp(ua.force, ub.force, t);
         support.phase = lerp(ua.phase, ub.phase, t);
       }

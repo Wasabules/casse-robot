@@ -273,7 +273,7 @@ export class Garage {
   /** Initiales de la boussole, dans la langue affichée. */
   private compassLabels = compassLabels();
 
-  constructor(engine: B.Engine, canvas: HTMLCanvasElement) {
+  constructor(engine: B.AbstractEngine, canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     const scene = new B.Scene(engine);
     scene.useRightHandedSystem = true;

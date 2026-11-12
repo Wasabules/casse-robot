@@ -15,6 +15,7 @@ import type { Block, Bot, FlailBall, HitTarget, JawGrip, MeleeArm, Part } from "
 import type { Simulation } from "../sim/simulation";
 import { organStunned } from "./emp";
 import { effectiveMass, meleeFrame, type Contact, type MeleeFrame, type PlannedHit } from "./melee";
+import { dcos, dsin } from "../math/det";
 
 /*
  * Frappes à mécanique (catalog/melee.ts) : le flipper, le fléau et la mâchoire broyeuse, trois
@@ -129,7 +130,7 @@ const CRUSH_ENERGY = 350;
 // --- Outils communs ---
 
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
-const angleDelta = (a: number, b: number): number => Math.atan2(Math.sin(b - a), Math.cos(b - a));
+const angleDelta = (a: number, b: number): number => Math.atan2(dsin(b - a), dcos(b - a));
 
 /** Vitesse d'un point d'un corps (monde). */
 function velocityAt(rb: RigidBody, p: Vec3): Vec3 {
@@ -229,12 +230,12 @@ const capsized = (bot: Bot): boolean => bot.righting > 0 || qrot(bot.cockpit.par
 
 /** Point du plateau à l'angle `angle` : `along` (part de sa longueur), `across` (part de sa demi-largeur). */
 function platePoint(f: MeleeFrame, plate: PlateSpec, angle: number, along: number, across: number): Vec3 {
-  const dir = add(scale(f.e1, Math.cos(angle)), scale(f.e2, -Math.sin(angle)));
+  const dir = add(scale(f.e1, dcos(angle)), scale(f.e2, -dsin(angle)));
   return add(f.hub, add(scale(dir, plate.length * along), scale(f.axis, plate.half * across)));
 }
 
 /** Sens où va le plateau à l'angle `angle` (il monte : l'angle croît). */
-const plateMotion = (f: MeleeFrame, angle: number): Vec3 => norm(add(scale(f.e1, -Math.sin(angle)), scale(f.e2, -Math.cos(angle))));
+const plateMotion = (f: MeleeFrame, angle: number): Vec3 => norm(add(scale(f.e1, -dsin(angle)), scale(f.e2, -dcos(angle))));
 
 /**
  * Premier contact du plateau en montant de `from` à `to` : un bloc ou une roue d'un robot ennemi
@@ -399,7 +400,7 @@ export function flipWouldHit(sim: Simulation, bot: Bot, arm: MeleeArm): boolean 
 
 /** Bout de la manivelle d'un fléau à l'angle `angle` (monde). */
 export function crankTip(f: MeleeFrame, flail: FlailSpec, angle: number): Vec3 {
-  return add(f.hub, scale(add(scale(f.e1, Math.cos(angle)), scale(f.e2, Math.sin(angle))), flail.crank));
+  return add(f.hub, scale(add(scale(f.e1, dcos(angle)), scale(f.e2, dsin(angle))), flail.crank));
 }
 
 /** Filtre des rayons de la boule et de sa chaîne : ce qui est fixe (décor, sol, accessoires ancrés). */
@@ -670,7 +671,7 @@ function updateWrap(sim: Simulation, arm: MeleeArm, fl: FlailSpec, tip: Vec3, fi
 // --- Mâchoire ---
 
 /** Direction d'une mâchoire (monde) à la demi-ouverture `angle` : celle du haut (`side` 1) ou du bas (-1). */
-export const jawDir = (f: MeleeFrame, angle: number, side: 1 | -1): Vec3 => add(scale(f.e1, Math.cos(angle)), scale(f.e2, -side * Math.sin(angle)));
+export const jawDir = (f: MeleeFrame, angle: number, side: 1 | -1): Vec3 => add(scale(f.e1, dcos(angle)), scale(f.e2, -side * dsin(angle)));
 
 /**
  * Le bloc ennemi qui est dans la gueule, entre les mâchoires ouvertes de `opening` (rad) : le plus

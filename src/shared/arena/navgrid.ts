@@ -1,6 +1,8 @@
 import { qrot, vec3, type Vec3 } from "../math/vec";
+import { NativeGrid, nativeKeepLargestRegion, nativeReady } from "../native/native";
 import { lavaAt } from "./features";
 import { deepWaterAt, groundLevel, type ArenaLayout, type StaticBox } from "./layout";
+import { dpow } from "../math/det";
 
 /*
  * Grille de passage de l'IA au sol (`ArenaLayout.navGrid`) : l'arène découpée en cases, chacune
@@ -160,7 +162,13 @@ function buildGrid(arena: ArenaLayout): NavGrid {
  * Toute case ouverte est ainsi atteignable depuis toutes les autres, et une destination n'oblige
  * jamais A* à fouiller toute l'arène pour rien.
  */
-function keepLargestRegion(open: Uint8Array, n: number): void {
+export function keepLargestRegion(open: Uint8Array, n: number): void {
+  if (nativeReady()) nativeKeepLargestRegion(open, n);
+  else keepLargestRegionTs(open, n);
+}
+
+/** `keepLargestRegion` en TypeScript : la référence de la simulation compilée (tests/native.test.ts). */
+export function keepLargestRegionTs(open: Uint8Array, n: number): void {
   const region = new Int32Array(n * n).fill(-1);
   const sizes: number[] = [];
   const stack: number[] = [];
@@ -221,6 +229,12 @@ export function passable(arena: ArenaLayout, x: number, z: number): boolean {
 
 /** La case franchissable la plus proche de `cell` (elle-même si elle l'est), à moins de `reach` cases ; -1 sinon. */
 export function nearestOpenCell(grid: NavGrid, cell: number, reach = 40): number {
+  const native = nativeOf(grid);
+  return native ? native.nearestOpenCell(cell, reach) : nearestOpenCellTs(grid, cell, reach);
+}
+
+/** `nearestOpenCell` en TypeScript (la référence). */
+export function nearestOpenCellTs(grid: NavGrid, cell: number, reach = 40): number {
   if (grid.open[cell]) return cell;
   const cx = Math.floor(cell / grid.n);
   const cz = cell % grid.n;
@@ -281,6 +295,24 @@ export function clearLine(grid: NavGrid, a: Vec3, b: Vec3): boolean {
  */
 const GREED = 1.4;
 
+/**
+ * La grille copiée dans la simulation compilée (crates/casse-sim/src/navgrid.rs), quand elle est
+ * chargée : A*, l'approche et la case ouverte la plus proche y tournent, avec les mêmes résultats
+ * (tests/native.test.ts). Une grille ne change plus une fois faite ; sa copie part avec elle.
+ */
+const natives = new WeakMap<NavGrid, NativeGrid>();
+const release = new FinalizationRegistry<NativeGrid>((native) => native.free());
+function nativeOf(grid: NavGrid): NativeGrid | null {
+  if (!nativeReady()) return null;
+  let native = natives.get(grid);
+  if (!native) {
+    native = new NativeGrid(grid.n, grid.open);
+    natives.set(grid, native);
+    release.register(grid, native);
+  }
+  return native;
+}
+
 /** Tableaux de travail de A*, un jeu par grille (remis à zéro à chaque recherche) ; le tas garde ses clés à côté de ses cases. */
 interface Scratch {
   cost: Float64Array;
@@ -312,13 +344,19 @@ const NEIGHBORS: readonly (readonly [number, number, number])[] = [
  * rapprocher sans faire de grand détour. La case de départ peut être fermée.
  */
 export function approachPath(grid: NavGrid, start: number, goal: number, budget: number): number[] {
+  const native = nativeOf(grid);
+  return native ? native.approachPath(start, goal, budget) : approachPathTs(grid, start, goal, budget);
+}
+
+/** `approachPath` en TypeScript (la référence). */
+export function approachPathTs(grid: NavGrid, start: number, goal: number, budget: number): number[] {
   const n = grid.n;
   const { from, closed } = scratchOf(grid);
   from.fill(-1);
   closed.fill(0);
   const gx = Math.floor(goal / n);
   const gz = goal % n;
-  const far = (c: number): number => (Math.floor(c / n) - gx) ** 2 + ((c % n) - gz) ** 2;
+  const far = (c: number): number => dpow(Math.floor(c / n) - gx, 2) + dpow((c % n) - gz, 2);
   const queue = [start];
   closed[start] = 1;
   let best = start;
@@ -349,6 +387,12 @@ export function approachPath(grid: NavGrid, start: number, goal: number, budget:
  * La case de départ peut être fermée (un robot poussé hors du chemin en sort par une voisine).
  */
 export function findPath(grid: NavGrid, start: number, goal: number): number[] | null {
+  const native = nativeOf(grid);
+  return native ? native.findPath(start, goal) : findPathTs(grid, start, goal);
+}
+
+/** `findPath` en TypeScript (la référence). */
+export function findPathTs(grid: NavGrid, start: number, goal: number): number[] | null {
   if (!grid.open[goal]) return null;
   const n = grid.n;
   const { cost, from, closed, heap, keys } = scratchOf(grid);

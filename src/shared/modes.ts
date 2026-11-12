@@ -23,6 +23,9 @@ export interface GameMode {
   readonly listed: boolean;
 }
 
+/** Partie sans fin ni score, où les robots détruits réapparaissent : la bataille de la mesure du rendu (robots imposés). */
+export const ENDLESS_MATCH: MatchRules = { scoreToWin: 0, timeLimit: 0, respawn: 3 };
+
 export const GAME_MODES = {
   battle: {
     pilot: true,

@@ -1,3 +1,4 @@
+import { dcos, dsin } from "./det";
 /** Vecteur 3D, compatible avec les vecteurs de Rapier ({ x, y, z }). */
 export interface Vec3 {
   x: number;
@@ -65,8 +66,8 @@ export function qmul(a: Quat, b: Quat): Quat {
 
 /** Rotation d'angle `angle` autour de l'axe unitaire `axis`. */
 export function axisAngle(axis: Vec3, angle: number): Quat {
-  const s = Math.sin(angle / 2);
-  return { x: axis.x * s, y: axis.y * s, z: axis.z * s, w: Math.cos(angle / 2) };
+  const s = dsin(angle / 2);
+  return { x: axis.x * s, y: axis.y * s, z: axis.z * s, w: dcos(angle / 2) };
 }
 
 /** Applique la rotation inverse de `q` au vecteur `v` (passage du repère monde au repère local). */

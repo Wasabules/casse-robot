@@ -8,6 +8,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { inflateSync } from "node:zlib";
 import WebSocket from "ws";
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -87,7 +88,7 @@ export function findChrome() {
  * continue) ; sinon, la carte graphique de la machine. Sans limite d'images par seconde (la mesure
  * voit ce que la machine peut faire), son coupé, sans geste demandé pour le son.
  */
-export async function launchChrome({ width = 1280, height = 720, software = false } = {}) {
+export async function launchChrome({ width = 1280, height = 720, software = false, extraArgs = [] } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "casse-robot-chrome-"));
   const args = [
     "--headless=new",
@@ -108,7 +109,7 @@ export async function launchChrome({ width = 1280, height = 720, software = fals
   else if (process.platform === "win32") args.push("--use-angle=d3d11");
   // Sur les machines de l'intégration continue (Ubuntu récent), le bac à sable de Chrome n'a pas le droit de s'ouvrir
   if (process.env.CI) args.push("--no-sandbox");
-  args.push("about:blank");
+  args.push(...extraArgs, "about:blank");
   const child = spawn(findChrome(), args, { stdio: "ignore" });
   // Chrome écrit le port qu'il a pris dans DevToolsActivePort
   const portFile = join(dir, "DevToolsActivePort");
@@ -226,9 +227,87 @@ export class Page {
     writeFileSync(file, Buffer.from(r.data, "base64"));
   }
 
+  /**
+   * L'image du canvas du jeu seul (le HUD et les menus cachés le temps de la capture), en pixels RGBA :
+   * relevée par une capture de la page, elle vaut pour WebGL comme pour WebGPU.
+   */
+  async canvasImage() {
+    await this.evaluate(`(() => {
+      const s = document.createElement("style");
+      s.id = "canvas-only";
+      s.textContent = "* { visibility: hidden !important; } #c { visibility: visible !important; }";
+      document.head.append(s);
+    })()`);
+    try {
+      // (deux images dessinées sans le HUD avant la capture)
+      await this.evaluate(`new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))`);
+      const box = await this.evaluate(`(() => { const r = document.getElementById("c").getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`);
+      const r = await this.send("Page.captureScreenshot", { format: "png", clip: { ...box, scale: 1 } });
+      return decodePng(Buffer.from(r.data, "base64"));
+    } finally {
+      await this.evaluate(`document.getElementById("canvas-only")?.remove()`);
+    }
+  }
+
   close() {
     this.ws.close();
   }
+}
+
+/**
+ * Une image PNG (8 bits par canal, gris, RVB, gris et alpha ou RVBA, sans entrelacement : ce que
+ * rend Chrome) en pixels RGBA.
+ */
+export function decodePng(buf) {
+  if (buf.readUInt32BE(0) !== 0x89504e47) throw new Error("pas une image PNG");
+  let at = 8, width = 0, height = 0, type = 0;
+  const parts = [];
+  while (at < buf.length) {
+    const length = buf.readUInt32BE(at);
+    const kind = buf.toString("ascii", at + 4, at + 8);
+    const data = buf.subarray(at + 8, at + 8 + length);
+    if (kind === "IHDR") {
+      width = data.readUInt32BE(0);
+      height = data.readUInt32BE(4);
+      type = data[9];
+      if (data[8] !== 8 || data[12] !== 0) throw new Error("PNG : seulement 8 bits par canal, sans entrelacement");
+    } else if (kind === "IDAT") parts.push(data);
+    else if (kind === "IEND") break;
+    at += 12 + length;
+  }
+  const channels = { 0: 1, 2: 3, 4: 2, 6: 4 }[type];
+  if (!channels) throw new Error(`PNG : type de couleur ${type} non lu`);
+  const raw = inflateSync(Buffer.concat(parts));
+  const stride = width * channels;
+  const rows = Buffer.alloc(stride * height);
+  for (let y = 0; y < height; y++) {
+    const filter = raw[y * (stride + 1)];
+    const line = raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1));
+    for (let i = 0; i < stride; i++) {
+      const a = i >= channels ? rows[y * stride + i - channels] : 0;
+      const b = y > 0 ? rows[(y - 1) * stride + i] : 0;
+      const c = i >= channels && y > 0 ? rows[(y - 1) * stride + i - channels] : 0;
+      let v = line[i];
+      if (filter === 1) v += a;
+      else if (filter === 2) v += b;
+      else if (filter === 3) v += (a + b) >> 1;
+      else if (filter === 4) {
+        const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
+        v += pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+      }
+      rows[y * stride + i] = v & 255;
+    }
+  }
+  const rgba = new Uint8Array(width * height * 4);
+  for (let k = 0; k < width * height; k++) {
+    const src = k * channels;
+    const grey = channels < 3;
+    rgba[k * 4] = rows[src];
+    rgba[k * 4 + 1] = grey ? rows[src] : rows[src + 1];
+    rgba[k * 4 + 2] = grey ? rows[src] : rows[src + 2];
+    rgba[k * 4 + 3] = channels === 4 ? rows[src + 3] : channels === 2 ? rows[src + 1] : 255;
+  }
+  return { width, height, data: rgba };
 }
 
 /**

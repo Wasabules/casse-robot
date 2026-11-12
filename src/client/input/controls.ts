@@ -111,9 +111,25 @@ export class Controls {
   /** Direction des menus tenue à la manette, et prochaine répétition (s). */
   private nav: { dir: MenuCommand | null; next: number } = { dir: null, next: 0 };
 
+  /**
+   * Où est le canvas dans la fenêtre et sa taille (px), relevés quand il change de taille plutôt
+   * qu'à chaque lecture : lire la mise en page entre deux écritures du HUD la fait recalculer.
+   */
+  readonly box = { left: 0, top: 0, width: 0, height: 0 };
+
   constructor(canvas: HTMLCanvasElement, game: ArenaGame) {
     this.game = game;
     this.canvas = canvas;
+    const measure = (): void => {
+      const r = canvas.getBoundingClientRect();
+      this.box.left = r.left;
+      this.box.top = r.top;
+      this.box.width = r.width;
+      this.box.height = r.height;
+    };
+    measure();
+    if (typeof ResizeObserver !== "undefined") new ResizeObserver(measure).observe(canvas);
+    window.addEventListener("resize", measure);
     window.addEventListener("keydown", (e) => this.onKeyDown(e));
     window.addEventListener("keyup", (e) => {
       this.held.delete(e.code);
@@ -286,7 +302,7 @@ export class Controls {
   aimPoint(): { x: number; y: number } {
     if (!this.touch.visible && !this.locked && !this.pad.active) return this.pointer;
     const centered = this.scoping || this.centerAim || !this.game.piloting;
-    return { x: this.canvas.clientWidth / 2, y: this.canvas.clientHeight * (centered ? 0.5 : RETICLE_HEIGHT) };
+    return { x: this.box.width / 2, y: this.box.height * (centered ? 0.5 : RETICLE_HEIGHT) };
   }
 
   /** Visée au centre exact de l'écran, même sans viseur (ogive pilotée : la caméra est à son nez). */
@@ -406,6 +422,9 @@ export class Controls {
       case "scoreboard": g.pressTab(); break;
       case "map": g.toggleMap(); break;
       case "selfDestruct": g.selfDestruct(); break;
+      // (le lecteur de musique l'annonce : hud/nowPlaying.ts)
+      case "musicNext": g.sound.nextMusic(); break;
+      case "musicPrevious": g.sound.previousMusic(); break;
       case "flightMode": g.toggleFlight(); break;
       case "cutEngine": g.cutEngine(); break;
       case "followNext": g.followNext(); break;

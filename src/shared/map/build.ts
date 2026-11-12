@@ -6,9 +6,9 @@ import {
 import { terrainHeight, type Terrain } from "../arena/terrain";
 import { PropList } from "../arena/valley";
 import { CAR_HALF, propDef, propHalf } from "../catalog/props";
-import { axisAngle, NO_ROTATION, qmul, vec3, type Quat } from "../math/vec";
+import { axisAngle, NO_ROTATION, qmul, vec3, type Quat, type Vec3 } from "../math/vec";
 import { decodeTerrain } from "./codec";
-import { MAP_LIMITS, type MapFile, type MapGround, type MapSpawn, type MapTurn } from "./format";
+import { MAP_LIMITS, type MapFile, type MapGround, type MapQuat, type MapSpawn, type MapTurn } from "./format";
 import { mapKey } from "./key";
 import { expandPrefab, lowestUnder, spawnGuard, type Site } from "./prefabs";
 
@@ -36,13 +36,38 @@ const WALL_HEIGHT = 1.2;
 /** Un accessoire mobile est posé un peu au-dessus du sol : il s'y pose de lui-même. */
 const DROP = 0.03;
 
-/** Rotation d'après un lacet, un tangage et un roulis (degrés), dans cet ordre. */
+/**
+ * Rotation d'après un lacet, un tangage et un roulis (degrés), dans cet ordre ; avec un quaternion
+ * (`quat`), celui-ci tourné ensuite d'autant. Sans angle non nul : le quaternion, ou `NO_ROTATION`
+ * (l'objet même : un accessoire qui le reçoit n'a pas d'orientation).
+ */
 export function turnQuat(t: MapTurn): Readonly<Quat> {
-  if (!t.yaw && !t.pitch && !t.roll) return NO_ROTATION;
-  let q: Quat = axisAngle(vec3(0, 1, 0), (t.yaw ?? 0) * DEG);
-  if (t.pitch) q = qmul(q, axisAngle(vec3(1, 0, 0), t.pitch * DEG));
-  if (t.roll) q = qmul(q, axisAngle(vec3(0, 0, 1), t.roll * DEG));
-  return q;
+  const base = t.quat ? quatOf(t.quat) : null;
+  if (!t.yaw && !t.pitch && !t.roll) return base ?? NO_ROTATION;
+  // Chaque angle donné (même nul), composé avec les précédents ; un seul : tel que `axisAngle` le
+  // donne. La même rotation, quel que soit l'écrit ; au bit près (au signe de ses zéros près), celle
+  // que le code des arènes compose de même (un pignon : `yaw(0)·pitch` ; une rampe : `pitch` seul)
+  let q: Quat | null = null;
+  for (const [axis, deg] of [[UP, t.yaw], [ACROSS, t.pitch], [ALONG, t.roll]] as const) {
+    if (deg === undefined) continue;
+    const r = axisAngle(axis, deg * DEG);
+    q = q ? qmul(q, r) : r;
+  }
+  if (!q) return base ?? NO_ROTATION;
+  return base ? qmul(q, base) : q;
+}
+
+/** Les axes du lacet, du tangage et du roulis. */
+const UP: Vec3 = vec3(0, 1, 0);
+const ACROSS: Vec3 = vec3(1, 0, 0);
+const ALONG: Vec3 = vec3(0, 0, 1);
+
+/** Un quaternion de carte, tel quel s'il est unitaire (au bit près : celui de l'export), sinon normalisé. */
+function quatOf([x, y, z, w]: MapQuat): Quat {
+  const n2 = x * x + y * y + z * z + w * w;
+  if (Math.abs(n2 - 1) < 1e-12) return { x, y, z, w };
+  const n = Math.sqrt(n2);
+  return { x: x / n, y: y / n, z: z / n, w: w / n };
 }
 
 /** La palette du sol : celle d'une arène du jeu (la Vallée par défaut), et ce que la carte en change. */
@@ -141,12 +166,14 @@ export function arenaFromMap(map: MapFile, key: MapKey = mapKey(map), origins?: 
     const rot = turnQuat(p);
     P.add({
       type: p.type,
-      pos: vec3(p.x, base + h.y, p.z),
+      // (`centered` : `y` est la hauteur de son centre)
+      pos: vec3(p.x, p.centered && p.y !== undefined ? p.y : base + h.y, p.z),
       ...(rot !== NO_ROTATION ? { rot } : {}),
       ...(slab ? { half: h } : {}),
       ...(p.scale !== undefined && !slab ? { scale: p.scale } : {}),
       ...(p.rests?.length ? { rests: [...p.rests] } : {}),
       ...(p.group !== undefined ? { building: groups.get(p.group) } : {}),
+      ...(p.diamond ? { diamond: true } : {}),
     });
   }
   const site: Site = {
@@ -195,9 +222,15 @@ export function arenaFromMap(map: MapFile, key: MapKey = mapKey(map), origins?: 
   const zones: CaptureZone[] = [...map.zones]
     .sort((a, b) => a.label.localeCompare(b.label))
     .map((z) => ({ label: z.label, pos: vec3(z.x, z.y ?? ground(z.x, z.z), z.z), radius: z.radius }));
-  const places: ArenaPlace[] = (map.places ?? []).map((p) => (p.names ? { name: p.name, names: p.names, x: p.x, z: p.z } : { name: p.name, x: p.x, z: p.z }));
+  const places: ArenaPlace[] = (map.places ?? []).map((p) => {
+    if (p.place) return { place: p.place, x: p.x, z: p.z };
+    const name = p.name ?? "";
+    return p.names ? { name, names: p.names, x: p.x, z: p.z } : { name, x: p.x, z: p.z };
+  });
   const water = map.water;
-  const wantsNav = map.nav !== false && (map.nav !== undefined || !!terrain || !!map.lava?.length || water?.deep !== undefined);
+  // La grille de passage, par défaut là où le relief, l'eau profonde ou la lave coupent les routes ; pas
+  // avec un réseau de passage (l'un ou l'autre), sauf si la carte la demande
+  const wantsNav = map.nav !== false && (map.nav !== undefined || (!map.navGraph && (!!terrain || !!map.lava?.length || water?.deep !== undefined)));
   const nav = map.nav || {};
 
   const arena: ArenaLayout = {
@@ -218,6 +251,7 @@ export function arenaFromMap(map: MapFile, key: MapKey = mapKey(map), origins?: 
     places: places.length ? places : undefined,
     lava: map.lava as readonly LavaShape[] | undefined,
     navGrid: wantsNav ? { cell: nav.cell ?? DEFAULT_NAV_CELL, maxSlope: (nav.maxSlope ?? DEFAULT_MAX_SLOPE) * DEG } : undefined,
+    nav: map.navGraph ? { points: map.navGraph.points, links: map.navGraph.links } : undefined,
     ground: groundStyle(map.ground),
     vents: map.vents?.map((v) => ({ x: v.x, y: v.y ?? ground(v.x, v.z), z: v.z, size: v.size, steam: v.steam })),
     falls: map.falls?.map((f) => ({ x: f.x, z: f.z, top: f.top, bottom: f.bottom, width: f.width, dir: f.dir * DEG })),

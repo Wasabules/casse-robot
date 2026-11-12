@@ -1,0 +1,13 @@
+# La simulation compilée (temps 4 du plan moteur, docs/architecture.md) : un crate Rust, compilé en
+# WebAssembly pour la page, le Worker et le serveur Node (npm run native).
+[workspace]
+members = ["crates/casse-sim"]
+resolver = "3"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+debug = false
+strip = true

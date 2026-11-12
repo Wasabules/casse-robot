@@ -1,0 +1,55 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Tranchées",
+    "names": {"en":"Trenches"},
+    "author": "Casse-Robot",
+    "description": "Trois couloirs séparés par des murets, avec des passages entre eux.",
+    "descriptions": {"en":"Three corridors separated by low walls, with gaps between them."},
+    "license": "AGPL-3.0-or-later"
+  },
+  "bounds": {"half":36,"roam":29,"spawnLine":29,"spawnSpread":24,"circuit":35,"airFloor":0},
+  "limits": {"bound":0},
+  "sky": {"color":"#c7d1d6","fog":0.009},
+  "ambience": "trenches",
+  "zones": [
+    {"label":"A","x":-22,"z":0,"y":0,"radius":5},
+    {"label":"B","x":0,"z":0,"y":0,"radius":5},
+    {"label":"C","x":22,"z":0,"y":0,"radius":5}
+  ],
+  "boxes": [
+    {"kind":"wall","x":0,"z":-36,"y":0.6,"size":[73,1.2,1]},
+    {"kind":"wall","x":-36,"z":0,"y":0.6,"size":[1,1.2,73]},
+    {"kind":"wall","x":0,"z":36,"y":0.6,"size":[73,1.2,1]},
+    {"kind":"wall","x":36,"z":0,"y":0.6,"size":[1,1.2,73]},
+    {"kind":"barrier","x":-10,"z":-14,"y":1.1,"size":[0.8,2.2,6]},
+    {"kind":"barrier","x":-10,"z":0,"y":1.1,"size":[0.8,2.2,6]},
+    {"kind":"barrier","x":-10,"z":14,"y":1.1,"size":[0.8,2.2,6]},
+    {"kind":"barrier","x":10,"z":-14,"y":1.1,"size":[0.8,2.2,6]},
+    {"kind":"barrier","x":10,"z":0,"y":1.1,"size":[0.8,2.2,6]},
+    {"kind":"barrier","x":10,"z":14,"y":1.1,"size":[0.8,2.2,6]},
+    {"kind":"barrier","x":-6.5,"z":0,"y":0.6,"size":[0.8,1.2,5]},
+    {"kind":"barrier","x":6.5,"z":0,"y":0.6,"size":[0.8,1.2,5]},
+    {"kind":"pillar","x":-22,"z":12,"y":1.5,"size":[1.6,3,1.6]},
+    {"kind":"pillar","x":22,"z":12,"y":1.5,"size":[1.6,3,1.6]},
+    {"kind":"pillar","x":-22,"z":-12,"y":1.5,"size":[1.6,3,1.6]},
+    {"kind":"pillar","x":22,"z":-12,"y":1.5,"size":[1.6,3,1.6]}
+  ],
+  "props": [
+    {"type":"crate","x":-9,"z":0,"y":0},
+    {"type":"crate","x":9,"z":0,"y":0},
+    {"type":"crate","x":-9,"z":0,"y":1},
+    {"type":"crate","x":-24,"z":18,"y":0},
+    {"type":"crate","x":24,"z":-18,"y":0},
+    {"type":"barrel","x":-11.3,"z":-14,"y":0},
+    {"type":"barrel","x":11.3,"z":-14,"y":0},
+    {"type":"barrel","x":-11.3,"z":14,"y":0},
+    {"type":"barrel","x":11.3,"z":14,"y":0},
+    {"type":"barrel","x":-20.4,"z":12.6,"y":0},
+    {"type":"barrel","x":20.4,"z":-12.6,"y":0},
+    {"type":"barrel","x":-5.6,"z":3.2,"y":0},
+    {"type":"barrel","x":5.6,"z":-3.2,"y":0},
+    {"type":"gas","x":-4,"z":14,"y":0},
+    {"type":"gas","x":4,"z":-14,"y":0}
+  ]
+}

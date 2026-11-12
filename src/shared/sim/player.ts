@@ -20,6 +20,7 @@ import { FLIPPED_UP_Y } from "../robot/righting";
 import { steeringGeometry } from "../robot/steering";
 import type { Bot } from "./entities";
 import type { Simulation } from "./simulation";
+import { dcos, dsin } from "../math/det";
 
 /*
  * Robot piloté par le joueur. Ses commandes (`PlayerInput`) sont lues à chaque pas ; ce sont elles,
@@ -177,7 +178,7 @@ export function thinkPlayer(sim: Simulation, bot: Bot, input: PlayerInput, dt: n
         const next = clamp(bot.ai.alt + input.climb * CLIMB_RATE * dt, height - CLIMB_LEAD, height + CLIMB_LEAD);
         bot.ai.alt = clamp(next, MIN_ALT, MAX_ALT);
       }
-      const forward = vec3(Math.sin(input.heading), 0, Math.cos(input.heading));
+      const forward = vec3(dsin(input.heading), 0, dcos(input.heading));
       const left = vec3(forward.z, 0, -forward.x);
       // Le frein l'arrête sur place (il ne vole plus vers où on le pousse)
       const go = 1 - brake;
@@ -188,7 +189,7 @@ export function thinkPlayer(sim: Simulation, bot: Bot, input: PlayerInput, dt: n
       let assist = Math.abs(yaw);
       if (input.relative && assist < 0.05) {
         const nose = qrot(rb.rotation(), vec3(0, 0, 1));
-        const gap = Math.atan2(Math.sin(input.heading - Math.atan2(nose.x, nose.z)), Math.cos(input.heading - Math.atan2(nose.x, nose.z)));
+        const gap = Math.atan2(dsin(input.heading - Math.atan2(nose.x, nose.z)), dcos(input.heading - Math.atan2(nose.x, nose.z)));
         yaw = clamp((gap * FACE_GAIN) / HOVER_YAW_RATE, -1, 1);
         assist = clamp(Math.abs(gap) / FACE_ASSIST, 0, 1);
       }
@@ -239,13 +240,13 @@ function operatePlayerMelee(sim: Simulation, bot: Bot, input: PlayerInput): void
  * il recule en orientant son arrière vers elle (un robot à roues directrices contre-braque).
  */
 function cameraDrive(bot: Bot, input: PlayerInput): [number, number] {
-  const forward = vec3(Math.sin(input.heading), 0, Math.cos(input.heading));
+  const forward = vec3(dsin(input.heading), 0, dcos(input.heading));
   const left = vec3(forward.z, 0, -forward.x);
   const want = add(scale(forward, input.throttle), scale(left, input.steer));
   const magnitude = Math.min(1, Math.hypot(want.x, want.z));
   if (magnitude < 0.1) return [0, 0];
   const nose = qrot(bot.cockpit.part.rb.rotation(), vec3(0, 0, 1));
-  const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
+  const wrap = (a: number): number => Math.atan2(dsin(a), dcos(a));
   // > 0 : la direction voulue est à gauche du robot
   const angle = wrap(Math.atan2(want.x, want.z) - Math.atan2(nose.x, nose.z));
   if (Math.abs(angle) > REVERSE_ANGLE) {
