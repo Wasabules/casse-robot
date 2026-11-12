@@ -1,0 +1,35 @@
+{
+  "$schema": "../schemas/melee.schema.json",
+  "$comment": "Fléau : une boule d'acier hérissée au bout d'une chaîne, au-dessus de son bloc (un petit mât) ; la manivelle la fait tourner autour de lui à plat, et la boule frappe d'autant plus fort qu'elle va vite. Libre au bout de sa chaîne, elle suit mal les virages, rebondit, s'enroule autour d'un poteau, et tire sur son robot à chaque tour. `hit.minSpeed` : la vitesse (m/s) de la boule par rapport à ce qu'elle frappe, sous laquelle elle ne fait que toucher.",
+  "look": "flail",
+  "motion": "flail",
+  "axis": "up",
+  "hub": [0, 0.9, 0],
+  "flail": {
+    "crank": 0.4,
+    "inertia": 0.25,
+    "speed": 7,
+    "spinUp": 3.5,
+    "chain": 1.4,
+    "links": 11,
+    "mass": 7,
+    "radius": 0.16,
+    "restitution": 0.25,
+    "friction": 0.25,
+    "drag": 0.08
+  },
+  "hit": {
+    "damageType": "impact",
+    "damage": 250,
+    "bite": 1,
+    "fling": 1,
+    "push": { "tangent": 1, "radial": 0, "axial": 0, "lift": 0 },
+    "recoil": 0,
+    "spread": 0.3,
+    "wheels": 1.1,
+    "wear": 2,
+    "gap": 0.12,
+    "minSpeed": 3
+  },
+  "engage": 2.6
+}

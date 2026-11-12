@@ -1,0 +1,21 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Lance-nanites : de lui-même, il verrouille l'allié le plus abîmé à portée et lui envoie des nanites qui le poursuivent et le réparent (blocs détruits compris), sans qu'on vise.",
+  "cost": 32,
+  "mass": 3,
+  "hp": 80,
+  "tinted": false,
+  "bond": 150,
+  "turret": {
+    "weapon": "nanites",
+    "yawRate": 3,
+    "pitchRate": 2.5,
+    "minPitch": -0.3,
+    "maxPitch": 1.3,
+    "height": 0.3,
+    "barrel": 0.35,
+    "head": [0.34, 0.26, 0.32],
+    "caliber": 0.25
+  },
+  "price": 450
+}

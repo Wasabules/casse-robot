@@ -1,0 +1,11 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Feu anticollision : rouge, il tourne (un éclat par tour), sur le dos ou sous le ventre d'un avion. Sans effet dans la simulation : la nuit, il éclaire la scène.",
+  "cost": 2,
+  "mass": 0.3,
+  "hp": 25,
+  "tinted": false,
+  "bond": 40,
+  "light": { "kind": "point", "range": 10, "color": "red", "pattern": "beacon" },
+  "price": 50
+}

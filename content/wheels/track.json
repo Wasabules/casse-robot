@@ -1,0 +1,17 @@
+{
+  "$schema": "../schemas/wheels.schema.json",
+  "$comment": "Galet de chenille : petit, très adhérent, lent et fort ; un galet toutes les une ou deux cases, le long du flanc. On en pose aussi au-dessus ou au-dessous d'un autre (une chenille plus haute), ou sur un autre vers l'extérieur (une chenille plus large, qui porte et agrippe plus : chaque galet a son moteur et son appui).",
+  "cost": 8,
+  "radius": 0.24,
+  "width": 0.4,
+  "mass": 3,
+  "hp": 120,
+  "grip": 1.3,
+  "stallTorque": 300,
+  "freeSpeed": 16,
+  "ratedLoad": 60,
+  "suspension": { "travelUp": 0.08, "travelDown": 0.06, "frequency": 2.8, "dampingRatio": 0.7 },
+  "track": true,
+  "drop": 0.12,
+  "price": 200
+}

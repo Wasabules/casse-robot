@@ -1,8 +1,7 @@
 import { box, incline } from "../arena/builders";
-import { building } from "../arena/city";
 import { lavaAt, type LavaShape } from "../arena/features";
 import type { ArenaBounds, PropSpot, StaticBox } from "../arena/layout";
-import { house, PropList, seeded } from "../arena/valley";
+import { building, house, PropList, seeded } from "../arena/buildings";
 import { propDef, propHalf, type PropType } from "../catalog/props";
 import { axisAngle, NO_ROTATION, qmul, qrot, vec3, type Quat, type Vec3 } from "../math/vec";
 import { MAP_LIMITS, type MapPath, type MapPrefab, type MapZone, type TreeType } from "./format";

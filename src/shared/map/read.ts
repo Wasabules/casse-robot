@@ -1,8 +1,9 @@
-import { ARENA_IDS, PLACE_IDS, type ArenaId, type BoxLook, type PathSurface, type PlaceId, type StaticKind } from "../arena/layout";
+import { ARENA_IDS, PLACE_IDS, type ArenaId, type BoxLook, type MapAsset, type MapAssets, type PathSurface, type PlaceId, type StaticKind } from "../arena/layout";
 import { PROP_TYPES, type PropType } from "../catalog/props";
+import { SHA256 } from "../media/sha256";
 import { terrainCodes } from "./codec";
 import {
-  MAP_FORMAT, MAP_LIMITS, type MapBox, type MapCounted, type MapFall, type MapFile, type MapGround, type MapIssue, type MapLava,
+  MAP_FORMAT, MAP_LIMITS, PACKAGE_LIMITS, type MapBox, type MapCounted, type MapFall, type MapFile, type MapGround, type MapIssue, type MapLava,
   type MapMeta, type MapNavGraph, type MapPath, type MapPlace, type MapPoint, type MapPrefab, type MapProp, type MapQuat, type MapSize, type MapSpawn, type MapSpawns,
   type MapTerrain, type MapTurn, type MapVent, type MapZone, type RoofMaterial, type TreeType, type WallMaterial,
 } from "./format";
@@ -64,8 +65,8 @@ export const ZONE_LABELS = ["A", "B", "C", "D", "E"] as const;
 
 const COLOR = /^#[0-9a-fA-F]{6}$/;
 const LANGUAGE = /^[a-z]{2}$/;
-/** Les formes que vérifie la lecture : une couleur (« #rrggbb »), un code de langue (ISO 639-1). */
-export const MAP_PATTERNS = { color: COLOR, language: LANGUAGE } as const;
+/** Les formes que vérifie la lecture : une couleur (« #rrggbb »), un code de langue (ISO 639-1), une empreinte SHA-256 (64 chiffres hexadécimaux). */
+export const MAP_PATTERNS = { color: COLOR, language: LANGUAGE, sha256: SHA256 } as const;
 
 /** Un nombre permis : de `min` à `max` (bornes comprises), entier si `int`. */
 export interface NumberRange {
@@ -132,6 +133,8 @@ export const MAP_RANGES = (() => {
     spawn: { width: span(L.minSpawnWidth, L.maxSpawnWidth) },
     /** Une composante d'un quaternion. */
     quat: span(-1, 1),
+    /** La taille (octets) d'une ressource d'un paquet : un modèle, l'ambiance (voir `PACKAGE_LIMITS`). */
+    asset: { model: whole(1, PACKAGE_LIMITS.model), ambience: whole(1, PACKAGE_LIMITS.ambience) },
   } as const;
 })();
 
@@ -609,6 +612,49 @@ function readSpawns(r: Reader, v: unknown): MapSpawns | undefined {
   return { blue: readSpawn(r, o.blue, "blue"), red: readSpawn(r, o.red, "red") };
 }
 
+/** Une ressource : son empreinte SHA-256 et sa taille, dans ces bornes. */
+function readAsset(r: Reader, v: unknown, path: string, range: NumberRange): MapAsset {
+  const o = r.obj(v, path) ?? {};
+  let sha256 = "";
+  if (typeof o.sha256 === "string" && SHA256.test(o.sha256)) sha256 = o.sha256;
+  else r.bad(`${path}.sha256`);
+  return { sha256, bytes: r.within(o.bytes, `${path}.bytes`, range) };
+}
+
+/**
+ * Les ressources d'un paquet (`MapFile.assets`) : un modèle par type d'accessoire connu (au plus un
+ * par type, rangés par type : la forme canonique en dépend), l'ambiance. Vide : absent (une carte sans
+ * ressources garde l'identifiant qu'elle avait avant les paquets).
+ */
+function readAssets(r: Reader, v: unknown): MapAssets | undefined {
+  if (v === undefined) return undefined;
+  const o = r.obj(v, "assets") ?? {};
+  let models: Partial<Record<PropType, MapAsset>> | undefined;
+  if (o.models !== undefined) {
+    const m = r.obj(o.models, "assets.models") ?? {};
+    const keys = Object.keys(m);
+    if (keys.length > Object.keys(PROP_TYPES).length) {
+      r.bad("assets.models");
+    } else {
+      const out: Partial<Record<PropType, MapAsset>> = {};
+      let total = 0;
+      for (const k of keys.sort()) {
+        if (!Object.hasOwn(PROP_TYPES, k)) {
+          r.bad(`assets.models.${k.slice(0, 32)}`);
+          continue;
+        }
+        const asset = readAsset(r, m[k], `assets.models.${k}`, MAP_RANGES.asset.model);
+        total += asset.bytes;
+        out[k as PropType] = asset;
+      }
+      if (total > PACKAGE_LIMITS.models) r.bad("assets.models");
+      if (Object.keys(out).length) models = out;
+    }
+  }
+  const ambience = o.ambience === undefined ? undefined : readAsset(r, o.ambience, "assets.ambience", MAP_RANGES.asset.ambience);
+  return models || ambience ? defined({ models, ambience }) : undefined;
+}
+
 /**
  * Amène une carte brute à la version du format de ce code : d'abord la version qu'elle déclare,
  * puis chaque migration (`migrations[n]` : de n à n + 1). Une carte faite pour une version plus
@@ -709,6 +755,7 @@ function readCurrent(o: Raw): ReadResult {
     zones: r.list(o.zones, "zones", L.zones, "zones").map((v, i) => readZone(r, v, i)),
     places: optList(o.places, r.list(o.places, "places", L.places, "places").map((v, i) => readPlace(r, v, i))),
     spawns: readSpawns(r, o.spawns),
+    assets: readAssets(r, o.assets),
   });
   if (o.zones === undefined) r.bad("zones");
   // Ce que sèment tous les bois et les tas de rochers ensemble ; les points de tous les chemins, de toutes les coulées

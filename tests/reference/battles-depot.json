@@ -1,7 +1,7 @@
 {
   "arena": "depot",
   "duration": 240,
-  "date": "2026-11-11",
+  "date": "2026-11-12",
   "matches": [
     {
       "seed": 1,
@@ -27,9 +27,9 @@
     {
       "seed": 4,
       "winner": "red",
-      "blue": 4,
+      "blue": 5,
       "red": 15,
-      "elapsed": 92
+      "elapsed": 105
     },
     {
       "seed": 5,
@@ -60,47 +60,46 @@
       "elapsed": 188
     }
   ],
-  "kills": 182,
+  "kills": 183,
   "causes": {
     "blast": 7,
     "bombs": 2,
-    "cannon": 15,
+    "cannon": 14,
     "drill": 1,
-    "fire": 20,
+    "fire": 18,
     "flail": 2,
-    "hammer": 1,
     "impact": 8,
-    "laser": 21,
-    "laserBlade": 2,
+    "laser": 22,
+    "laserBlade": 3,
     "lockon": 8,
     "mine": 1,
     "missile": 1,
-    "plasma": 9,
+    "plasma": 11,
     "rail": 1,
-    "rifle": 55,
+    "rifle": 57,
     "rockets": 3,
     "self": 10,
     "shotgun": 8,
     "sniper": 2,
     "spinner": 1,
-    "warhead": 4
+    "warhead": 3
   },
   "stuckShare": 18.8,
   "modes": {
-    "charge": 3298,
-    "cover": 851,
-    "engage": 5611,
-    "falling": 24,
-    "flee": 880,
-    "flipped": 216,
-    "landing": 176,
-    "patrol": 1913,
-    "reverse": 685,
-    "stranded": 484,
+    "charge": 3322,
+    "cover": 861,
+    "engage": 5737,
+    "falling": 21,
+    "flee": 866,
+    "flipped": 205,
+    "landing": 184,
+    "patrol": 1914,
+    "reverse": 687,
+    "stranded": 487,
     "stunned": 95,
     "support": 474
   },
-  "stepMs": 3.96,
+  "stepMs": 3.7,
   "robots": {
     "Ange": {
       "kills": 1,
@@ -116,7 +115,7 @@
       "kills": 0,
       "deaths": 2,
       "life": 55.2,
-      "flipped": 35,
+      "flipped": 25,
       "stunned": 5.5,
       "killedBy": {
         "rifle": 2
@@ -133,12 +132,14 @@
       }
     },
     "Bastion": {
-      "kills": 16,
-      "deaths": 0,
-      "life": null,
-      "flipped": 0.5,
+      "kills": 15,
+      "deaths": 1,
+      "life": 73,
+      "flipped": 0,
       "stunned": 0,
-      "killedBy": {}
+      "killedBy": {
+        "laserBlade": 1
+      }
     },
     "Batteur": {
       "kills": 2,
@@ -164,17 +165,17 @@
       }
     },
     "Bolide": {
-      "kills": 3,
+      "kills": 2,
       "deaths": 5,
-      "life": 29.3,
+      "life": 28.2,
       "flipped": 4.5,
       "stunned": 3.5,
       "killedBy": {
         "blast": 1,
         "cannon": 1,
+        "plasma": 1,
         "rifle": 1,
-        "shotgun": 1,
-        "warhead": 1
+        "shotgun": 1
       }
     },
     "Bombardier": {
@@ -186,9 +187,9 @@
       "killedBy": {}
     },
     "Brasier": {
-      "kills": 11,
+      "kills": 12,
       "deaths": 4,
-      "life": 56.1,
+      "life": 54.8,
       "flipped": 1.5,
       "stunned": 0,
       "killedBy": {
@@ -268,27 +269,28 @@
       }
     },
     "Drone": {
-      "kills": 5,
-      "deaths": 12,
-      "life": 20.2,
-      "flipped": 12,
+      "kills": 7,
+      "deaths": 11,
+      "life": 21.1,
+      "flipped": 12.5,
       "stunned": 0,
       "killedBy": {
-        "cannon": 4,
+        "cannon": 1,
         "laser": 4,
-        "rifle": 2,
+        "plasma": 1,
+        "rifle": 3,
         "self": 1,
         "warhead": 1
       }
     },
     "Duelliste": {
-      "kills": 2,
+      "kills": 3,
       "deaths": 4,
-      "life": 56.7,
+      "life": 61.2,
       "flipped": 0,
       "stunned": 0,
       "killedBy": {
-        "fire": 1,
+        "cannon": 1,
         "rifle": 1,
         "self": 1,
         "shotgun": 1
@@ -340,7 +342,7 @@
       }
     },
     "Frégate": {
-      "kills": 19,
+      "kills": 20,
       "deaths": 4,
       "life": 36.7,
       "flipped": 0,
@@ -461,41 +463,40 @@
       }
     },
     "Pilon": {
-      "kills": 1,
+      "kills": 0,
       "deaths": 7,
-      "life": 51.3,
-      "flipped": 3.5,
+      "life": 53.4,
+      "flipped": 0.5,
       "stunned": 0,
       "killedBy": {
         "cannon": 1,
-        "fire": 2,
+        "fire": 1,
         "laser": 1,
+        "plasma": 1,
         "rifle": 3
       }
     },
     "Porte-ogive": {
-      "kills": 9,
-      "deaths": 3,
-      "life": 75.5,
+      "kills": 8,
+      "deaths": 2,
+      "life": 82.6,
       "flipped": 6,
       "stunned": 0,
       "killedBy": {
         "cannon": 1,
-        "drill": 1,
-        "hammer": 1
+        "drill": 1
       }
     },
     "Raie": {
       "kills": 2,
-      "deaths": 7,
-      "life": 73.3,
-      "flipped": 1,
+      "deaths": 8,
+      "life": 67,
+      "flipped": 3,
       "stunned": 4.5,
       "killedBy": {
-        "cannon": 1,
-        "laser": 2,
+        "cannon": 2,
+        "laser": 3,
         "lockon": 1,
-        "plasma": 1,
         "rockets": 1,
         "sniper": 1
       }
@@ -576,15 +577,15 @@
     },
     "Tricycle": {
       "kills": 6,
-      "deaths": 8,
-      "life": 32.5,
+      "deaths": 9,
+      "life": 29.2,
       "flipped": 0,
       "stunned": 0,
       "killedBy": {
         "blast": 2,
         "fire": 1,
         "laser": 2,
-        "rifle": 3
+        "rifle": 4
       }
     }
   }

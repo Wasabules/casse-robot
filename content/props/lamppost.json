@@ -1,0 +1,12 @@
+{
+  "$schema": "../schemas/props.schema.json",
+  "$comment": "Un robot lancé le couche, un obus aussi ; couché, il se brise s'il cède encore. De la tôle d'acier peinte : elle ne brûle pas d'elle-même.",
+  "shape": { "kind": "cylinder", "radius": 0.13, "halfHeight": 3.2 },
+  "mass": 180,
+  "friction": 0.6,
+  "hp": 60,
+  "shatters": true,
+  "anchored": true,
+  "topples": 0.5,
+  "resist": { "kinetic": 0.6, "pierce": 0.85, "energy": 0.7, "explosive": 1.2, "impact": 1.6, "fire": 0, "cut": 0.7 }
+}

@@ -1,0 +1,11 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Blindage lourd : il encaisse les balles. Les trois blindages forment une échelle de dureté : plus un bloc encaisse, plus il pèse. Repères : le fusil inflige 22 points, le canon 40 et 120 de souffle (voir content/weapons/). Solidité des liaisons (`bond`) : un obus de canon (30 N·s) qui frappe le bout d'un bras de blindage léger long d'un mètre l'arrache ; le même bras en blindage lourd tient. Ses formes (biseau, coin, arrondi, pente, demi-bloc : catalog/blocks.ts, `shaped`) reprennent sa matière, sa masse, ses points et son coût en proportion de leur volume.",
+  "cost": 4,
+  "mass": 2,
+  "hp": 250,
+  "tinted": true,
+  "bond": 250,
+  "resist": { "kinetic": 0.7, "pierce": 0.85, "impact": 0.6, "fire": 0.8, "cut": 0.5 },
+  "price": 150
+}

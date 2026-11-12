@@ -1,0 +1,21 @@
+{
+  "$schema": "../schemas/props.schema.json",
+  "$comment": "Une voiture abandonnée (4,2 × 1,45 × 1,85 m : `CAR_HALF`, catalog/props.ts), qu'un robot lourd pousse. À bout, elle prend feu (son essence) et brûle pendant sa mèche, puis explose ; les flammes la font céder aussi, et une voiture en feu allume sa voisine. Tôle d'acier peinte, mais l'essence brûle.",
+  "shape": { "kind": "slab" },
+  "mass": 117,
+  "friction": 0.7,
+  "hp": 26,
+  "shatters": true,
+  "resist": { "kinetic": 0.6, "pierce": 0.85, "energy": 0.7, "explosive": 1.1, "impact": 0.5, "fire": 1.6, "cut": 0.7 },
+  "burns": { "time": 25, "reach": 0.8 },
+  "explosion": {
+    "look": "car",
+    "radius": 3.6,
+    "damage": 220,
+    "blastRadius": 5.5,
+    "power": 12,
+    "lift": 1.4,
+    "ignite": 0.6
+  },
+  "fuse": 5
+}

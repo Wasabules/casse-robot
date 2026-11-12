@@ -1,4 +1,4 @@
-import { isMapKey, type ArenaKey } from "../arena/layout";
+import { isArenaId, isMapKey, type ArenaKey } from "../arena/layout";
 import { lockProgress, pilotLock } from "../combat/lock";
 import { applyDamage } from "../combat/damage";
 import { findHomingTarget } from "../combat/projectiles";
@@ -6,6 +6,7 @@ import type { WeaponId } from "../catalog/weapons";
 import { weaponDef } from "../catalog/weapons";
 import type { BotProfile } from "../design/presets";
 import type { MapFile } from "../map/format";
+import { provideGameArenaFile } from "../map/gameArenas";
 import { registerMap } from "../map/load";
 import type { Vec3 } from "../math/vec";
 import { ENDLESS_MATCH, GAME_MODES, matchEntries, pickRoster, type GameModeId } from "../modes";
@@ -32,9 +33,10 @@ import { writeSnapshot } from "./snapshot";
 /** Ce que le client demande à la session. */
 export type SessionCommand =
   /**
-   * Une partie : le mode, l'arène (une carte communautaire est donnée avec, la session la fait
-   * connaître), le robot du joueur dans un mode piloté, ou des robots imposés (la mesure du rendu) ;
-   * `seed` : un hasard rejouable (Math.random de la session).
+   * Une partie : le mode, l'arène (son fichier peut être donné avec : une carte communautaire, que la
+   * session fait connaître, ou une arène du jeu que la session n'a pas encore, les grandes : le client
+   * les charge à la demande), le robot du joueur dans un mode piloté, ou des robots imposés (la mesure
+   * du rendu) ; `seed` : un hasard rejouable (Math.random de la session).
    */
   | { t: "start"; mode: GameModeId; arena: ArenaKey; map?: MapFile; pilot: BotProfile | null; roster: readonly BotProfile[] | null; seed?: number }
   /** Une vague de ces robots-là, sans joueur (la caméra libre, la console). */
@@ -136,6 +138,7 @@ export class LocalSession {
   private start(cmd: Extract<SessionCommand, { t: "start" }>): void {
     if (cmd.seed !== undefined) seedMathRandom(cmd.seed);
     if (cmd.map && isMapKey(cmd.arena)) registerMap(cmd.map);
+    else if (cmd.map && isArenaId(cmd.arena)) provideGameArenaFile(cmd.arena, cmd.map);
     const mode = GAME_MODES[cmd.mode];
     this.mode = cmd.mode;
     endMatch(this.sim);

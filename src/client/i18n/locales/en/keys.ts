@@ -238,7 +238,7 @@ export const keys = {
   "help.map": "Full map",
   "help.music": "Music: previous · next track",
   "help.padPilot": "{move}: drive; {look}: camera (in a plane, the direction); {scope} · {fire}: scope, fire; {pause}: pause",
-  "help.touchPilot": "Stick on the left; fire, scope, climb, turbo on the right; you aim with the crosshair; drag: camera",
+  "help.touchPilot": "Stick on the left; fire, scope, climb, turbo on the right; you aim with the crosshair; swipe (or the aim stick): camera; swipe from Fire: aim while firing",
   "help.escape": "Release the mouse, pause",
   "help.freeFire": "Fire (hold: rifle bursts)",
   "help.turnCamera": "Turn the camera",

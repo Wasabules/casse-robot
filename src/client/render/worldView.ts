@@ -1,7 +1,8 @@
 import * as B from "../babylon";
 import type { RigidBody } from "@dimforge/rapier3d-compat";
+import type { MapAsset } from "../../shared/arena/layout";
 import { blockDef, BLOCK_TYPES } from "../../shared/catalog/blocks";
-import { propDef } from "../../shared/catalog/props";
+import { propDef, type PropType } from "../../shared/catalog/props";
 import { wheelDef } from "../../shared/catalog/wheels";
 import { BLOCK_SIZE } from "../../shared/config";
 import { clamp } from "../../shared/math/scalar";
@@ -66,9 +67,14 @@ const JET_NOZZLE = JET_NACELLE.nozzle;
 const RECOIL_RETURN = 0.18;
 const UNIT = new B.Vector3(1, 1, 1);
 
-/** Blocs d'un morceau qui ont le même aspect : une mesh, et une instance fine par bloc (dans l'ordre de `blocks`). */
+/**
+ * Blocs d'un morceau qui ont le même aspect : une mesh, et une instance fine par bloc (dans l'ordre
+ * de `blocks`). `geometry` : celle de la source quand le lot l'a copiée (la source qui prend son
+ * modèle glTF en change : le lot se refait, voir `reshapeLots`).
+ */
 interface Batch {
-  readonly mesh: B.Mesh;
+  mesh: B.Mesh;
+  geometry: B.Geometry | null;
   readonly source: B.Mesh;
   readonly part: number;
   readonly blocks: Block[];
@@ -584,6 +590,29 @@ export class WorldView {
     return node;
   }
 
+  /**
+   * Le mesh d'un lot : une copie de la géométrie de la source, ses parts (une par matière d'un
+   * modèle glTF : la géométrie copiée n'en a qu'une) et sa matière, la couleur d'usure par instance.
+   */
+  private lotMesh(source: B.Mesh, part: number): B.Mesh {
+    const mesh = new B.Mesh(`lot${part}`, this.scene);
+    // Une géométrie à lui : Babylon range le tampon de couleur des instances fines sur la
+    // géométrie, et des lots qui la partageraient écraseraient celui des autres (sur un vrai
+    // GPU, un lot plus grand que le tampon d'un autre ne serait plus dessiné du tout)
+    source.geometry?.copy(`lot${part}-${source.name}`).applyToMesh(mesh);
+    if (source.subMeshes.length > 1) {
+      mesh.releaseSubMeshes();
+      for (const sub of source.subMeshes) new B.SubMesh(sub.materialIndex, sub.verticesStart, sub.verticesCount, sub.indexStart, sub.indexCount, mesh);
+    }
+    mesh.material = source.material;
+    mesh.receiveShadows = true;
+    mesh.parent = this.parts.get(part)?.node ?? null;
+    mesh.thinInstanceEnablePicking = true;
+    mesh.thinInstanceRegisterAttribute(B.VertexBuffer.ColorKind, 4);
+    this.shadows.addShadowCaster(mesh, false);
+    return mesh;
+  }
+
   /** Ajoute le bloc au lot de son aspect dans son morceau (le lot se crée au premier bloc). */
   private batch(block: Block): void {
     const source = this.assets.blockSource(block.type, block.bot.profile.color);
@@ -591,18 +620,7 @@ export class WorldView {
     if (!lots) this.batches.set(block.part.id, (lots = new Map()));
     let lot = lots.get(source);
     if (!lot) {
-      const mesh = new B.Mesh(`lot${block.part.id}`, this.scene);
-      // Une géométrie à lui : Babylon range le tampon de couleur des instances fines sur la
-      // géométrie, et des lots qui la partageraient écraseraient celui des autres (sur un vrai
-      // GPU, un lot plus grand que le tampon d'un autre ne serait plus dessiné du tout)
-      source.geometry?.copy(`lot${block.part.id}-${source.name}`).applyToMesh(mesh);
-      mesh.material = source.material;
-      mesh.receiveShadows = true;
-      mesh.parent = this.parts.get(block.part.id)?.node ?? null;
-      mesh.thinInstanceEnablePicking = true;
-      mesh.thinInstanceRegisterAttribute(B.VertexBuffer.ColorKind, 4);
-      this.shadows.addShadowCaster(mesh, false);
-      lot = { mesh, source, part: block.part.id, blocks: [] };
+      lot = { mesh: this.lotMesh(source, block.part.id), geometry: source.geometry, source, part: block.part.id, blocks: [] };
       lots.set(source, lot);
     }
     lot.mesh.thinInstanceAdd(blockMatrix(block), false);
@@ -637,8 +655,34 @@ export class WorldView {
     this.batches.get(lot.part)?.delete(lot.source);
   }
 
+  /** Le nombre de sources qui avaient pris leur modèle glTF au dernier coup d'œil (voir `reshapeLots`). */
+  private modelGeneration = 0;
+
+  /**
+   * Des sources de blocs ont pris leur modèle glTF (render/partModels.ts) : les lots qui avaient
+   * copié leur ancienne géométrie se refont, avec leurs instances (matrices et couleurs d'usure).
+   */
+  private reshapeLots(): void {
+    if (this.assets.modelGeneration === this.modelGeneration) return;
+    this.modelGeneration = this.assets.modelGeneration;
+    for (const lots of this.batches.values()) {
+      for (const lot of lots.values()) {
+        if (lot.source.geometry === lot.geometry) continue;
+        lot.mesh.dispose();
+        lot.geometry = lot.source.geometry;
+        lot.mesh = this.lotMesh(lot.source, lot.part);
+        lot.blocks.forEach((block, i) => {
+          lot.mesh.thinInstanceAdd(blockMatrix(block), false);
+          lot.mesh.thinInstanceSetAttributeAt(B.VertexBuffer.ColorKind, i, wearColor(block, this.soot.get(block.id)), false);
+        });
+        this.dirty.add(lot);
+      }
+    }
+  }
+
   /** Renvoie au GPU les instances des lots qui ont changé, et recalcule leur volume (visibilité). */
   private flushBatches(): void {
+    this.reshapeLots();
     for (const lot of this.dirty) {
       lot.mesh.thinInstanceBufferUpdated("matrix");
       lot.mesh.thinInstanceBufferUpdated(B.VertexBuffer.ColorKind);
@@ -802,7 +846,9 @@ export class WorldView {
 
   private addDebris(debris: Debris): void {
     const look = debris.look;
-    const source = look.kind === "block" ? this.assets.blockSource(look.type, look.color) : look.size ? this.assets.propShardSource(look.type) : this.assets.propSource(look.type);
+    const source = look.kind === "block" ? this.assets.blockSource(look.type, look.color)
+      : look.size ? this.assets.propShardSource(look.type, this.ownModel(look.type))
+      : this.assets.propSource(look.type, null, false, 0, this.ownModel(look.type));
     const mesh = this.instance(source, "debris");
     mesh.isPickable = false; // on ne vise pas les débris
     mesh.scaling.setAll(debrisScale(look));
@@ -831,11 +877,16 @@ export class WorldView {
     entry.placed = false;
   }
 
-  /** La source d'un accessoire, à son cran de noircissement. */
+  /** La source d'un accessoire, à son cran de noircissement (le modèle que lui donne la carte en place, s'il en a un). */
   private propSourceOf(entry: PropEntry): B.Mesh {
     const prop = entry.prop;
     const spot = this.sim.arena.props[prop.spot];
-    return this.assets.propSource(prop.type, prop.half, !!spot?.diamond, entry.char);
+    return this.assets.propSource(prop.type, prop.half, !!spot?.diamond, entry.char, this.ownModel(prop.type));
+  }
+
+  /** Le modèle que la carte en place donne à ce type d'accessoire (une carte venue d'un paquet), ou null : celui du jeu. */
+  private ownModel(type: PropType): MapAsset | null {
+    return this.sim.arena.assets?.models?.[type] ?? null;
   }
 
   /** Un accessoire qui change (il ploie, tombe, fuit) quitte son lot : une instance à lui, à la même pose. */

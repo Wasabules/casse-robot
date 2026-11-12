@@ -1,5 +1,5 @@
 import type { Collider, RigidBody } from "@dimforge/rapier3d-compat";
-import { ARENAS, DEFAULT_ARENA, isArenaId, isMapKey, spotPose, type ArenaLayout, type MapKey } from "../arena/layout";
+import { ARENAS, DEFAULT_ARENA, isArenaId, isMapKey, knownGameArena, spotPose, type ArenaLayout, type MapKey } from "../arena/layout";
 import { BLOCK_TYPES } from "../catalog/blocks";
 import { propHalf, propHp } from "../catalog/props";
 import { weaponDef, type WeaponId } from "../catalog/weapons";
@@ -178,16 +178,20 @@ export class Replica implements World {
     if (isMapKey(arena.id)) this.maps.set(arena.id, arena);
   }
 
-  /** L'arène de cet identifiant : une arène du jeu, une carte reçue, ou une carte que le client a déjà. */
+  /** L'arène de cet identifiant : une arène du jeu (son fichier là : client/net/netClient.ts l'attend), une carte reçue, ou une carte que le client a déjà. */
   private arenaFor(id: unknown): ArenaLayout | undefined {
-    if (isArenaId(id)) return ARENAS[id];
+    if (isArenaId(id)) return knownGameArena(id);
     if (!isMapKey(id)) return undefined;
     return this.maps.get(id) ?? this.resolveArena?.(id);
   }
 
   /** Une image reçue du serveur. */
   receive(bytes: Uint8Array): void {
-    const { header, snapshot } = decodeFrame(bytes);
+    this.receiveFrame(decodeFrame(bytes));
+  }
+
+  /** Une image reçue, déjà décodée (`decodeFrame` : le client regarde d'abord si elle annonce une arène à charger). */
+  receiveFrame({ header, snapshot }: { header: FrameHeader; snapshot: Uint8Array }): void {
     const snap = readSnapshot(snapshot);
     // Partie solo, un nouveau monde : il s'affiche tout de suite (comme une première image), même partie figée
     if (header.reset) {

@@ -301,7 +301,8 @@ export class EditorView {
       const def = propDef(spot.type);
       const slab = def.shape.kind === "slab";
       const half = slab ? spot.half ?? (spot.type === "car" || spot.type === "wreck" ? CAR_HALF : null) : null;
-      const mesh = this.assets.propSource(spot.type, half, !!spot.diamond).createInstance("prop");
+      // (le modèle que la carte donne à ce type, si elle vient d'un paquet : comme en jeu)
+      const mesh = this.assets.propSource(spot.type, half, !!spot.diamond, 0, arena.assets?.models?.[spot.type] ?? null).createInstance("prop");
       mesh.position.set(spot.pos.x, spot.pos.y, spot.pos.z);
       const r = spot.rot;
       mesh.rotationQuaternion = r ? new B.Quaternion(r.x, r.y, r.z, r.w) : B.Quaternion.Identity();

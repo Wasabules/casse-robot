@@ -1,0 +1,22 @@
+{
+  "$schema": "../schemas/weapons.schema.json",
+  "$comment": "Grenade fumigène : un écran de fumée qui coupe la vue, pour couvrir une fuite.",
+  "cooldown": 5,
+  "automatic": false,
+  "spread": 0.008,
+  "recoil": 4,
+  "range": 40,
+  "handling": { "hip": 1.25, "move": 0.002, "turn": 0.005 },
+  "ammo": { "capacity": 3, "reload": 10 },
+  "projectile": {
+    "look": "grenade",
+    "speed": 24,
+    "gravity": 1,
+    "life": 3,
+    "damage": 0,
+    "damageType": "kinetic",
+    "penetrating": false,
+    "impulse": 2,
+    "smoke": { "radius": 6, "duration": 14 }
+  }
+}

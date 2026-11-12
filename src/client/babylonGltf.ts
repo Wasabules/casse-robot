@@ -1,7 +1,8 @@
 /*
  * Le lecteur glTF de Babylon (`@babylonjs/loaders`), à part de client/babylon.ts : seul
- * render/propGltf.ts l'importe, et lui-même ne se charge qu'à la demande (`import()` dans
- * render/propModels.ts, quand un accessoire a un modèle glTF à lire). Rien de tout cela n'entre donc
+ * render/gltfModel.ts l'importe, et lui-même ne se charge qu'à la demande (`import()` dans
+ * render/gltfModels.ts, quand un accessoire, un bloc, une tête de tourelle ou une roue a un modèle
+ * glTF à lire). Rien de tout cela n'entre donc
  * dans le paquet principal (tests/architecture.test.ts le vérifie). Seules les extensions que lit le
  * jeu (client/gltfExtensions.ts) sont enregistrées, sans être chargées : chacune ne l'est que si un
  * fichier s'en sert.

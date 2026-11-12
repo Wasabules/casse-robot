@@ -1,7 +1,7 @@
 import RAPIER from "@dimforge/rapier3d-compat";
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
+import { probePath } from "./probe";
 
 /*
  * La sonde de la physique (temps 4) : Rapier 0.36 compilé par nous (crates/casse-sim, fonctionnalité
@@ -11,7 +11,7 @@ import { beforeAll, describe, expect, it } from "vitest";
  * du TypeScript. Sautée si la sonde n'est pas construite (elle demande Rust).
  */
 
-const PROBE = join(process.cwd(), "target", "probe", "wasm32-unknown-unknown", "release", "casse_sim.wasm");
+const PROBE = probePath();
 
 interface Probe {
   memory: { buffer: ArrayBuffer };
@@ -100,10 +100,10 @@ function runProbe(probe: Probe, specs: Spec[], steps: number): number[][] {
 
 let probe: Probe;
 
-describe.skipIf(!existsSync(PROBE))("Sonde de la physique (Rapier compilé ici contre celui du jeu)", () => {
+describe.skipIf(!PROBE)("Sonde de la physique (Rapier compilé ici contre celui du jeu)", () => {
   beforeAll(async () => {
     await RAPIER.init();
-    const { instance } = await WebAssembly.instantiate(readFileSync(PROBE), {});
+    const { instance } = await WebAssembly.instantiate(readFileSync(PROBE!), {});
     probe = instance.exports as unknown as Probe;
   });
 

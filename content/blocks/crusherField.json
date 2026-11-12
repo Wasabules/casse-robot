@@ -1,0 +1,12 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Champ broyeur (arme de contact d'énergie) : un projecteur qui frappe ce qui touche la coque de son morceau.",
+  "cost": 40,
+  "mass": 4,
+  "hp": 120,
+  "tinted": false,
+  "bond": 120,
+  "resist": { "energy": 0.5 },
+  "melee": "crusherField",
+  "price": 500
+}

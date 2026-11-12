@@ -1,0 +1,32 @@
+{
+  "$schema": "../schemas/weapons.schema.json",
+  "$comment": "Bombes : une soute sous un avion les lâche en chapelet tant que la gâchette est tenue (huit dans la soute, rechargées une à une). Elles tombent en gardant la vitesse de l'appareil : il faut les lâcher avant d'être au-dessus de la cible. Elles explosent au sol, largement.",
+  "cooldown": 0.25,
+  "automatic": true,
+  "spread": 0.01,
+  "recoil": 0,
+  "range": 80,
+  "dropped": true,
+  "handling": { "hip": 1, "move": 0, "turn": 0 },
+  "ammo": { "capacity": 8, "reload": 2.5 },
+  "projectile": {
+    "look": "bomb",
+    "speed": 1.5,
+    "gravity": 1,
+    "life": 10,
+    "damage": 60,
+    "damageType": "explosive",
+    "penetrating": false,
+    "impulse": 20,
+    "hull": { "radius": 0.35, "hp": 40 },
+    "explosion": {
+      "look": "bomb",
+      "radius": 2.4,
+      "damage": 170,
+      "blastRadius": 4.5,
+      "power": 8,
+      "lift": 0.9,
+      "ignite": 0.2
+    }
+  }
+}

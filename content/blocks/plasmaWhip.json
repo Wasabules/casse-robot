@@ -1,0 +1,12 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Fouet plasma (arme de contact d'énergie) : la poignée d'un filament de plasma qui claque devant le bloc.",
+  "cost": 36,
+  "mass": 6,
+  "hp": 160,
+  "tinted": false,
+  "bond": 200,
+  "resist": { "fire": 0.4, "energy": 0.6, "cut": 0.8 },
+  "melee": "plasmaWhip",
+  "price": 450
+}

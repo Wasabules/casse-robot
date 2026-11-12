@@ -25,6 +25,7 @@ export const common = {
     deg: "{v}°",
     dps: "{v}\u00a0dmg/s",
     px: "{v}\u00a0px",
+    kB: "{v} KB",
     times: "×{v}",
   } as const),
   ...section("team", { blue: "Blue", red: "Red" } as const satisfies Record<Team, Message>),

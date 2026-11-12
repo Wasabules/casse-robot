@@ -2,11 +2,12 @@ import type { PropType } from "../catalog/props";
 import { propHalf } from "../catalog/props";
 import { axisAngle, qmul, vec3, type Quat } from "../math/vec";
 import { box, zone } from "./builders";
-import { NO_PEAK } from "./features";
+import { CANYON_GROUND } from "./grounds";
 import type { ArenaLayout, BoxLook, CaptureZone, NavGraph, PropSpot, StaticBox, StaticKind, TerrainPath } from "./layout";
 import { linkNav, walkable } from "./navGraph";
 import { makeTerrain, noise2, smoothstep, terrainHeight } from "./terrain";
-import { house, PropList, seeded } from "./valley";
+import { quantizeTerrain } from "../map/codec";
+import { house, PropList, seeded } from "./buildings";
 import { dcos, dpow, dsin } from "../math/det";
 
 /*
@@ -163,14 +164,22 @@ function extended(points: readonly Point[], extra: number): Point[] {
   return [out(points[0], points[1]), ...points, out(points[n - 1], points[n - 2])];
 }
 
-/** Les points d'une ligne brisée, et d'autres entre eux, tous les `step` m au plus. */
-function densified(points: readonly Point[], step: number): Point[] {
+/**
+ * Une courbe lisse qui passe par les points d'une ligne brisée (Catmull-Rom), échantillonnée tous
+ * les `step` m au plus. Un sentier la suit sans coude : au coude d'une ligne brisée, la hauteur du
+ * sentier (celle du segment le plus proche) sautait d'un segment à l'autre sur son bord intérieur,
+ * une marche de plusieurs décimètres où un robot qui coupait le virage restait calé.
+ */
+function smoothed(points: readonly Point[], step: number): Point[] {
+  const n = points.length;
+  const at = (i: number): Point => points[Math.max(0, Math.min(n - 1, i))];
+  const spline = (a: number, b: number, c: number, d: number, u: number): number =>
+    0.5 * (2 * b + (c - a) * u + (2 * a - 5 * b + 4 * c - d) * u * u + (3 * b - a - 3 * c + d) * u * u * u);
   const out: Point[] = [points[0]];
-  for (let i = 1; i < points.length; i++) {
-    const [ax, az] = points[i - 1];
-    const [bx, bz] = points[i];
-    const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / step));
-    for (let k = 1; k <= n; k++) out.push([ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n]);
+  for (let i = 1; i < n; i++) {
+    const [p0, p1, p2, p3] = [at(i - 2), at(i - 1), at(i), at(i + 1)];
+    const m = Math.max(1, Math.ceil(Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / step));
+    for (let k = 1; k <= m; k++) out.push([spline(p0[0], p1[0], p2[0], p3[0], k / m), spline(p0[1], p1[1], p2[1], p3[1], k / m)]);
   }
   return out;
 }
@@ -196,11 +205,12 @@ function graded(points: readonly Point[], from: number, to: number): [number, nu
 
 /**
  * Sentier le long d'une ligne (prolongée de 4 m à chaque bout, pour qu'il commence et finisse à
- * plat), de la hauteur `from` à `to` ; `nodes` : ses points de passage, pour l'IA et la carte.
+ * plat), qu'il suit en courbe lisse, de la hauteur `from` à `to` ; `nodes` : ses points de passage,
+ * pour l'IA et la carte.
  */
 function makeTrail(width: number, fall: number, line: readonly Point[], from: number, to: number): Trail & { nodes: readonly Point[] } {
   const nodes = extended(line, 4);
-  return { ...trail(width, fall, graded(densified(nodes, 2), from, to)), nodes };
+  return { ...trail(width, fall, graded(smoothed(nodes, 2), from, to)), nodes };
 }
 
 /**
@@ -217,6 +227,16 @@ function wallTrail(x0: number, x1: number, side: number): Trail & { nodes: reado
 }
 
 /**
+ * Largeur du sentier en corniche (m). Taillé dans une falaise (la paroi de la Table d'un côté, le
+ * vide de l'autre), il n'est plat que sur sa largeur moins un mètre ou deux (le relief est
+ * échantillonné au mètre, et les sommets voisins de son bord sont déjà sur la paroi). À 6,5 m, la
+ * bande de 2,5 m de part et d'autre de sa ligne n'y était pas praticable partout (`walkable`), et
+ * des robots de 3,5 à 4,4 m de large qui coupaient un peu le virage y roulaient d'une roue ou d'une
+ * chenille sur l'arête ; à 8 m, celle de 3 m l'est.
+ */
+const LEDGE_WIDTH = 8;
+
+/**
  * Sentier en corniche autour de la Table, du plateau à son dessus : il longe la falaise de sa moitié
  * nord (l'ellipse un peu au-delà de son bord), d'est en ouest, et entre peu à peu sur le dessus, sans
  * lacet. `mirror` : son image de l'autre côté de la gorge.
@@ -228,7 +248,7 @@ function ledgeTrail(mirror: boolean): Trail & { nodes: readonly Point[] } {
     const a = (deg * Math.PI) / 180;
     return [TABLE.x + TABLE.ax * k * dcos(a), TABLE.z + TABLE.az * k * dsin(a)];
   });
-  return makeTrail(6.5, 2.5, line.map(([x, z]) => [x, mirror ? 2 * TABLE.z - z : z]), PLATEAU, MESA_TOP);
+  return makeTrail(LEDGE_WIDTH, 2.5, line.map(([x, z]) => [x, mirror ? 2 * TABLE.z - z : z]), PLATEAU, MESA_TOP);
 }
 
 /** Ravine qui descend du plateau au bassin de l'oasis, large et en pente douce (côté nord, ou son image au sud). */
@@ -301,7 +321,7 @@ function canyonHeight(x: number, z: number): number {
  * arêtes. Le pas reste une puissance de deux : à 1,375 m, les rayons de Rapier tombant pile sur
  * certaines lignes de sommets traversaient le champ de hauteurs (une roue y perdait le sol).
  */
-const terrain = lazy(() => makeTerrain(440, 440, canyonHeight));
+const terrain = lazy(() => quantizeTerrain(makeTerrain(440, 440, canyonHeight)));
 
 /** Hauteur du sol telle que la voit la physique (le champ de hauteurs interpole entre ses sommets). */
 const ground = (x: number, z: number): number => terrainHeight(terrain(), x, z);
@@ -347,15 +367,18 @@ function viaduct(): StaticBox[] {
     looked("timber", box("deck", 2.6, PLATEAU - 0.85, 0, 0.25, 0.25, DECK_HALF - 2)),
     looked("timber", box("deck", -2.6, PLATEAU - 0.85, 0, 0.25, 0.25, DECK_HALF - 2)),
   ];
+  // Le dessous des longerons, et le chapeau de chaque palée qui les porte
   const top = PLATEAU - 1.1;
+  const cap = 0.3;
   for (const z of [-16, -5.5, 5.5, 16]) {
-    for (const x of [-2.6, 2.6]) {
-      const g = ground(x, z) - 0.4;
-      if (top - g < 1.5) continue;
-      list.push(looked("timber", box("pillar", x, (g + top) / 2, z, 0.3, (top - g) / 2, 0.3)));
-    }
-    // Une moise entre les deux pieds, au-dessus des robots qui passent dessous
-    if (Math.max(ground(-2.6, z), ground(2.6, z)) < 6.5) list.push(looked("timber", box("deck", 0, 9, z, 2.9, 0.15, 0.15)));
+    // Une palée : un pied sous l'axe du tablier, et son chapeau sous les deux longerons. (Deux pieds
+    // sous les longerons, à 4,6 m l'un de l'autre, étaient trop près pour qu'un robot passe entre
+    // eux, et trop loin pour que la navigation en fasse un seul obstacle : venu du lit, il visait le
+    // coin de l'un en longeant l'autre, et le heurtait ; le Buggy y perdait une roue)
+    const g = ground(0, z) - 0.4;
+    if (top - g < 1.5) continue;
+    list.push(looked("timber", box("pillar", 0, (g + top - cap) / 2, z, 0.35, (top - cap - g) / 2, 0.35)));
+    list.push(looked("timber", box("deck", 0, top - cap / 2, z, 2.9, cap / 2, 0.2)));
   }
   return list;
 }
@@ -701,19 +724,7 @@ export const CANYON: ArenaLayout = {
     { place: "northTunnel", x: BUTTES[0][0], z: BUTTES[0][1] },
     { place: "southTunnel", x: BUTTES[1][0], z: BUTTES[1][1] },
   ],
-  ground: {
-    base: ["#c98f5b", "#d6a46c"],
-    dirt: "#a8714a",
-    sand: "#dcc391",
-    mud: "#6a5a40",
-    rock: "#a4573a",
-    strata: ["#9a4a2e", "#b8653f", "#cf8f5f", "#a95536", "#dcae7c", "#8f4430"],
-    strataStep: 1.7,
-    rockLine: 34,
-    peak: "#eef1f3",
-    peakLine: NO_PEAK,
-    patches: [{ x: POND.x, z: POND.z, r: 15, color: "#7f8f45" }, { x: -66, z: -4, r: 8, color: "#a99a5a" }],
-  },
+ground: CANYON_GROUND,
   get nav() {
     return nav();
   },

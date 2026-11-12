@@ -196,6 +196,7 @@ export const hud = {
   "hud.page.touchDown": "Descendre",
   "hud.page.touchBoost": "Turbo",
   "hud.page.touchScope": "Viseur",
+  "hud.page.touchAim": "Manche de visée : tourner la caméra",
   "hud.page.pause": "Pause",
   "hud.page.fullscreen": "Plein écran",
   "hud.page.exitFullscreen": "Quitter le plein écran",

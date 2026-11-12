@@ -1,0 +1,12 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Batterie : de l'énergie pour voler plus longtemps. Détruite, elle prend feu.",
+  "cost": 8,
+  "mass": 1.5,
+  "hp": 60,
+  "tinted": false,
+  "bond": 60,
+  "resist": { "explosive": 1.2, "fire": 1.2 },
+  "battery": { "capacity": 50 },
+  "price": 0
+}

@@ -599,6 +599,31 @@ describe("multijoueur", () => {
     expect(replica.arena.id).toBe(key);
   });
 
+  it("une carte venue d'un paquet : le message porte l'empreinte de ses ressources, la réplique a la même carte et les mêmes ressources", () => {
+    const map: MapFile = {
+      ...blankMap({ name: "Carte en paquet", author: "Tests", half: 60 }),
+      props: [{ type: "crate", x: -6, z: 10 }],
+      assets: { models: { crate: { sha256: "a".repeat(64), bytes: 45328 } }, ambience: { sha256: "b".repeat(64), bytes: 209282 } },
+    };
+    expect(validateMap(map)).toEqual([]);
+    const key = mapKey(map);
+    const { assets: _a, ...plain } = map;
+    expect(key).not.toBe(mapKey(plain));
+    room.dispose();
+    room = new Room(new ProgressBook(), { maps: [map], mapsOnly: true });
+    expect(room.sim.arena.assets).toEqual(map.assets);
+    const client = connect("Lou");
+    const sent = client.texts.find((m): m is Extract<ServerMessage, { t: "map" }> => m.t === "map")!;
+    const check = checkMap(JSON.parse(JSON.stringify(sent.map)));
+    expect(check.issues).toEqual([]);
+    expect(check.key).toBe(key);
+    client.replica.addArena(check.arena!);
+    run(1);
+    client.replica.flush();
+    expect(client.replica.arena.id).toBe(key);
+    expect(client.replica.arena.assets).toEqual(map.assets);
+  });
+
   it("le serveur refuse un plan invalide ou une autre version du jeu ; il accepte un avion", () => {
     const bad = connect("Eve", { name: "Tas", color: "#ff0000", design: { blocks: [], wheels: [] } });
     expect(bad.texts[0].t).toBe("refused");

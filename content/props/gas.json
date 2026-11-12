@@ -1,0 +1,11 @@
+{
+  "$schema": "../schemas/props.schema.json",
+  "$comment": "Un choc franc la perce : elle fuit, s'envole en tournoyant, puis saute.",
+  "shape": { "kind": "cylinder", "radius": 0.22, "halfHeight": 0.55 },
+  "mass": 12,
+  "friction": 0.5,
+  "hp": 20,
+  "resist": { "impact": 0.6, "fire": 1.5 },
+  "explosion": { "look": "gas", "radius": 2.2, "damage": 180, "blastRadius": 3, "power": 5, "lift": 0.5, "ignite": 0.4 },
+  "vent": { "thrust": 600, "duration": 1.6 }
+}

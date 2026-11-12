@@ -1,0 +1,18 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Rotor de sustentation. 4 rotors portent 1,5 fois le poids du Drone (armé, avec ses batteries) ; à 3, il ne tient plus son altitude ; à 2, il tombe.",
+  "cost": 8,
+  "mass": 1,
+  "hp": 50,
+  "tinted": false,
+  "bond": 40,
+  "resist": { "fire": 1.4 },
+  "thruster": {
+    "maxThrust": 108,
+    "spoolTime": 0.12,
+    "torqueRatio": 0.05,
+    "power": 1,
+    "exhaust": { "nozzle": 0.25, "reach": 1, "dps": 14, "radius": 0.12, "flare": 0.12 }
+  },
+  "price": 100
+}

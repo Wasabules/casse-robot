@@ -1,0 +1,11 @@
+{
+  "$schema": "../schemas/props.schema.json",
+  "$comment": "Un étage d'un immeuble (un pan dont l'emplacement donne les dimensions) : enduit sur maçonnerie, percé de fenêtres. Maçonnerie : les balles l'écornent, les explosions l'abattent.",
+  "shape": { "kind": "slab" },
+  "mass": 1500,
+  "friction": 0.8,
+  "hp": 50,
+  "shatters": true,
+  "anchored": true,
+  "resist": { "kinetic": 0.3, "pierce": 0.55, "energy": 0.5, "explosive": 1.3, "impact": 0.8, "fire": 0, "cut": 0.35 }
+}

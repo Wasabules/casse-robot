@@ -1,0 +1,21 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Tourelle de réparation : un rayon qui remet en état les alliés ; il puise dans les batteries.",
+  "cost": 30,
+  "mass": 4,
+  "hp": 90,
+  "tinted": false,
+  "bond": 150,
+  "turret": {
+    "weapon": "repair",
+    "yawRate": 2.6,
+    "pitchRate": 2,
+    "minPitch": -0.35,
+    "maxPitch": 1.1,
+    "height": 0.35,
+    "barrel": 0.5,
+    "head": [0.32, 0.24, 0.36],
+    "caliber": 0.12
+  },
+  "price": 400
+}

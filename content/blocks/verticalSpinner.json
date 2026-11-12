@@ -1,0 +1,12 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Toupie verticale : le moteur d'un disque épais debout devant le bloc, tenu par deux fourches. Bloc lourd et solide, comme les autres armes de contact mécaniques.",
+  "cost": 45,
+  "mass": 13,
+  "hp": 220,
+  "tinted": false,
+  "bond": 250,
+  "resist": { "cut": 0.7, "kinetic": 0.85, "impact": 0.8 },
+  "melee": "verticalSpinner",
+  "price": 450
+}

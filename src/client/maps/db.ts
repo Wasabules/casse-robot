@@ -11,11 +11,15 @@ import type { MapFile } from "../../shared/map/format";
  */
 
 const DB_NAME = "casse-robot-maps";
-/** 2 : le brouillon de l'éditeur de cartes. */
-const DB_VERSION = 2;
+/** 2 : le brouillon de l'éditeur de cartes ; 3 : les ressources des paquets (`assets`). */
+const DB_VERSION = 3;
 export type MapStore = "library" | "cache";
-/** Les magasins : les cartes, et les brouillons de l'éditeur (une entrée par brouillon, sous sa clé). */
-const STORES: readonly (MapStore | "drafts")[] = ["library", "cache", "drafts"];
+/**
+ * Les magasins : les cartes, les brouillons de l'éditeur (une entrée par brouillon, sous sa clé), et
+ * les ressources des paquets (modèles, ambiances : leurs octets sous leur empreinte SHA-256, une fois
+ * pour toutes les cartes qui s'en servent).
+ */
+const STORES: readonly (MapStore | "drafts" | "assets")[] = ["library", "cache", "drafts", "assets"];
 /** Au plus autant d'attente pour ouvrir la base (s) ; au-delà, on fait sans. */
 const OPEN_TIMEOUT = 4;
 
@@ -122,6 +126,75 @@ export async function writeDraftEntry(entry: { readonly key: string }): Promise<
   } catch (e) {
     console.warn("Cartes : écriture du brouillon impossible", e);
     return false;
+  }
+}
+
+/** Les cartes des brouillons de l'éditeur (pour savoir quelles ressources elles gardent). */
+export async function readDraftMaps(): Promise<MapFile[]> {
+  const db = await mapDb();
+  if (!db) return [];
+  try {
+    const all = (await done(db.transaction("drafts", "readonly").objectStore("drafts").getAll())) as { map?: MapFile }[];
+    return all.flatMap((d) => (d.map && typeof d.map === "object" ? [d.map] : []));
+  } catch (e) {
+    console.warn("Cartes : lecture des brouillons impossible", e);
+    return [];
+  }
+}
+
+/** Une ressource gardée : son empreinte, ses octets. */
+interface StoredAsset {
+  readonly key: string;
+  readonly bytes: Uint8Array;
+  readonly saved: number;
+}
+
+/** Les octets d'une ressource d'après son empreinte (null : pas gardée, ou pas d'IndexedDB). */
+export async function readAsset(hash: string): Promise<Uint8Array | null> {
+  const db = await mapDb();
+  if (!db) return null;
+  try {
+    const entry = (await done(db.transaction("assets", "readonly").objectStore("assets").get(hash))) as StoredAsset | undefined;
+    return entry?.bytes instanceof Uint8Array ? entry.bytes : null;
+  } catch (e) {
+    console.warn("Cartes : lecture d'une ressource impossible", e);
+    return null;
+  }
+}
+
+/** Garde une ressource (sous son empreinte) ; faux si le navigateur ne garde rien. */
+export async function writeAsset(hash: string, bytes: Uint8Array): Promise<boolean> {
+  const db = await mapDb();
+  if (!db) return false;
+  try {
+    await done(db.transaction("assets", "readwrite").objectStore("assets").put({ key: hash, bytes, saved: Date.now() } satisfies StoredAsset));
+    return true;
+  } catch (e) {
+    console.warn("Cartes : écriture d'une ressource impossible", e);
+    return false;
+  }
+}
+
+/** Les empreintes des ressources gardées. */
+export async function assetKeys(): Promise<string[]> {
+  const db = await mapDb();
+  if (!db) return [];
+  try {
+    return ((await done(db.transaction("assets", "readonly").objectStore("assets").getAllKeys())) as IDBValidKey[]).filter((k): k is string => typeof k === "string");
+  } catch {
+    return [];
+  }
+}
+
+/** Oublie des ressources. */
+export async function deleteAssets(hashes: readonly string[]): Promise<void> {
+  const db = await mapDb();
+  if (!db || !hashes.length) return;
+  try {
+    const store = db.transaction("assets", "readwrite").objectStore("assets");
+    await Promise.all(hashes.map((h) => done(store.delete(h))));
+  } catch (e) {
+    console.warn("Cartes : suppression de ressources impossible", e);
   }
 }
 

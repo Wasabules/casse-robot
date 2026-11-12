@@ -1,0 +1,12 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Fléau (arme de contact) : le moteur, le mât et la manivelle d'une boule au bout d'une chaîne (la boule pèse 7 kg). Bloc lourd et solide, comme les autres armes de contact mécaniques.",
+  "cost": 35,
+  "mass": 12,
+  "hp": 200,
+  "tinted": false,
+  "bond": 250,
+  "resist": { "cut": 0.7, "kinetic": 0.85, "impact": 0.8 },
+  "melee": "flail",
+  "price": 350
+}

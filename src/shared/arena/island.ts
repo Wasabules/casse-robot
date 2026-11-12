@@ -4,7 +4,9 @@ import { barrier, box, zone } from "./builders";
 import { segmentDistance, type LavaShape, type Vent, type Waterfall } from "./features";
 import type { ArenaLayout, CaptureZone, PropSpot, StaticBox, TerrainPath } from "./layout";
 import { makeTerrain, noise2, smoothstep, terrainHeight } from "./terrain";
-import { house, PropList, seeded } from "./valley";
+import { quantizeTerrain } from "../map/codec";
+import { house, PropList, seeded } from "./buildings";
+import { ISLAND_GROUND } from "./grounds";
 import { dcos, dpow, dsin } from "../math/det";
 
 /*
@@ -277,7 +279,7 @@ function islandHeight(x: number, z: number): number {
 
 const ROADS: readonly Road[] = [spiralRoad(90), spiralRoad(270)];
 
-const TERRAIN = makeTerrain(360, 288, islandHeight);
+const TERRAIN = quantizeTerrain(makeTerrain(360, 288, islandHeight));
 /** Hauteur du sol telle que la voient la physique et le rendu (le relief échantillonné). */
 const ground = (x: number, z: number): number => Math.max(0, terrainHeight(TERRAIN, x, z));
 
@@ -583,10 +585,7 @@ export const ISLAND: ArenaLayout = {
   paths: PATHS,
   sky: { color: "#a6d3ec", fog: 0.0032 },
   waterColor: "#2b8a9c",
-  ground: {
-    base: ["#4c8a32", "#6fa645"], dirt: "#8d6c47", sand: "#dccb94", mud: "#6f6c56", rock: "#665d55", peak: "#3e3936",
-    rockLine: 9, peakLine: 21, beach: 1.5, basalt: "#2c2722", basaltWidth: 4,
-  },
+ground: ISLAND_GROUND,
   vents: VENTS,
   falls: FALLS,
   places: [

@@ -1,7 +1,8 @@
-import type { ArenaKey, ArenaLayout, CommunityMeta } from "../../shared/arena/layout";
+import type { ArenaKey, CommunityMeta } from "../../shared/arena/layout";
 import { measure, t } from "../i18n/i18n";
 import { authored } from "../i18n/names";
-import { paintPlan, PlanQueue } from "./arenaPreview";
+import type { ArenaFacts } from "../maps/gameArenas";
+import { paintPlan, PlanQueue, type PlanLayout } from "./arenaPreview";
 import { CardGrid } from "./cardGrid";
 
 /** Une arène qu'on peut choisir : celles du jeu, puis les cartes communautaires. */
@@ -12,12 +13,13 @@ export interface ArenaOption {
   info: string;
   /** Une carte communautaire : son auteur, sa licence. */
   community?: CommunityMeta;
-  /** Demi-côté de la zone de jeu (m), nombre de zones à capturer, de nuit ou non. */
-  half: number;
-  zones: number;
-  night: boolean;
-  /** L'arène elle-même, pour son plan (construite à la demande : le Canyon, une carte communautaire). */
-  layout: () => ArenaLayout | undefined;
+  /**
+   * Sa taille, ses zones à capturer, le jour ou la nuit : tout de suite (une carte communautaire, lus
+   * dans sa carte), ou une fois son fichier chargé (une grande arène du jeu : client/maps/gameArenas.ts).
+   */
+  facts: () => ArenaFacts | Promise<ArenaFacts>;
+  /** L'arène elle-même, pour son plan (chargée, construite à la demande). */
+  layout: PlanLayout;
 }
 
 export interface ArenaPickerOptions {
@@ -61,13 +63,21 @@ export function rememberArena(key: ArenaKey): void {
 }
 
 /** Quelques faits sur une arène : sa taille, ses zones, le jour ou la nuit. */
-function facts(arena: ArenaOption): string[] {
+function factLines(facts: ArenaFacts): string[] {
   return [
-    arena.half >= LARGE_HALF ? t("menu.arena.large") : t("menu.arena.small"),
-    t("menu.arena.side", { side: measure(arena.half * 2, "m", 0) }),
-    t("menu.arena.zones", { n: arena.zones }),
-    arena.night ? t("menu.arena.night") : t("menu.arena.day"),
+    facts.half >= LARGE_HALF ? t("menu.arena.large") : t("menu.arena.small"),
+    t("menu.arena.side", { side: measure(facts.half * 2, "m", 0) }),
+    t("menu.arena.zones", { n: facts.zones }),
+    facts.night ? t("menu.arena.night") : t("menu.arena.day"),
   ];
+}
+
+/** Les faits d'une arène, quand ils sont là ; null si son fichier n'a pas pu se charger. */
+function factsOf(arena: ArenaOption): Promise<ArenaFacts | null> {
+  return Promise.resolve().then(arena.facts).catch((e: unknown) => {
+    console.warn(`Arène ${arena.key} : fichier impossible à charger`, e);
+    return null;
+  });
 }
 
 /**
@@ -82,6 +92,9 @@ export class ArenaPicker {
   private readonly grid: CardGrid<Choice>;
   private readonly detail: HTMLElement;
   private readonly plans = new PlanQueue();
+  /** L'arène dont la fiche est affichée (ses faits peuvent n'arriver qu'une fois son fichier chargé). */
+  private shown: Choice | null = null;
+  private disposed = false;
 
   constructor(options: ArenaPickerOptions) {
     this.options = options;
@@ -110,6 +123,7 @@ export class ArenaPicker {
 
   /** On quitte l'écran : les plans qui restent à dessiner sont abandonnés (ceux déjà dessinés sont gardés). */
   dispose(): void {
+    this.disposed = true;
     this.plans.stop();
   }
 
@@ -128,8 +142,12 @@ export class ArenaPicker {
     const tags = el("span", "picker-tags");
     if (arena.key === this.options.last) tags.append(el("span", "rp-tag", t("menu.arena.tagLast")));
     if (arena.community) tags.append(el("span", "rp-tag", t("menu.arena.tagCommunity")));
-    if (arena.night) tags.append(el("span", "rp-tag", t("menu.arena.night")));
     if (tags.childElementCount) figure.append(tags);
+    void factsOf(arena).then((facts) => {
+      if (!facts?.night || this.disposed) return;
+      tags.append(el("span", "rp-tag", t("menu.arena.night")));
+      if (!tags.parentElement) figure.append(tags);
+    });
     button.append(figure, el("span", "picker-name", arena.name), el("span", "picker-sub", arena.info));
     button.title = arena.info ? t("menu.arena.cardTitle", { name: arena.name, info: arena.info }) : arena.name;
     return button;
@@ -145,6 +163,7 @@ export class ArenaPicker {
 
   /** Fiche : le plan en grand, le nom, la description entière, quelques faits, et le bouton qui la choisit. */
   private showDetail(choice: Choice | null): void {
+    this.shown = choice;
     if (!choice) {
       this.detail.replaceChildren();
       return;
@@ -175,7 +194,10 @@ export class ArenaPicker {
     });
     this.plans.hurry(choice.key);
     const chips = el("div", "picker-chips");
-    for (const fact of facts(choice)) chips.append(el("span", "picker-chip", fact));
+    void factsOf(choice).then((facts) => {
+      if (!facts || this.shown !== choice || this.disposed) return;
+      for (const fact of factLines(facts)) chips.append(el("span", "picker-chip", fact));
+    });
     const parts: HTMLElement[] = [view, el("h2", "picker-title", choice.name)];
     const meta = choice.community;
     if (meta) {

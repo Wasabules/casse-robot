@@ -1,0 +1,11 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Brouilleur : un radar ennemi ne repère plus le robot au-delà de sa portée.",
+  "cost": 15,
+  "mass": 1.5,
+  "hp": 60,
+  "tinted": false,
+  "bond": 60,
+  "jammer": { "range": 25 },
+  "price": 200
+}

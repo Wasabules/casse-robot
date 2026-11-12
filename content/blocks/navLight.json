@@ -1,0 +1,11 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Feu de position : fixe, rouge à gauche du robot, vert à droite, blanc au milieu (le bout des ailes, la queue d'un avion). Sans effet dans la simulation : la nuit, il éclaire la scène.",
+  "cost": 1,
+  "mass": 0.2,
+  "hp": 20,
+  "tinted": false,
+  "bond": 40,
+  "light": { "kind": "point", "range": 5, "color": "side", "pattern": "steady" },
+  "price": 30
+}

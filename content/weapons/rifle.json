@@ -1,0 +1,22 @@
+{
+  "$schema": "../schemas/weapons.schema.json",
+  "$comment": "Fusil automatique : des balles rapides et précises, en rafale ; environ 5 s de rafale continue avant de surchauffer.",
+  "cooldown": 0.16,
+  "automatic": true,
+  "spread": 0.003,
+  "recoil": 3,
+  "range": 45,
+  "engage": 22,
+  "handling": { "hip": 3.3, "move": 0.003, "turn": 0.012 },
+  "heat": { "perShot": 0.07, "cooling": 0.25 },
+  "projectile": {
+    "look": "bullet",
+    "speed": 160,
+    "gravity": 1,
+    "life": 1.2,
+    "damage": 22,
+    "damageType": "kinetic",
+    "penetrating": false,
+    "impulse": 6
+  }
+}

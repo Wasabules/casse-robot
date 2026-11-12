@@ -1,0 +1,13 @@
+{
+  "$schema": "../schemas/props.schema.json",
+  "$comment": "Un fromager de l'Île volcanique, le géant de la jungle : tronc large à contreforts, cime en parasol. Un tronc : il faut une explosion, une rafale soutenue ou un robot lourd lancé pour l'abattre (une toupie l'entaille).",
+  "shape": { "kind": "cylinder", "radius": 0.6, "halfHeight": 5.5 },
+  "mass": 1500,
+  "friction": 0.8,
+  "hp": 380,
+  "shatters": true,
+  "anchored": true,
+  "topples": 0.5,
+  "resist": { "kinetic": 0.4, "pierce": 0.5, "energy": 0.7, "explosive": 1.2, "impact": 1.2, "fire": 2, "cut": 1.2 },
+  "burns": { "time": 26, "reach": 3.4 }
+}

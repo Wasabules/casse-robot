@@ -28,9 +28,20 @@ import { utf8Decode, utf8Encode } from "./binary";
  * les deux pilotages) ; 24 : les lignes de départ libres d'une carte communautaire (`MapFile.spawns` :
  * une carte qui en a ne se joue pas pareil pour un client qui ne les connaît pas) ; 25 : la nuit (la
  * Cité de nuit, `sky.night` d'une carte), les phares et les balises des robots, le mât d'éclairage ; 26 :
- * les feux décoratifs (feu de position, feu à éclats, feu anticollision, gyrophare, rampe de police).
+ * les feux décoratifs (feu de position, feu à éclats, feu anticollision, gyrophare, rampe de police) ;
+ * 27 : les paquets de cartes (`MapFile.assets` : l'empreinte des modèles et de l'ambiance d'une carte,
+ * que son identifiant couvre ; un client qui l'ignorerait ne trouverait pas la carte que le serveur
+ * nomme), servis à part par le serveur de jeu (`MAP_ASSET_PATH`).
  */
-export const PROTOCOL_VERSION = 26;
+export const PROTOCOL_VERSION = 27;
+/**
+ * Où le serveur de jeu sert les ressources des cartes qu'il fait jouer (modèles, ambiance), d'après
+ * leur empreinte : `<origine HTTP du serveur>/map-assets/<sha256>`. En HTTP plutôt que dans la
+ * WebSocket : quelques centaines de Ko ne retiennent pas les images de la partie derrière eux, le
+ * navigateur les télécharge en parallèle (et les garde : l'adresse ne change jamais), et le client
+ * n'en a pas besoin pour jouer (le modèle du jeu, l'ambiance d'une arène du jeu en attendant).
+ */
+export const MAP_ASSET_PATH = "/map-assets/";
 /** Port par défaut du serveur de jeu. */
 export const DEFAULT_PORT = 8787;
 /** Le serveur envoie une image tous les SNAPSHOT_EVERY pas de simulation (20 par seconde). */

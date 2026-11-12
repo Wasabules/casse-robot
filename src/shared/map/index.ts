@@ -14,7 +14,11 @@ export {
 export { arenaFromMap, boundAt, groundStyle, mapBounds, turnQuat, type ArenaOrigins, type ElementOrigin } from "./build";
 export { exactDegrees, exactTurn, mapFromArena } from "./export";
 export { mapText } from "./text";
-export { PACKAGE_FILES, packageImage, packMap, unpackMap, type MapPackage, type PackedMap, type PackedTerrain } from "./pack";
+export {
+  ambienceIssue, assetEntries, assetMatches, folderSource, isArchive, licenseText, modelIssue, modelPath, PACKAGE_EXTENSION, PACKAGE_FILES, packageEntries, packageFileLimit,
+  packageImage, packMap, readMapArchive, readPackage, unpackMap, writeMapArchive, zipSource,
+  type ArchiveWriting, type AssetEntry, type AssetShelf, type FolderAccess, type MapPackage, type PackageRead, type PackageSource, type PackedMap, type PackedTerrain,
+} from "./pack";
 export { checkMap, checkMapText, needsSize, validateMap, validateArena, type MapCheck } from "./validate";
 export {
   decodePng, decodeRaw16, heightsFromImage, imageFromBytes, imageFromHeights, isHeightmapError, MAX_IMAGE_SIDE, sampleImage, smoothImage, terrainFromImage,

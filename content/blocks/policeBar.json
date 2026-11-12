@@ -1,0 +1,11 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Rampe de police : deux feux, bleu à gauche, rouge à droite, qui éclatent en alternance. Sans effet dans la simulation : la nuit, il éclaire la scène.",
+  "cost": 4,
+  "mass": 0.5,
+  "hp": 35,
+  "tinted": false,
+  "bond": 40,
+  "light": { "kind": "point", "range": 12, "color": "police", "pattern": "wigwag" },
+  "price": 80
+}

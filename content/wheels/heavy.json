@@ -1,0 +1,15 @@
+{
+  "$schema": "../schemas/wheels.schema.json",
+  "$comment": "Grande roue à fort couple mais lente, avec un grand débattement, pour les engins lourds.",
+  "cost": 12,
+  "radius": 0.75,
+  "width": 0.45,
+  "mass": 9,
+  "hp": 120,
+  "grip": 0.95,
+  "stallTorque": 900,
+  "freeSpeed": 7,
+  "ratedLoad": 70,
+  "suspension": { "travelUp": 0.2, "travelDown": 0.14, "frequency": 1.9, "dampingRatio": 0.55 },
+  "price": 150
+}

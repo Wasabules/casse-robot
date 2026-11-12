@@ -1,5 +1,7 @@
 import type { MapCounted, MapIssueCode } from "../../../../shared/map/format";
 import type { HeightmapErrorCode } from "../../../../shared/map/heightmap";
+import type { GlbProblemCode } from "../../../../shared/media/glb";
+import type { OpusProblem } from "../../../../shared/media/ogg";
 import type { Message } from "../../i18n";
 import { section } from "../section";
 
@@ -12,17 +14,22 @@ import { section } from "../section";
 export const maps = {
   "maps.by": "par {author}",
   "maps.title": "Cartes communautaires",
-  "maps.subtitle": "Les cartes livrées avec le jeu, et celles que tu as importées (fichiers .casse-map.json).",
+  "maps.subtitle": "Les cartes livrées avec le jeu, et celles que tu as importées (fichiers .casse-map.json, paquets .casse-map.zip).",
   "maps.manage": "Cartes communautaires…",
   "maps.manageDetail": "Importer, exporter ou supprimer des cartes.",
   "maps.import": "Importer une carte…",
-  "maps.importDetail": "Un fichier .casse-map.json : il est vérifié, puis gardé dans ce navigateur.",
+  "maps.importDetail": "Un fichier .casse-map.json, ou un paquet .casse-map.zip (la carte, ses modèles, son ambiance) : il est vérifié, puis gardé dans ce navigateur.",
   "maps.imported": "Carte importée : {name}.",
   "maps.already": "Cette carte est déjà là : {name}.",
   "maps.unreadable": "Fichier illisible.",
   "maps.invalidTitle": "Carte refusée",
   "maps.export": "Exporter le fichier",
   "maps.exportDetail": "Enregistre la carte en .casse-map.json, pour la partager ou la proposer au jeu.",
+  "maps.exportPackageDetail": "Enregistre la carte et ses ressources (modèles, ambiance) en un paquet .casse-map.zip, pour la partager.",
+  "maps.exportMissing": "Ressources absentes de ce navigateur : impossible d'en faire un paquet.",
+  "maps.assetModels": { one: "{n} modèle d'accessoire", other: "{n} modèles d'accessoires" },
+  "maps.assetAmbience": "son ambiance",
+  "maps.assets": "Paquet : {list}",
   "maps.delete": "Supprimer",
   "maps.deleteDetail": "La retire de ce navigateur.",
   "maps.deleted": "Carte supprimée : {name}.",
@@ -54,7 +61,35 @@ export const maps = {
     spawnHazard: "Danger tout près de la ligne de départ des {team} (lave, baril, citerne).",
     spawnOutside: "La ligne de départ des {team} sort de la zone de jeu.",
     spawnClose: "Les deux lignes de départ sont trop près l'une de l'autre : {distance} m (au moins {min} m).",
+    archive: "Paquet illisible : archive zip abîmée, chiffrée, ou d'une forme que le jeu ne lit pas.",
+    packagePath: "Paquet refusé : un fichier au nom dangereux ({path}).",
+    packageMap: "Pas de map.json dans le paquet : ce n'est pas un paquet de carte.",
+    assetSize: "Fichier trop gros dans le paquet : {path}, {size} Ko (au plus {max} Ko).",
+    assetName: "Fichier inattendu dans le paquet : {path} (des modèles models/props/<type d'accessoire>.glb, une ambiance sounds/ambience.ogg).",
+    assetModel: "Modèle illisible : {path} ({why}).",
+    assetSound: "Ambiance refusée : {path} ({why}).",
   } as const satisfies Record<MapIssueCode, Message>),
+  /** Ce qui ne va pas dans un modèle glTF d'un paquet (`GlbProblem`, shared/media/glb.ts). */
+  ...section("glbProblem", {
+    short: "trop court pour un fichier glTF binaire",
+    magic: "pas un fichier glTF binaire : exporter en .glb",
+    container: "conteneur en version {version}, le jeu lit la version 2",
+    length: "longueur annoncée de {declared} octets pour un fichier de {actual}",
+    jsonChunk: "morceau JSON absent ou tronqué",
+    json: "JSON illisible",
+    version: "glTF en version {version}, le jeu lit la 2.0",
+    externalBuffer: "tampon dans un fichier à part : tout doit être dans le .glb",
+    bufferSize: "tampon de {buffer} octets pour un morceau binaire de {bin}",
+    externalImage: "image dans un fichier à part : les textures doivent être dans le .glb",
+    noMesh: "aucun mesh",
+    extensions: "extensions que le jeu ne lit pas : {list}",
+  } as const satisfies Record<GlbProblemCode, Message>),
+  /** Ce qui ne va pas dans l'ambiance d'un paquet (`OpusProblem`, shared/media/ogg.ts). */
+  ...section("opusProblem", {
+    format: "pas un Ogg Opus lisible",
+    channels: "{channels} voies, au plus deux",
+    duration: "{seconds} s, il en faut de {min} à {max}",
+  } as const satisfies Record<OpusProblem["code"], Message>),
   /** Ce qu'une carte a en trop (« Trop de {what} »). */
   ...section("mapCounted", {
     boxes: "boîtes du décor",
@@ -72,6 +107,7 @@ export const maps = {
     languages: "langues",
     navPoints: "points du réseau de passage",
     navLinks: "liaisons du réseau de passage",
+    files: "fichiers dans le paquet",
   } as const satisfies Record<MapCounted, Message>),
   /** Pourquoi une image ne fait pas un relief. */
   ...section("heightmap", {

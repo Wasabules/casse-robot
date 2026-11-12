@@ -1,7 +1,9 @@
 import { MAP_EXTENSION, type MapFile } from "../../shared/map/format";
 import { decodePng, decodeRaw16, imageFromBytes, MAX_IMAGE_SIDE, type HeightImage } from "../../shared/map/heightmap";
+import { assetEntries, licenseText, PACKAGE_EXTENSION, writeMapArchive } from "../../shared/map/pack";
 import { encodePng } from "../../shared/map/png";
 import { fold } from "../i18n/format";
+import type { MapAssetStore } from "./assets";
 
 /*
  * Les fichiers des cartes dans le navigateur : choisir un fichier, enregistrer une carte (pour la
@@ -10,15 +12,52 @@ import { fold } from "../i18n/format";
  * canvas). L'éditeur de cartes s'en sert aussi.
  */
 
-/** Décompression zlib par le navigateur (les données d'un PNG). */
-export async function inflate(data: Uint8Array): Promise<Uint8Array> {
-  const stream = new Blob([data as BlobPart]).stream().pipeThrough(new DecompressionStream("deflate"));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
+/**
+ * Lit un flux décompressé jusqu'au bout, mais pas au-delà de `max` octets : une entrée hostile (une
+ * « bombe » de quelques Ko qui en ferait des Go) est abandonnée en route.
+ */
+async function drain(stream: ReadableStream<Uint8Array>, max: number): Promise<Uint8Array> {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > max) {
+      await reader.cancel();
+      throw new Error(`Décompression au-delà de ${max} octets`);
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const c of chunks) {
+    out.set(c, at);
+    at += c.length;
+  }
+  return out;
+}
+
+/** Décompression zlib par le navigateur (les données d'un PNG) ; `max` : au plus autant d'octets. */
+export async function inflate(data: Uint8Array, max = Infinity): Promise<Uint8Array> {
+  return drain(new Blob([data as BlobPart]).stream().pipeThrough(new DecompressionStream("deflate")), max);
 }
 
 /** Compression zlib par le navigateur (pour écrire un PNG). */
 export async function deflate(data: Uint8Array): Promise<Uint8Array> {
   const stream = new Blob([data as BlobPart]).stream().pipeThrough(new CompressionStream("deflate"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+/** Décompression « deflate » brute (une entrée d'une archive zip), d'au plus `max` octets. */
+export async function inflateRaw(data: Uint8Array, max: number): Promise<Uint8Array> {
+  return drain(new Blob([data as BlobPart]).stream().pipeThrough(new DecompressionStream("deflate-raw")), Math.max(0, max));
+}
+
+/** Compression « deflate » brute (une entrée d'une archive zip). */
+export async function deflateRaw(data: Uint8Array): Promise<Uint8Array> {
+  const stream = new Blob([data as BlobPart]).stream().pipeThrough(new CompressionStream("deflate-raw"));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
@@ -34,10 +73,13 @@ export function pickFile(accept: string): Promise<File | null> {
   });
 }
 
-/** Le nom d'un fichier de carte d'après son nom (sans accents ni signes : « Val du Lac » → val-du-lac.casse-map.json). */
-export function mapFileName(map: MapFile): string {
+/**
+ * Le nom d'un fichier de carte d'après son nom (sans accents ni signes : « Val du Lac » →
+ * val-du-lac.casse-map.json) ; un paquet (une carte qui a des ressources) : val-du-lac.casse-map.zip.
+ */
+export function mapFileName(map: MapFile, extension = map.assets ? PACKAGE_EXTENSION : MAP_EXTENSION): string {
   const slug = fold(map.meta.name).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "carte"; // i18n-ignore
-  return `${slug}${MAP_EXTENSION}`;
+  return `${slug}${extension}`;
 }
 
 /** Fait enregistrer un fichier par le navigateur. */
@@ -54,7 +96,20 @@ export function download(name: string, data: BlobPart, type: string): void {
 
 /** Enregistre une carte en `.casse-map.json` (lisible : deux espaces d'indentation). */
 export function downloadMap(map: MapFile): void {
-  download(mapFileName(map), `${JSON.stringify(map, null, 2)}\n`, "application/json");
+  download(mapFileName(map, MAP_EXTENSION), `${JSON.stringify(map, null, 2)}\n`, "application/json");
+}
+
+/**
+ * Enregistre une carte et ses ressources en un paquet `.casse-map.zip` (map/pack.ts). Faux si ce
+ * navigateur n'a pas toutes ses ressources (rien n'est enregistré).
+ */
+export async function downloadPackage(map: MapFile, assets: MapAssetStore): Promise<boolean> {
+  const shelf = await assets.shelfOf(map);
+  if (!shelf) return false;
+  const license = licenseText(map.meta, assetEntries(map.assets).map((e) => e.path));
+  const bytes = await writeMapArchive(map, shelf, { deflate, deflateRaw, license });
+  download(mapFileName(map, PACKAGE_EXTENSION), bytes as BlobPart, "application/zip");
+  return true;
 }
 
 /** Enregistre une image de hauteurs en PNG 16 bits (pour reprendre un relief dans un outil de terrain). */

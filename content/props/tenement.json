@@ -1,0 +1,11 @@
+{
+  "$schema": "../schemas/props.schema.json",
+  "$comment": "Un pan d'immeuble de la Ville. Maçonnerie : les balles l'écornent, les explosions l'abattent.",
+  "shape": { "kind": "slab" },
+  "mass": 1700,
+  "friction": 0.8,
+  "hp": 55,
+  "shatters": true,
+  "anchored": true,
+  "resist": { "kinetic": 0.3, "pierce": 0.55, "energy": 0.5, "explosive": 1.3, "impact": 0.8, "fire": 0, "cut": 0.35 }
+}

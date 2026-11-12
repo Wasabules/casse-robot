@@ -1,0 +1,25 @@
+{
+  "$schema": "../schemas/melee.schema.json",
+  "$comment": "Hélice tranchante : les trois pales de l'hélice d'avion (le bloc `propeller`, un moteur). Son régime suit la poussée ; son disque de près de 2 m (les cotes de `BLADES.propeller`, design/clearance.ts) blesse ce qu'il touche, mais chaque coup l'use beaucoup : sous la moitié de ses points, le moteur perd de sa poussée ; cassée, plus rien. Frôler un ennemi, c'est risquer son moteur. Pas de balourd : une hélice abîmée a déjà celui d'un moteur abîmé (ratés, poussée, tremblement).",
+  "look": "propeller",
+  "motion": "driven",
+  "axis": "up",
+  "hub": [0, 0.35, 0],
+  "blade": { "inner": 0, "outer": 0.975, "half": 0.035, "arms": { "count": 3, "width": 0.14 } },
+  "spin": { "inertia": 0.8, "speed": 50, "spinUp": 0.6, "spinDown": 3, "gyro": 0, "unbalance": 0, "mass": 2 },
+  "drive": { "idle": 0.28, "stop": 0.02 },
+  "hit": {
+    "damageType": "cut",
+    "damage": 170,
+    "bite": 0.7,
+    "fling": 0.3,
+    "push": { "tangent": 1, "radial": 0.2, "axial": 0.5, "lift": 0 },
+    "recoil": 1,
+    "spread": 0.25,
+    "wheels": 1.2,
+    "wear": 60,
+    "gap": 0.1,
+    "minSpeed": 0.2
+  },
+  "engage": 0
+}

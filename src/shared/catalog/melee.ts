@@ -1,6 +1,22 @@
 import { add, cross, scale, vec3, type Vec3 } from "../math/vec";
 import { isWeaponId, type DamageType, type WeaponId } from "./weapons";
 import { dcos, dpow, dsin } from "../math/det";
+import { fromFiles } from "./content";
+import crusherField from "../../../content/melee/crusherField.json";
+import drill from "../../../content/melee/drill.json";
+import drum from "../../../content/melee/drum.json";
+import flail from "../../../content/melee/flail.json";
+import flipper from "../../../content/melee/flipper.json";
+import hammer from "../../../content/melee/hammer.json";
+import jaw from "../../../content/melee/jaw.json";
+import laserBlade from "../../../content/melee/laserBlade.json";
+import plasmaWhip from "../../../content/melee/plasmaWhip.json";
+import propeller from "../../../content/melee/propeller.json";
+import saw from "../../../content/melee/saw.json";
+import shellSpinner from "../../../content/melee/shellSpinner.json";
+import shockLance from "../../../content/melee/shockLance.json";
+import spinner from "../../../content/melee/spinner.json";
+import verticalSpinner from "../../../content/melee/verticalSpinner.json";
 
 /*
  * Armes de contact : une masse qui tourne, ou un bras qui frappe, porté par un bloc (le champ
@@ -406,257 +422,19 @@ export interface MeleeSpec {
 /** Rendement du moteur d'un rotor : ce qui ne passe pas dans la lame est perdu. */
 export const MOTOR_EFFICIENCY = 0.8;
 
-export const MELEE_WEAPONS = {
-  /**
-   * Toupie horizontale : une grande barre d'acier qui tourne à plat au-dessus (ou au-dessous) de son
-   * bloc, 1,9 m d'envergure, ~3 kJ à plein régime. Elle arrache des blocs entiers et éprouve les
-   * liaisons ; chaque coup la fait reculer ; abîmée, elle se déséquilibre.
-   */
-  spinner: {
-    look: "bar", motion: "spin", axis: "up", hub: [0, 0.42, 0],
-    blade: { inner: 0, outer: 0.95, half: 0.07, arms: { count: 2, width: 0.18 } },
-    spin: { inertia: 1.6, speed: 62, spinUp: 2.4, spinDown: 15, gyro: 1, unbalance: 0.035, mass: 6 },
-    hit: {
-      damageType: "cut", damage: 170, bite: 0.55, fling: 0.5, push: { tangent: 1, radial: 0.55, axial: 0, lift: 0.3 },
-      recoil: 1, spread: 0.35, wheels: 1.2, wear: 5, gap: 0.15, minSpeed: 0.25,
-    },
-    engage: 1.5,
-  },
-  /**
-   * Marteau pneumatique : un bras sur le dessus du robot, armé vers l'arrière, qui s'abat devant lui
-   * sur ordre (gâchette) ; gros dégâts sur le dessus de la cible ; chaque coup soulève l'avant de
-   * son robot. Le vérin se recharge sur les batteries.
-   */
-  hammer: {
-    look: "hammer", motion: "swing", axis: "left", hub: [0, 0.2, 0.1],
-    swing: { reach: 1.3, radius: 0.18, rest: 1.9, end: -1, strike: 0.22, recover: 0.85, energy: 1500, cost: 2 },
-    hit: {
-      // La réaction au pivot soulève l'avant du robot ; entière, le Pilon se cabrait de 19° et risquait de se retourner
-      damageType: "impact", damage: 220, bite: 1, fling: 0.4, push: { tangent: 1, radial: 0.15, axial: 0, lift: 0 },
-      recoil: 0.8, spread: 0.4, wheels: 1, wear: 3, gap: 0, minSpeed: 0,
-    },
-    engage: 2,
-  },
-  /**
-   * Flipper : un plateau en coin devant son bloc, qu'un vérin relève d'un coup sur ordre : ce qui
-   * est dessus part en l'air (et se fait mal en retombant). Peu de dégâts par lui-même ; une levée
-   * coûte cher aux batteries et le vérin met longtemps à se recharger. Le sol retient le robot qui
-   * soulève : un robot léger qui veut soulever un lourd s'enfonce, et c'est lui qui pique du nez.
-   */
-  flipper: {
-    // Au repos, sur un robot à chenilles (bloc à 0,36 m du sol), le bord du plateau effleure le sol
-    look: "plate", motion: "flip", axis: "left", hub: [0, -0.1, 0.3],
-    plate: { length: 1, half: 0.7, rest: -0.24, end: 1.15, strike: 0.14, lower: 0.5, reload: 3.2, energy: 4000, cost: 8 },
-    hit: {
-      damageType: "impact", damage: 30, bite: 1, fling: 0.9, push: { tangent: 1, radial: 0, axial: 0, lift: 0.5 },
-      recoil: 1, spread: 0.25, wheels: 1, wear: 1, gap: 0, minSpeed: 0,
-    },
-    engage: 2,
-  },
-  /**
-   * Fléau : une boule d'acier hérissée au bout d'une chaîne, au-dessus de son bloc (un petit mât) ;
-   * la manivelle la fait tourner autour de lui à plat, et la boule frappe d'autant plus fort qu'elle
-   * va vite. Libre au bout de sa chaîne, elle suit mal les virages, rebondit, s'enroule autour d'un
-   * poteau, et tire sur son robot à chaque tour.
-   */
-  flail: {
-    look: "flail", motion: "flail", axis: "up", hub: [0, 0.9, 0],
-    flail: {
-      crank: 0.4, inertia: 0.25, speed: 7, spinUp: 3.5, chain: 1.4, links: 11,
-      mass: 7, radius: 0.16, restitution: 0.25, friction: 0.25, drag: 0.08,
-    },
-    hit: {
-      // `minSpeed` : la vitesse (m/s) de la boule par rapport à ce qu'elle frappe, sous laquelle elle ne fait que toucher
-      damageType: "impact", damage: 250, bite: 1, fling: 1, push: { tangent: 1, radial: 0, axial: 0, lift: 0 },
-      recoil: 0, spread: 0.3, wheels: 1.1, wear: 2, gap: 0.12, minSpeed: 3,
-    },
-    engage: 2.6,
-  },
-  /**
-   * Mâchoire broyeuse : deux mâchoires dentées devant son bloc ; sur ordre elles se referment, et ce
-   * qu'elles trouvent entre elles est saisi, écrasé en continu (le blindage lourd tient plus
-   * longtemps) et traîné. C'est le plus lourd des deux robots qui ne bouge pas : un robot léger qui
-   * en mord un lourd ne fait que s'y accrocher.
-   */
-  jaw: {
-    look: "jaw", motion: "grip", axis: "left", hub: [0, 0, 0.28],
-    jaw: {
-      length: 0.8, half: 0.3, open: 0.55, shut: 0.05, close: 0.2, reopen: 0.4, cooldown: 0.8, mouth: [0.15, 0.85],
-      strength: 6000, slip: 0.4, tear: 0.6, crush: 110, bite: 60, power: 1.6, hold: 6,
-    },
-    hit: {
-      damageType: "impact", damage: 0, bite: 1, fling: 0, push: { tangent: 0, radial: 1, axial: 0, lift: 0 },
-      recoil: 0, spread: 0.25, wheels: 1.2, wear: 1.5, gap: 0, minSpeed: 0,
-    },
-    engage: 2,
-  },
-  /**
-   * Lame laser rotative : un arc d'énergie qui balaie à plat au-dessus de son bloc. Ni gyroscope, ni
-   * recul, ni balourd : rien ne tourne vraiment. Elle s'allume en une demi-seconde et découpe vite,
-   * à petits coups rapprochés (dégâts d'énergie, que le blindage lourd ne réduit pas) ; allumée, elle
-   * vide les batteries (1,5 kW pour tenir sa charge, plus qu'en donne le générateur ; 3 kW pour la
-   * refaire en coupant). Sous une IEM, une paralysie, ou le moyeu dans l'eau, elle s'éteint d'un coup.
-   */
-  laserBlade: {
-    look: "saber", motion: "spin", axis: "up", hub: [0, 0.36, 0], quench: true,
-    blade: { inner: 0.2, outer: 1.05, half: 0.06 },
-    spin: { inertia: 2.4, speed: 32, spinUp: 0.5, spinDown: 2, gyro: 0, unbalance: 0, mass: 0, reaction: 0 },
-    hit: {
-      damageType: "energy", damage: 80, bite: 0.3, fling: 0, push: { tangent: 1, radial: 0.2, axial: 0, lift: 0 },
-      recoil: 0, spread: 0.2, wheels: 1.2, wear: 0.5, gap: 0.08, minSpeed: 0.45,
-    },
-    engage: 1.5,
-  },
-  /**
-   * Fouet plasma : un filament qui claque à plat devant le robot, de sa droite à sa gauche (à la
-   * gâchette) ; il brûle ce qu'il touche (dégâts de feu) et l'allume : le pendant au contact du
-   * lance-flammes. Pas de masse au bout : il ne pousse ni ne recule. Il s'éteint dans l'eau.
-   */
-  plasmaWhip: {
-    look: "whip", motion: "swing", axis: "up", hub: [0, 0.34, 0.1], quench: true,
-    swing: { reach: 2.1, radius: 0.22, rest: 1.45, end: -1.45, strike: 0.2, recover: 0.55, energy: 1200, cost: 1.6 },
-    hit: {
-      damageType: "fire", damage: 150, bite: 1, fling: 0, push: { tangent: 1, radial: 0.2, axial: 0, lift: 0.2 },
-      recoil: 0, spread: 0.35, wheels: 1, wear: 1, gap: 0, minSpeed: 0, ignite: 0.6,
-    },
-    engage: 2.2,
-  },
-  /**
-   * Lance électrique : une pointe qui sort droit devant son bloc (à la gâchette) et décharge ce
-   * qu'elle touche : peu de dégâts, mais une paralysie locale (une IEM ciblée) des organes autour du
-   * point touché pendant 2,5 s : les roues de ce côté en roue libre, une tourelle muette, un moteur
-   * coupé ; le reste du robot marche.
-   */
-  shockLance: {
-    look: "lance", motion: "thrust", axis: "up", hub: [0, 0.08, 0.2],
-    thrust: { retracted: 0.3, reach: 1.6, radius: 0.16, strike: 0.14, recover: 0.6, energy: 800, cost: 2.5 },
-    hit: {
-      damageType: "energy", damage: 90, bite: 1, fling: 0, push: { tangent: 1, radial: 0, axial: 0, lift: 0 },
-      recoil: 0, spread: 0.25, wheels: 1, wear: 1, gap: 0, minSpeed: 0, stun: { radius: 1.1, duration: 2.5 },
-    },
-    engage: 1.8,
-  },
-  /**
-   * Toupie verticale : un disque épais debout à l'avant, qui tourne vers le haut par devant (sens -1
-   * autour de la gauche) : il cueille l'adversaire par-dessous, le soulève et le retourne. Son moment
-   * cinétique est couché (le long de l'essieu) : en virage, il fait pencher son robot sur le côté
-   * (couple L × Ω), et un robot haut sur roues peut se renverser. S'il frappe trop bas (le sol, en
-   * piquant du nez), le sol le renvoie vers le haut : le nez se lève, jusqu'au salto arrière.
-   */
-  verticalSpinner: {
-    look: "disc", motion: "spin", axis: "left", hub: [0, 0.05, 0.72],
-    blade: { inner: 0, outer: 0.45, half: 0.07 },
-    spin: { inertia: 1, speed: 80, spinUp: 2.6, spinDown: 14, gyro: 1, unbalance: 0.03, mass: 9, direction: -1 },
-    hit: {
-      damageType: "cut", damage: 150, bite: 0.5, fling: 0.8, push: { tangent: 1, radial: 0.25, axial: 0, lift: 0.6 },
-      recoil: 1, spread: 0.3, wheels: 1.2, wear: 5, gap: 0.18, minSpeed: 0.25, ground: 1,
-    },
-    engage: 1.8,
-  },
-  /**
-   * Champ broyeur : un projecteur de bouclier détourné. Armé (seul, quand un ennemi approche), il
-   * frappe d'énergie ce qui entre dans une marge de 0,35 m autour des blocs de son morceau (à moins
-   * de 2,6 m de lui) et le repousse ; une arme de contact ennemie qui s'y frotte est frappée la
-   * première, et son régime chute. Défensif et passif : pas de touche. Chaque coup puise dans sa
-   * charge, que les batteries refont (0,5 kW pour la tenir, 1 kW pour la refaire).
-   */
-  crusherField: {
-    look: "field", motion: "field", axis: "up", hub: [0, 0.3, 0],
-    spin: { inertia: 24, speed: 10, spinUp: 1.5, spinDown: 6, gyro: 0, unbalance: 0, mass: 0, reaction: 0 },
-    field: { margin: 0.35, radius: 2.6, contacts: 4, drain: 0.35, repel: 160 },
-    hit: {
-      damageType: "energy", damage: 150, bite: 0.1, fling: 0.35, push: { tangent: 0, radial: 1, axial: 0, lift: 0.15 },
-      recoil: 0, spread: 0, wheels: 1, wear: 0, gap: 0.2, minSpeed: 0.3,
-    },
-    engage: 1.5,
-  },
-  /**
-   * Tambour : un cylindre à dents, large et bas, couché à l'avant, qui tourne vers le haut par devant.
-   * La version stable : petit rayon, régime élevé, peu de moment cinétique (peu de précession) ; des
-   * coups brefs et répétés qui font sautiller l'adversaire, et qui arrachent roues et galets.
-   */
-  drum: {
-    look: "drum", motion: "spin", axis: "left", hub: [0, 0, 0.5],
-    blade: { inner: 0, outer: 0.25, half: 0.45 },
-    spin: { inertia: 0.32, speed: 115, spinUp: 1.8, spinDown: 10, gyro: 1, unbalance: 0.02, mass: 10, direction: -1 },
-    hit: {
-      damageType: "cut", damage: 140, bite: 0.3, fling: 0.45, push: { tangent: 0.7, radial: 0.3, axial: 0, lift: 0.7 },
-      recoil: 1, spread: 0.3, wheels: 2.6, wear: 3, gap: 0.12, minSpeed: 0.3,
-    },
-    engage: 1.4,
-  },
-  /**
-   * Anneau-coque : un anneau d'acier qui tourne autour du robot entier, pendu à des rayons posés sur
-   * le dessus (son bloc, au centre du robot, en est le moyeu). Il frappe de tous côtés sans viser ;
-   * il sert aussi de blindage (un tir de côté le touche). Énorme moment cinétique vertical : tout le
-   * robot devient un gyroscope, et la réaction de son moteur le fait pivoter et déraper quand
-   * l'anneau reprend de la vitesse.
-   */
-  shellSpinner: {
-    look: "shell", motion: "spin", axis: "up", hub: [0, -0.185, 0],
-    blade: { inner: 1.48, outer: 1.6, half: 0.475, web: { at: 0.475, half: 0.04 } },
-    spin: { inertia: 24, speed: 24, spinUp: 3.2, spinDown: 25, gyro: 1, unbalance: 0.05, mass: 11 },
-    hit: {
-      damageType: "cut", damage: 100, bite: 0.25, fling: 0.55, push: { tangent: 1, radial: 0.5, axial: 0, lift: 0.25 },
-      recoil: 1, spread: 0.3, wheels: 1.4, wear: 2, gap: 0.2, minSpeed: 0.25, ground: 0.15,
-    },
-    engage: 2.3,
-  },
-  /**
-   * Hélice tranchante : les trois pales de l'hélice d'avion (le bloc `propeller`, un moteur). Son
-   * régime suit la poussée ; son disque de près de 2 m (les cotes de `BLADES.propeller`,
-   * design/clearance.ts) blesse ce qu'il touche, mais chaque coup l'use beaucoup : sous la moitié de
-   * ses points, le moteur perd de sa poussée ; cassée, plus rien. Frôler un ennemi, c'est risquer
-   * son moteur.
-   */
-  propeller: {
-    look: "propeller", motion: "driven", axis: "up", hub: [0, 0.35, 0],
-    blade: { inner: 0, outer: 0.975, half: 0.035, arms: { count: 3, width: 0.14 } },
-    // Pas de balourd : une hélice abîmée a déjà celui d'un moteur abîmé (ratés, poussée, tremblement)
-    spin: { inertia: 0.8, speed: 50, spinUp: 0.6, spinDown: 3, gyro: 0, unbalance: 0, mass: 2 },
-    drive: { idle: 0.28, stop: 0.02 },
-    hit: {
-      damageType: "cut", damage: 170, bite: 0.7, fling: 0.3, push: { tangent: 1, radial: 0.2, axial: 0.5, lift: 0 },
-      recoil: 1, spread: 0.25, wheels: 1.2, wear: 60, gap: 0.1, minSpeed: 0.2,
-    },
-    engage: 0,
-  },
-  /**
-   * Scie circulaire : un disque d'acier denté de 0,9 m, à plat, au bout d'un bras devant son bloc ;
-   * petit et rapide (1 430 tr/min). Il ne frappe pas : il mord en continu (`bite`), perce un bloc
-   * puis le suivant, et sa prise tire son robot latéralement le long de la cible.
-   */
-  saw: {
-    look: "saw", motion: "spin", axis: "up", hub: [0, 0.02, 0.72],
-    blade: { inner: 0, outer: 0.45, half: 0.03 },
-    spin: { inertia: 0.3, speed: 150, spinUp: 1.2, spinDown: 10, gyro: 1, unbalance: 0.012, mass: 3 },
-    bite: { power: 5, feed: "radial", grab: 10, gear: 1, depth: 0.8 },
-    hit: {
-      damageType: "cut", damage: 90, bite: 0, fling: 0, push: { tangent: 1, radial: 0, axial: 0, lift: 0 },
-      recoil: 0, spread: 0.15, wheels: 1.3, wear: 0.8, gap: 0, minSpeed: 0.2,
-    },
-    engage: 1.5,
-  },
-  /**
-   * Foreuse : une mèche hélicoïdale d'un mètre devant son bloc, menée par un volant et un réducteur
-   * (1/16) : elle tourne lentement, avec un couple énorme. Très perforante, elle traverse une ligne
-   * de blocs jusqu'au cockpit ; son couple tord la cible, et, en réaction, fait rouler sur lui-même
-   * un robot léger autour de l'axe du foret : il faut de la masse ou des appuis larges.
-   */
-  drill: {
-    look: "drill", motion: "spin", axis: "forward", hub: [0, 0, 0.75],
-    blade: { inner: 0, outer: 0.11, half: 0.5 },
-    spin: { inertia: 0.5, speed: 120, spinUp: 2, spinDown: 8, gyro: 1, unbalance: 0.008, mass: 4 },
-    bite: { power: 4, feed: "axial", grab: 0, gear: 16, depth: 1.2 },
-    hit: {
-      damageType: "cut", damage: 120, bite: 0, fling: 0, push: { tangent: 0, radial: 0, axial: 1, lift: 0 },
-      recoil: 0, spread: 0, wheels: 1, wear: 0.6, gap: 0, minSpeed: 0.2,
-    },
-    engage: 1.5,
-  },
-} as const satisfies Record<string, MeleeSpec>;
+/**
+ * Les armes de contact, un fichier chacune (content/melee/<id>.json, qui suit
+ * content/schemas/melee.schema.json), dans l'ordre du catalogue : leurs noms font `MeleeId`.
+ */
+const FILES = {
+  spinner, hammer, flipper, flail, jaw, laserBlade, plasmaWhip, shockLance, verticalSpinner, crusherField, drum, shellSpinner, propeller, saw,
+  drill,
+};
 
-export type MeleeId = keyof typeof MELEE_WEAPONS;
+/** Les armes de contact, lues de leurs fichiers. */
+export const MELEE_WEAPONS = fromFiles<typeof FILES, MeleeSpec>(FILES);
+
+export type MeleeId = keyof typeof FILES;
 
 export const MELEE_IDS = Object.keys(MELEE_WEAPONS) as MeleeId[];
 

@@ -16,41 +16,62 @@ export const MAX_GRADE = 0.62;
 const SAMPLE = 1;
 /** Liaisons de plus de cette longueur : on ne les cherche pas (m). */
 export const LINK_REACH = 34;
-/** Marge de côté des liaisons du réseau (m) : un robot large qui les suit garde ses roues sur un sentier. */
-export const LINK_MARGIN = 1;
+/**
+ * Marge de côté des liaisons du réseau (m) : la demi-largeur des plus larges robots au sol (leurs
+ * roues ou leurs chenilles, au bord extérieur : 1,6 à 2,2 m). Un robot qui les suit garde ses roues
+ * sur un sentier ; à 1 m, une liaison pouvait longer le bord d'un sentier, et un robot large qui la
+ * suivait roulait d'une chenille sur le remblai.
+ */
+export const LINK_MARGIN = 2;
 
 /** Dévers le plus fort qu'on suit en ligne droite (dénivelé par mètre en travers : ~22°) : au-delà, on longe un talus. */
 export const MAX_CROSS = 0.4;
 
+/** Hauteurs de la rangée précédente de `walkable` (une par ligne parallèle), gardées d'un appel à l'autre. */
+let lanesBuffer = new Float64Array(8);
+
 /**
  * La ligne droite de (ax, az) à (bx, bz) est praticable sur le relief. Avec une marge (`margin` m),
- * les deux lignes qui la longent de chaque côté le sont aussi (un robot a sa largeur : au bord d'un
- * sentier, ses roues de côté tomberaient), et le sol ne penche pas trop en travers (elle ne longe
- * pas un talus).
+ * toute la bande de cette demi-largeur l'est (un robot a sa largeur : au bord d'un sentier, ses
+ * roues de côté tomberaient) : des lignes parallèles de -margin à margin, à SAMPLE m au plus l'une
+ * de l'autre, chacune praticable, et le sol ne penche nulle part trop en travers entre deux voisines
+ * (elle ne longe pas un talus, ni l'arête d'un remblai, où un robot à cheval reste posé sur le
+ * ventre). Deux lignes au bord seulement ne voyaient pas l'arête entre elles : un robot qui coupait
+ * vers un sentier en roulant le long de son remblai s'y calait.
  */
 export function walkable(t: Terrain, ax: number, az: number, bx: number, bz: number, margin = 0): boolean {
   const length = Math.hypot(bx - ax, bz - az);
   const n = Math.max(1, Math.ceil(length / SAMPLE));
   const limit = MAX_GRADE * (length / n);
-  // La gauche de (dx, dz) est (dz, -dx)
-  const sx = margin > 0 && length > 1e-6 ? ((bz - az) / length) * margin : 0;
-  const sz = margin > 0 && length > 1e-6 ? (-(bx - ax) / length) * margin : 0;
-  const side = sx !== 0 || sz !== 0;
-  let last = terrainHeight(t, ax, az);
-  let lastL = side ? terrainHeight(t, ax + sx, az + sz) : 0;
-  let lastR = side ? terrainHeight(t, ax - sx, az - sz) : 0;
+  // Lignes de chaque côté de la ligne droite (la gauche de (dx, dz) est (dz, -dx)), `gap` m l'une de l'autre
+  const lanes = margin > 0 && length > 1e-6 ? Math.ceil(margin / SAMPLE) : 0;
+  if (lanes === 0) {
+    let last = terrainHeight(t, ax, az);
+    for (let i = 1; i <= n; i++) {
+      const h = terrainHeight(t, ax + ((bx - ax) * i) / n, az + ((bz - az) * i) / n);
+      if (Math.abs(h - last) > limit) return false;
+      last = h;
+    }
+    return true;
+  }
+  const gap = margin / lanes;
+  const sx = ((bz - az) / length) * gap;
+  const sz = (-(bx - ax) / length) * gap;
+  const tilt = MAX_CROSS * gap;
+  const width = 2 * lanes + 1;
+  if (lanesBuffer.length < width) lanesBuffer = new Float64Array(width);
+  const last = lanesBuffer;
+  for (let k = 0; k < width; k++) last[k] = terrainHeight(t, ax + sx * (k - lanes), az + sz * (k - lanes));
   for (let i = 1; i <= n; i++) {
     const x = ax + ((bx - ax) * i) / n;
     const z = az + ((bz - az) * i) / n;
-    const h = terrainHeight(t, x, z);
-    if (Math.abs(h - last) > limit) return false;
-    last = h;
-    if (!side) continue;
-    const hl = terrainHeight(t, x + sx, z + sz);
-    const hr = terrainHeight(t, x - sx, z - sz);
-    if (Math.abs(hl - lastL) > limit || Math.abs(hr - lastR) > limit || Math.abs(hl - hr) > 2 * margin * MAX_CROSS) return false;
-    lastL = hl;
-    lastR = hr;
+    let beside = 0;
+    for (let k = 0; k < width; k++) {
+      const h = terrainHeight(t, x + sx * (k - lanes), z + sz * (k - lanes));
+      if (Math.abs(h - last[k]) > limit || (k > 0 && Math.abs(h - beside) > tilt)) return false;
+      last[k] = h;
+      beside = h;
+    }
   }
   return true;
 }

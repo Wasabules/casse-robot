@@ -1,0 +1,12 @@
+{
+  "$schema": "../schemas/props.schema.json",
+  "$comment": "Un mât d'éclairage de 9 m, ses projecteurs en haut (la nuit, ils éclairent) ; plus solide qu'un lampadaire, il se couche aussi sous un choc franc. De la tôle d'acier peinte : elle ne brûle pas d'elle-même.",
+  "shape": { "kind": "cylinder", "radius": 0.14, "halfHeight": 4.6 },
+  "mass": 420,
+  "friction": 0.6,
+  "hp": 110,
+  "shatters": true,
+  "anchored": true,
+  "topples": 0.5,
+  "resist": { "kinetic": 0.6, "pierce": 0.85, "energy": 0.7, "explosive": 1.2, "impact": 1.3, "fire": 0, "cut": 0.7 }
+}

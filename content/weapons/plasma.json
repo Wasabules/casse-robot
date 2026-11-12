@@ -1,0 +1,24 @@
+{
+  "$schema": "../schemas/weapons.schema.json",
+  "$comment": "Projecteur de plasma : un jet continu de plasma brûlant, à courte portée, qui passe le blindage lourd et met le feu ; il chauffe vite (3,5 s de jet) et puise dans les batteries.",
+  "cooldown": 0.05,
+  "automatic": true,
+  "spread": 0.012,
+  "recoil": 0.5,
+  "range": 26,
+  "engage": 14,
+  "power": 0.08,
+  "handling": { "hip": 1.2, "move": 0.001, "turn": 0.004 },
+  "heat": { "perShot": 0.025, "cooling": 0.22 },
+  "projectile": {
+    "look": "plasma",
+    "speed": 60,
+    "gravity": 0,
+    "life": 0.45,
+    "damage": 13,
+    "damageType": "energy",
+    "penetrating": false,
+    "impulse": 0.8,
+    "ignite": 0.04
+  }
+}

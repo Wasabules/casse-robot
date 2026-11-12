@@ -1,0 +1,24 @@
+{
+  "$schema": "../schemas/melee.schema.json",
+  "$comment": "Toupie horizontale : une grande barre d'acier qui tourne à plat au-dessus (ou au-dessous) de son bloc, 1,9 m d'envergure, ~3 kJ à plein régime. Elle arrache des blocs entiers et éprouve les liaisons ; chaque coup la fait reculer ; abîmée, elle se déséquilibre.",
+  "look": "bar",
+  "motion": "spin",
+  "axis": "up",
+  "hub": [0, 0.42, 0],
+  "blade": { "inner": 0, "outer": 0.95, "half": 0.07, "arms": { "count": 2, "width": 0.18 } },
+  "spin": { "inertia": 1.6, "speed": 62, "spinUp": 2.4, "spinDown": 15, "gyro": 1, "unbalance": 0.035, "mass": 6 },
+  "hit": {
+    "damageType": "cut",
+    "damage": 170,
+    "bite": 0.55,
+    "fling": 0.5,
+    "push": { "tangent": 1, "radial": 0.55, "axial": 0, "lift": 0.3 },
+    "recoil": 1,
+    "spread": 0.35,
+    "wheels": 1.2,
+    "wear": 5,
+    "gap": 0.15,
+    "minSpeed": 0.25
+  },
+  "engage": 1.5
+}

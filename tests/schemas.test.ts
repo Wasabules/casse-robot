@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import type { MapAssets } from "../src/shared/arena/layout";
+import { PROP_TYPES } from "../src/shared/catalog/props";
 import { PRESET_BOTS } from "../src/shared/design/presets";
 import { upgradeDesign, validateDesign, type RobotDesign } from "../src/shared/design/robotDesign";
 import {
@@ -73,6 +75,11 @@ const FULL = {
   zones: [{ label: "A", x: 0, z: 0, y: 0.5, radius: 6 }, { label: "C", x: 20, z: 0, y: 1, radius: 8 }],
   places: [{ name: "Village", names: { en: "Village" }, place: "village", x: 20, z: 20 }],
   spawns: { blue: { x: 0, z: -45, facing: 0, width: 30 }, red: { x: 0, z: 45, facing: 180, width: 30 } },
+  assets: {
+    // (un modèle par type d'accessoire : la lecture les range par type)
+    models: Object.fromEntries(Object.keys(PROP_TYPES).sort().map((type, i) => [type, { sha256: i.toString(16).padStart(64, "0"), bytes: 1000 + i }])) as Full<MapAssets>["models"],
+    ambience: { sha256: "fedcba9876543210".repeat(4), bytes: 209282 },
+  },
 } as const satisfies Full<MapFile>;
 
 /** La carte minimale du guide des auteurs (le premier bloc JSON après « A minimal map »). */

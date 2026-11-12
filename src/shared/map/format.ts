@@ -1,6 +1,10 @@
-import type { ArenaId, BoxLook, CommunityMeta, PathSurface, PlaceId, StaticKind } from "../arena/layout";
+import type { ArenaId, BoxLook, CommunityMeta, MapAssets, PathSurface, PlaceId, StaticKind } from "../arena/layout";
 import type { GroundStyle } from "../arena/features";
 import type { PropType } from "../catalog/props";
+import type { GlbProblem } from "../media/glb";
+import type { OpusProblem } from "../media/ogg";
+
+export type { MapAsset, MapAssets } from "../arena/layout";
 
 /*
  * Format des cartes communautaires (`MapFile`) : une donnée JSON versionnée, qu'une personne écrit
@@ -331,6 +335,15 @@ export interface MapFile {
   readonly places?: readonly MapPlace[];
   /** Lignes de départ libres ; sans elles, celles de `bounds` (au nord et au sud). */
   readonly spawns?: MapSpawns;
+  /**
+   * Les ressources d'un paquet de carte (map/pack.ts) : l'empreinte et la taille de chacun de ses
+   * modèles glTF et de son ambiance. Ce ne sont pas les fichiers : ils voyagent à côté de la carte
+   * (le paquet, la bibliothèque du navigateur, le serveur qui les sert par leur empreinte), mais
+   * l'identifiant de la carte (`mapKey`) les couvre ainsi : une ressource changée, c'est une autre
+   * carte. Une carte sans ressources n'a pas ce champ (son identifiant est celui d'avant). La lecture
+   * d'un paquet l'écrit d'après ses fichiers, quoi qu'en dise son map.json.
+   */
+  readonly assets?: MapAssets;
 }
 
 /**
@@ -413,10 +426,37 @@ export const MAP_LIMITS = {
   navLinks: 8192,
 } as const;
 
+/**
+ * Bornes d'un paquet de carte (map/pack.ts), qui vient de n'importe qui : l'archive, ses fichiers, et
+ * chaque ressource (octets ; une ambiance en secondes). Un modèle d'accessoire du jeu pèse quelques
+ * dizaines de Ko (la caisse : 45 Ko) ; une ambiance du jeu, ~200 Ko pour ~17 s en stéréo. Décodée, une
+ * ambiance pèse ~0,4 Mo par seconde : une minute au plus.
+ */
+export const PACKAGE_LIMITS = {
+  /**
+   * L'archive (un seul fichier). Ce qu'on en décompresse est borné fichier par fichier (les autres ne
+   * sont pas lus) : au plus ~22 Mo en tout.
+   */
+  archive: 24 * 1024 * 1024,
+  /** Fichiers (et dossiers) d'un paquet. */
+  entries: 128,
+  /** map.json (comme un fichier de carte), l'image du relief, LICENSE.txt. */
+  map: MAP_LIMITS.bytes,
+  terrain: 2 * 1024 * 1024,
+  license: 64 * 1024,
+  /** Un modèle glTF, et tous ceux d'une carte. */
+  model: 4 * 1024 * 1024,
+  models: 16 * 1024 * 1024,
+  /** L'ambiance : un Ogg Opus d'une ou deux voies, de 2 à 60 s. */
+  ambience: 2 * 1024 * 1024,
+  ambienceMin: 2,
+  ambienceMax: 60,
+} as const;
+
 /** Sur quoi porte un dépassement de nombre (`MapIssue` « tooMany »). */
 export type MapCounted =
   | "boxes" | "props" | "dynamicProps" | "prefabs" | "scattered" | "zones" | "places" | "lava" | "vents" | "falls" | "paths" | "points" | "languages"
-  | "navPoints" | "navLinks";
+  | "navPoints" | "navLinks" | "files";
 
 /** Ce que les lignes de départ ont de travers : une équipe. */
 export type MapTeam = "blue" | "red";
@@ -462,6 +502,20 @@ export type MapIssue =
   /** La ligne de départ (libre) d'une équipe sort de la zone de jeu. */
   | { code: "spawnOutside"; team: MapTeam }
   /** Les deux lignes de départ (libres) sont trop près l'une de l'autre. */
-  | { code: "spawnClose"; distance: number; min: number };
+  | { code: "spawnClose"; distance: number; min: number }
+  /** Le paquet n'est pas une archive lisible (zip abîmé, chiffré, zip64, une entrée qui ne se décompresse pas). */
+  | { code: "archive" }
+  /** Un fichier du paquet au nom dangereux (« .. », chemin absolu, lecteur) : tout le paquet est refusé. */
+  | { code: "packagePath"; path: string }
+  /** Le paquet n'a pas de map.json. */
+  | { code: "packageMap" }
+  /** Une ressource du paquet (ou l'image de son relief) plus grosse que permis (Ko). */
+  | { code: "assetSize"; path: string; size: number; max: number }
+  /** Un fichier inattendu parmi les ressources : un modèle pour un type d'accessoire que le jeu ne connaît pas, un autre son que l'ambiance. */
+  | { code: "assetName"; path: string }
+  /** Un modèle glTF que le jeu ne sait pas lire (les contrôles de `npm run models`). */
+  | { code: "assetModel"; path: string; problem: GlbProblem }
+  /** L'ambiance : pas un Ogg Opus lisible, trop de voies, une durée hors des bornes. */
+  | { code: "assetSound"; path: string; problem: OpusProblem };
 
 export type MapIssueCode = MapIssue["code"];

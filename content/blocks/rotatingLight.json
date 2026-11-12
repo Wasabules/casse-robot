@@ -1,0 +1,11 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Gyrophare : orange, son faisceau tourne et balaie ce qui l'entoure (un engin de chantier, une dépanneuse). Sans effet dans la simulation : la nuit, il éclaire la scène.",
+  "cost": 3,
+  "mass": 0.4,
+  "hp": 30,
+  "tinted": false,
+  "bond": 40,
+  "light": { "kind": "sweep", "range": 20, "cone": 0.7, "color": "amber", "pattern": "rotate" },
+  "price": 70
+}

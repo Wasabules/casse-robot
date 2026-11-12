@@ -170,9 +170,9 @@ describe("la Cité", () => {
 
   it("une courte bataille se joue sans erreur, et des robots y sont détruits", { timeout: 120_000 }, () => {
     // (une graine dont le tirage des robots donne des destructions en 30 s ; le tirage dépend de la
-    // liste des robots prédéfinis : à 46 robots, la 4 donne trois destructions, et aligne le
-    // Duelliste et le Pilon ; sur les graines 1 à 10, quatre n'en donnent aucune)
-    seedRandom(4);
+    // liste des robots prédéfinis, et la bataille du relief au bit près : à 46 robots, le relief
+    // arrondi à 16 bits, la 3 donne deux destructions ; sur les graines 1 à 10, quatre n'en donnent aucune)
+    seedRandom(3);
     spawnTeams(sim, matchEntries(GAME_MODES.battle, PRESET_BOTS[1]));
     startMatch(sim, { ...GAME_MODES.battle.match, timeLimit: 30 });
     let kills = 0;

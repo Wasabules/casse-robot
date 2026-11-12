@@ -151,7 +151,7 @@ Don't write it by hand: `npm run map:terrain` makes it from an image (see [Impor
 
 - `sky`: `{ "color": "#bfd0db", "fog": 0.0045, "dust": 0, "night": false }`: color of the sky and the fog, fog density (0 to 0.05), dust in the air (grains per second: a ruined city), and night (`"night": true`: the moon instead of the sun, a starry sky, the `lamppost` lampposts and the `floodlight` floodlight masts lit, the robots' headlights and beacons too; then pick a dark sky, like City by Night: `"color": "#141b2b"`, `"fog": 0.0095`). By default, the Valley's sky.
 - `ground`: the ground palette (`#rrggbb` colors). `preset` starts from that of one of the game's arenas (`valley` by default, `canyon`, `island`, `city`, `port`), and each field changes it: `base` (the two tints of the ground, mixed by noise), `dirt` (patches and paths), `sand` (banks), `mud` (bottom of the water), `rock` (steep slopes and heights), `peak` (summits: snow, ash), `rockLine` and `peakLine` (heights where rock and summit begin, m), `rockSpan`, `beach` (width of the beach, m of height), `basalt` and `basaltWidth` (solidified ground around lava), `strata` and `strataStep` (color bands of the cliffs), `patches` (patches: `[{ "x", "z", "r", "color" }]`), `grain` (pattern size, m), `stains` (share of dirt patches), `slope` (`{ "color", "from", "span" }`: the tint of slopes), `lawn` (grass paths).
-- `ambience`: the ambient sound of one of the game's arenas (`valley` by default; `depot`, `fort`, `trenches`, `yard`, `canyon`, `island`, `city`, `port`).
+- `ambience`: the ambient sound of one of the game's arenas (`valley` by default; `depot`, `fort`, `trenches`, `yard`, `canyon`, `island`, `city`, `port`). A [map package](#map-packages) can bring its own (`sounds/ambience.ogg`): this one then plays while it loads.
 
 ### Water, lava, vents, waterfalls
 
@@ -316,7 +316,7 @@ The server runs the same checks on the maps in its folder, and the browser on th
 - In the game (`npm run dev`): **Play**, a mode, your map. The **Free Arena** mode gives a free camera (WASD, right click) to roam the map while the AI fights on it; **M** shows the full map and its places; **Zone Capture** shows whether the AI reaches each zone.
 - In the browser console: `__casse.testMap(carte)` starts a test match on a map (a JavaScript object), `__casse.maps.list()` lists the known maps.
 - Balancing: `BATTLE_ARENA=ma-carte npm run battle` plays eight AI battles on a map from `maps/` (the file name without `.casse-map.json`) and gives a report: match length, kill causes, share of time ground robots are stuck, step cost. `MAP_PERF=1 npx vitest run tests/communityMaps.test.ts --silent=false` compares the cost of a combat step on each map in `maps/` with that of the Depot and the Valley.
-- In multiplayer: `npm run server` puts the maps in `maps/` in the rotation, after the game's arenas (`MAPS_DIR`: another folder; `MAPS_ONLY=1`: only the maps); the log says why it drops an invalid map. A player who doesn't have the map receives it once (about 75 KB for Lake Vale) and keeps it.
+- In multiplayer: `npm run server` puts the maps in `maps/` in the rotation, after the game's arenas (`MAPS_DIR`: another folder; `MAPS_ONLY=1`: only the maps); the log says why it drops an invalid map. A player who doesn't have the map receives it once (about 75 KB for Lake Vale) and keeps it. The folder can also hold [map packages](#map-packages), whose resources the server serves to the players who receive the map.
 
 ## Submitting your map to the game
 
@@ -325,29 +325,59 @@ The server runs the same checks on the maps in its folder, and the browser on th
 3. The map must have a **free license** (`CC-BY-4.0`, `CC-BY-SA-4.0` or `CC0-1.0`: the game is free, its community must be able to reuse it), your name (or your nickname) as author, and a description; a name and a description in English (`names`, `descriptions`) are welcome. Don't reuse terrain you don't have the rights to (a real elevation map is usually free: state its source in the *pull request* description).
 4. `npm run check` (which review runs, and which continuous integration will run) checks all the maps in `maps/` and plays a short AI battle on each; `npm run map:check` only runs the checks, in a few seconds.
 
+The game ships map files, not packages: a map that brings its own models or ambience is shared as its archive (`.casse-map.zip`: import it in the game, put it in a server's `MAPS_DIR`), with the license of each resource stated in its `LICENSE.txt`.
+
 ## The game's arenas as maps
 
-The game's own arenas, from the Depot to the Harbor, are written in this format in [`content/arenas/`](../content/arenas/) (`npm run map:export -- all`; `npm run map:export -- valley canyon --into some/folder` for a few of them elsewhere). They are a reference for what the format can say, and a starting point: copy one into `maps/` under another name, change it (in the editor: **Community maps… → Import a map…**, then **Edit**), and it's yours (their license is the game's, AGPL-3.0-or-later). They are not in `maps/`: the game and the server would load them a second time, next to the arenas they already have.
+The game's own arenas, from the Depot to the Harbor, are written in this format in [`content/arenas/`](../content/arenas/), and **the game plays them from there**: the browser, the server and the tests read these files (the large ones are downloaded only when they are played or shown); the code that builds them (`src/shared/arena/`) only writes them (`npm run map:export -- all`; `npm run map:export -- valley canyon --into some/folder` for a few of them elsewhere). They are a reference for what the format can say, and a starting point: copy one into `maps/` under another name, change it (in the editor: **Community maps… → Import a map…**, then **Edit**), and it's yours (their license is the game's, AGPL-3.0-or-later). They are not in `maps/`: the server would take them for community maps, next to the arenas it already plays.
 
-The export is exact: read back and built, each file gives the same arena as the game's code, to the bit (boxes, props, zones, paths, play dimensions, sky, ground palette, nav grid or nav graph), except the terrain, at the precision of its 16-bit coding (0.4 mm at most), and the direction of the Volcanic Island's waterfalls (an angle that no number of degrees gives back to the bit; only the renderer reads it). A short AI battle on the arena built from its file gives the same world as on the code's arena, with the file's terrain. To get there, a file says everything explicitly:
+The export is exact: read back and built, each file gives the same arena as the game's code, to the bit (boxes, props, zones, paths, play dimensions, sky, ground palette, terrain, nav grid or nav graph: the code rounds its terrains once to the 16-bit precision of the format), except the direction of the Volcanic Island's waterfalls (an angle that no number of degrees gives back to the bit; only the renderer reads it). A short AI battle on the arena built from its file gives the same world as on the code's arena. To get there, a file says everything explicitly:
 
 - the height of every box and prop (`y`), the perimeter walls and the invisible limits as boxes, and `"limits": { "bound": 0 }` (no limit added); `"nav": false` when the arena has no nav grid; the small arenas' sky and their own ambience;
 - the angles, in degrees chosen so that they give the rotation back exactly; when no degrees do (a rotation composed by the code, an angle beyond a full turn), a `quat`; an upright prop that the code gave an orientation keeps it (`quat: [0, 0, 0, 1]`);
 - a prop's `centered` height when no base height gives its center back exactly.
 
-The files are written one element per line, the terrain last (`mapText`): a map read and written again gives the same text. After changing an arena, run `npm run map:export -- all` again: the tests check that the files are the ones the export makes.
+The files are written one element per line, the terrain last (`mapText`): a map read and written again gives the same text. After changing an arena's code, run `npm run map:export -- all` again: the game plays the files, not the code, and the tests check that the files are the ones the export makes.
 
 ## Map packages
 
-A **map package** is the same map as a folder, easier to make and to read with other tools (no base64 to decode):
+A **map package** is the same map as a folder, easier to make and to read with other tools (no base64 to decode), which can also bring **its own resources**: glTF models for some of the game's props, and its own ambient sound. The folder is the author's working form; to share it, it becomes **one file**, a zip archive (`.casse-map.zip`), which the game imports, the server plays and the tool reads.
 
 | File | |
 |---|---|
 | `map.json` | The map, whose `terrain` names its image (`"image": "terrain.png"`) instead of holding its `heights`. |
 | `terrain.png` | The terrain as a 16-bit grayscale PNG, `cells + 1` pixels per side: each pixel is the code of its height (0: `min`, 65,535: `max`), the top to the north and the left to the west (like an imported terrain image). |
 | `LICENSE.txt` | The map's license and author (written from `meta`; the map itself stays the reference). |
+| `models/props/<type>.glb` | Optional: a glTF binary model that replaces, **on this map only**, the game's model of an existing prop type (`crate.glb`, `barrel.glb`, `oak.glb`…: the types of [`props`](#props-the-props)). The conventions are those of the game's own prop models ([`models.md`](models.md): meters, +y up, the origin at the bottom center of the footprint, a material named `glass` for a lamp's glass), and so are the checks (`npm run models`): one self-contained `.glb`, no glTF extension the game doesn't read. The collision shape stays the game's: a model changes what you see, not how the prop behaves. A new prop type needs code (its catalog entry, its collision shape): a package can't add one. |
+| `sounds/ambience.ogg` | Optional: the map's ambient sound, an Ogg Opus loop, mono or stereo, 2 to 60 s, played instead of `ambience` (which still says what to play while it loads, or in a browser that can't play Opus). The game brings it to the level of its own ambiences and crossfades its last quarter second into its start: make it loop cleanly anyway (`ffmpeg -i ambience.wav -c:a libopus -b:a 96k sounds/ambience.ogg`). |
 
-`npm run map:pack -- maps/ma-carte.casse-map.json [--into dossier]` (`dossier`: a folder) makes the folder `ma-carte/` (next to the file, or in `--into`); `npm run map:unpack -- ma-carte/ [--into dossier]` makes `ma-carte.casse-map.json` from it again, and checks it like the game does. Nothing is lost either way: the codes go into the image as they are (the Volcanic Island comes back byte for byte; its package weighs 115 KB against 271 KB, the PNG compresses the terrain). The game and the server don't read packages yet: only the tool does.
+Notes and work files (`README.md`, a `sources/` folder with your `.blend`) can stay in the folder: the game never reads them. Anything else under `models/` or `sounds/` is an error (a typo, a model for a block, which a package can't change).
+
+**Identity.** A map from a package carries the SHA-256 and the size of each of its resources (`assets`, written by whoever reads the package from its files, never by hand): the map's identifier covers them, so a model changed by one byte makes another map, and a player who already has the old one receives the new one. A package without resources is exactly the map it was (same identifier as its `.casse-map.json`).
+
+**Commands.**
+
+- `npm run map:pack -- maps/ma-carte.casse-map.json [--into dossier]` (`dossier`: a folder) makes the folder `ma-carte/` (next to the file, or in `--into`); with `--zip`, the archive `ma-carte.casse-map.zip` directly.
+- `npm run map:pack -- ma-carte/` makes the archive `ma-carte.casse-map.zip` from the folder (its resources included), and checks it.
+- `npm run map:unpack -- ma-carte.casse-map.zip` makes the folder `ma-carte/` from an archive (its files rewritten by the tool: the map, its terrain, its license, its resources); `npm run map:unpack -- ma-carte/` makes `ma-carte.casse-map.json` from a folder, and checks it like the game does (without its resources: a `.casse-map.json` can't hold them).
+- `npm run map:check -- ma-carte/ ma-carte.casse-map.zip` checks packages as well as files, and lists their resources.
+
+Nothing is lost going from a map file to a package and back: the codes go into the image as they are (the Volcanic Island comes back byte for byte; its package weighs 115 KB against 271 KB, the PNG compresses the terrain). An archive made by any zip tool works too (Windows' "Compress to ZIP file", `zip -r`, `Compress-Archive`), even with everything inside one folder.
+
+**In the game.** **Community maps… → Import a map…** takes a `.casse-map.zip` as well as a `.casse-map.json`; the map and its resources are kept in the browser, and **Export the file** writes the package back. In the map editor, **File → Resources (package)** lists the map's resources, adds a prop model (choose the prop type, then the `.glb`) or the ambience (an `.ogg`), and removes one; a map with resources exports as a package. While a model or the ambience loads, the game shows its own model and plays the declared `ambience`.
+
+**On a server.** `MAPS_DIR` takes packages, as archives (`.zip`) or as folders (a folder with a `map.json`), next to `.casse-map.json` files. A player who doesn't have the map receives it over the game's connection as before, and downloads its resources from the game server over HTTP, by their SHA-256 (`/map-assets/<sha256>`: the server serves only the resources of the maps it plays; the browser checks each file against the map, keeps it, and won't download it again).
+
+**Limits.** A package comes from anyone: everything is bounded before it's read, and a faulty resource rejects the package with its reason.
+
+| | At most |
+|---|---|
+| The archive | 24 MB, 128 files |
+| `map.json`, `terrain.png`, `LICENSE.txt` | 4 MB, 2 MB, 64 KB |
+| A model, all the models | 4 MB, 16 MB |
+| The ambience | 2 MB, 2 to 60 s, mono or stereo |
+
+For comparison, the game's crate model weighs 45 KB, and an ambience of the game ~200 KB for 19 s in stereo (Lake Vale with a model and an ambience: a 245 KB package).
 
 ## For developers
 
@@ -364,6 +394,13 @@ The engine is in `src/shared/map/` (no DOM: it also runs on the server); everyth
 | `mapFromArena(arena, meta?)`, `exactTurn`, `exactDegrees` | export.ts | An arena (a game arena, or any `ArenaLayout`) as a map, exactly (see [The game's arenas as maps](#the-games-arenas-as-maps)). |
 | `mapText(carte)` | text.ts | A map as the text of its file: one element per line, the terrain last, `-0` kept. |
 | `packMap`, `unpackMap`, `packageImage`, `PACKAGE_FILES` | pack.ts | A map ↔ a map package (see [Map packages](#map-packages)). |
+| `readPackage(source, inflate)`, `readMapArchive(octets, inflate, inflateRaw)`, `folderSource`, `zipSource` | pack.ts | Reads a package (a folder, through a small file-system interface; an archive): the map with its `assets`, the resources by their SHA-256, the license; or its problems. |
+| `writeMapArchive(carte, ressources, …)`, `packageEntries`, `licenseText` | pack.ts | A map and its resources as an archive (or the files of a folder). |
+| `modelIssue`, `ambienceIssue`, `assetMatches`, `assetEntries`, `PACKAGE_LIMITS` | pack.ts, format.ts | The checks of a resource, and its bounds. |
+| `openZip`, `writeZip` | media/zip.ts | A zip archive, read and written without dependencies (stored or deflated entries). |
+| `inspectGlb`, `GLTF_EXTENSIONS` | media/glb.ts | What the game needs to read a `.glb` (shared with `npm run models`). |
+| `inspectOpus` | media/ogg.ts | An Ogg Opus file: its pages, its header, its duration. |
+| `sha256` | media/sha256.ts | The SHA-256 of some bytes (the browser has none on a plain-http page). |
 | `decodePng`, `decodeRaw16`, `imageFromBytes`, `terrainFromImage`, `heightsFromImage`, `imageFromHeights` | heightmap.ts | Terrain import and export. |
 | `encodePng` | png.ts | A height image as an 8- or 16-bit PNG. |
 | `encodeTerrain`, `decodeTerrain`, `terrainCodes` | codec.ts | A map's terrain ↔ the game's heights (the decoded terrain is cached per map terrain: it must not be modified); its raw 16-bit codes. |

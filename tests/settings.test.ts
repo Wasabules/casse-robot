@@ -135,6 +135,27 @@ describe("Réglages du joueur", () => {
     expect(defaultSettings({ coarse: false, screen: 1080, memory: 8, cores: 8 })).toEqual(DEFAULT_SETTINGS);
   });
 
+  it("le jeu au doigt : par défaut, visée en glissant, viseur qui bascule ; des réglages d'avant restent lisibles", () => {
+    expect(DEFAULT_SETTINGS).toMatchObject({
+      touchAim: "swipe", touchSensitivity: 1, touchStickSensitivity: 1, touchInvertY: false,
+      touchScopeToggle: true, touchSize: 1, touchOpacity: 1, touchLeftHanded: false,
+    });
+    // Des réglages enregistrés avant l'onglet Tactile : celui-ci par défaut, le reste gardé
+    const old = parseSettings(JSON.stringify({ sensitivity: 1.4, drive: "tank", scopeToggle: false }));
+    expect(old).toMatchObject({ sensitivity: 1.4, drive: "tank", scopeToggle: false, touchAim: "swipe", touchScopeToggle: true, touchSize: 1 });
+    // Gardés s'ils sont valides, bornés, sinon ceux par défaut
+    const s = parseSettings(JSON.stringify({
+      touchAim: "stick", touchSensitivity: 2.2, touchStickSensitivity: 9, touchInvertY: true,
+      touchScopeToggle: false, touchSize: 0.2, touchOpacity: 0.55, touchLeftHanded: true,
+    }));
+    expect(s).toMatchObject({
+      touchAim: "stick", touchSensitivity: 2.2, touchStickSensitivity: 3, touchInvertY: true,
+      touchScopeToggle: false, touchSize: 0.7, touchOpacity: 0.55, touchLeftHanded: true,
+    });
+    const bad = parseSettings(JSON.stringify({ touchAim: "gyro", touchSensitivity: "vite", touchOpacity: Infinity, touchLeftHanded: 1 }));
+    expect(bad).toMatchObject({ touchAim: "swipe", touchSensitivity: 1, touchOpacity: 1, touchLeftHanded: false });
+  });
+
   it("le moteur de rendu : WebGL par défaut, WebGPU gardé, une valeur inconnue ignorée ; l'adresse peut l'imposer", () => {
     expect(parseSettings(null).renderer).toBe("webgl");
     expect(parseSettings(JSON.stringify({ renderer: "webgpu" })).renderer).toBe("webgpu");

@@ -1,0 +1,11 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Radar : son équipe repère les ennemis à sa portée, à travers les murs et la fumée.",
+  "cost": 15,
+  "mass": 1.5,
+  "hp": 50,
+  "tinted": false,
+  "bond": 40,
+  "radar": { "range": 120 },
+  "price": 150
+}

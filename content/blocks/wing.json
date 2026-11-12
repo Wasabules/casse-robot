@@ -1,0 +1,13 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Aile. Fine et légère, elle craint le feu, les explosions et les lames. Profil d'aile : une plaque d'une case (0,25 m²).",
+  "cost": 2,
+  "mass": 0.4,
+  "hp": 40,
+  "tinted": true,
+  "bond": 40,
+  "resist": { "fire": 1.5, "explosive": 1.2, "energy": 1.2, "cut": 1.5 },
+  "shape": "plate",
+  "aero": { "area": 0.25, "liftSlope": 4, "stallAngle": 0.26, "dragMin": 0.02, "inducedDrag": 0.08 },
+  "price": 0
+}

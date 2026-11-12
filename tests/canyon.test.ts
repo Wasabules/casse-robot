@@ -229,31 +229,59 @@ describe("le Canyon (simulation)", () => {
     expect(flatDistance(goal, target)).toBeLessThan(0.01);
   });
 
-  it("un robot de l'IA rejoint la zone du fond du canyon depuis le plateau, et celle de l'arche", { timeout: 120_000 }, () => {
+  /** Un robot de l'IA seul en jeu, qu'on mène à une zone (il prendrait la plus proche qu'il ne tient pas) ; rend le temps qu'il y a mis (s). */
+  const driveTo = (bot: Bot, label: string, seconds: number): { reached: boolean; time: number } => {
+    const zone = CANYON.zones.find((z) => z.label === label)!;
+    const reached = (): boolean => flatDistance(bot.cockpit.part.rb.worldCom(), zone.pos) < zone.radius && Math.abs(bot.cockpit.part.rb.worldCom().y - zone.pos.y) < 4;
+    let i = 0;
+    for (; i < seconds * 60 && !reached(); i++) {
+      // Sa destination, tant qu'il patrouille (sans gêner un dégagement en marche arrière ni son redressement)
+      if (i % 30 === 0 && bot.ai.mode === "patrol") {
+        bot.ai.target = vec3(zone.pos.x, 0, zone.pos.z);
+        bot.ai.timer = 10;
+      }
+      sim.step();
+    }
+    return { reached: reached(), time: i / 60 };
+  };
+
+  it("un robot de l'IA rejoint la zone du fond du canyon depuis le plateau", { timeout: 120_000 }, () => {
     startMatch(sim, { ...GAME_MODES.capture.match, timeLimit: 600 });
     sim.combat = false;
-    const bot = place("buggy", 20, 40, Math.PI);
-    const zone = CANYON.zones.find((z) => z.label === "E")!;
-    // Seul en jeu : il va prendre une zone (la plus proche qu'il ne tient pas), on lui fixe la sienne
-    const reached = (z: typeof zone): boolean => flatDistance(bot.cockpit.part.rb.worldCom(), z.pos) < z.radius && Math.abs(bot.cockpit.part.rb.worldCom().y - z.pos.y) < 4;
-    // Sa destination, tant qu'il patrouille (sans gêner un dégagement en marche arrière ni son redressement)
-    const drive = (to: typeof zone, seconds: number): number => {
-      let i = 0;
-      for (; i < seconds * 60 && !reached(to); i++) {
-        if (i % 30 === 0 && bot.ai.mode === "patrol") {
-          bot.ai.target = vec3(to.pos.x, 0, to.pos.z);
-          bot.ai.timer = 10;
-        }
-        sim.step();
-      }
-      return i / 60;
-    };
-    const toOasis = drive(zone, 90);
-    expect(reached(zone), `au bout de ${toOasis.toFixed(0)} s`).toBe(true);
-    const arch = CANYON.zones.find((z) => z.label === "A")!;
-    const toArch = drive(arch, 100);
-    expect(reached(arch), `au bout de ${toArch.toFixed(0)} s`).toBe(true);
+    const toOasis = driveTo(place("buggy", 20, 40, Math.PI), "E", 90);
+    expect(toOasis.reached, `au bout de ${toOasis.time.toFixed(0)} s`).toBe(true);
   });
+
+  it("du plateau, un robot de l'IA monte à la zone de l'arche par le sentier en corniche", { timeout: 120_000 }, () => {
+    // (il partait de (40, 22), sur le rebord du canyon : ses roues de gauche au-dessus du vide, la
+    // roue arrière en l'air ; selon le premier coup de volant, il partait, restait calé ou tombait)
+    startMatch(sim, { ...GAME_MODES.capture.match, timeLimit: 600 });
+    sim.combat = false;
+    const toArch = driveTo(place("buggy", 40, 25, 1.2), "A", 80);
+    expect(toArch.reached, `au bout de ${toArch.time.toFixed(0)} s`).toBe(true);
+  });
+
+  // Du fond du canyon à l'arche : un sentier dans la paroi jusqu'au plateau, puis le sentier en
+  // corniche (au nord ou au sud de la gorge) ; de l'est (l'oasis), en passant d'abord sous le viaduc.
+  // Le robot calait au coude du sentier en corniche, une roue ou une chenille sur son arête : les
+  // liaisons du réseau et ses raccourcis longeaient le bord du sentier (une marge de 1 m, jugée sur
+  // deux lignes seulement), le sentier ne faisait que 6,5 m de large, et ses coudes avaient une marche
+  // sur leur bord intérieur ; sous le viaduc, il heurtait un des deux pieds d'une palée (le Buggy y
+  // perdait une roue). Sur six départs du lit et trois graines, le Buggy, le Tricycle et le Char y
+  // montaient 8 fois sur 18 (graine 6), maintenant 51 fois sur 54, en 30 à 120 s (voir la feuille de route)
+  const CLIMBS: readonly (readonly [string, number, number])[] = [
+    ["buggy", 45, 9], ["buggy", 55, 7], ["buggy", -30, -9.5],
+    ["trike", 45, 9], ["trike", 55, 7], ["trike", -64, -4],
+    ["tank", 20, 8.5], ["tank", 45, 9],
+  ];
+  for (const [id, x, z] of CLIMBS) {
+    it(`du fond du canyon (${x}, ${z}), un robot de l'IA (${id}) monte à la zone de l'arche`, { timeout: 180_000 }, () => {
+      startMatch(sim, { ...GAME_MODES.capture.match, timeLimit: 600 });
+      sim.combat = false;
+      const toArch = driveTo(place(id, x, z, Math.PI / 2), "A", 130);
+      expect(toArch.reached, `au bout de ${toArch.time.toFixed(0)} s`).toBe(true);
+    });
+  }
 
   it("une bataille s'y joue sans erreur, robots dans la carte, et des robots y sont détruits", { timeout: 120_000 }, () => {
     // Une graine dont les équipes tirées au sort se rencontrent en 45 s (le tirage change avec le

@@ -3,7 +3,7 @@ import { propDef, propHalf } from "../catalog/props";
 import { clamp } from "../math/scalar";
 import { vec3, type Quat } from "../math/vec";
 import { turnQuat } from "./build";
-import { encodeTerrain } from "./codec";
+import { encodeTerrain, terrainSource } from "./codec";
 import { readMap } from "./read";
 import {
   MAP_FORMAT, type MapBox, type MapFile, type MapMeta, type MapPlace, type MapProp, type MapQuat, type MapSpawn, type MapTurn,
@@ -11,10 +11,12 @@ import {
 
 /*
  * Une arène en carte (`MapFile`) : l'inverse de `arenaFromMap` (build.ts). Les arènes du jeu
- * (`ARENAS`) sont faites par du code ; exportées, elles se lisent, se vérifient et se rejouent comme
- * une carte communautaire. L'aller-retour est exact : la carte, relue et reconstruite, redonne au bit
- * près les mêmes boîtes, accessoires, zones, chemins, bornes… (le relief, à la précision de son
- * encodage sur 16 bits). Pour cela, tout est écrit explicitement (la hauteur de chaque élément, les
+ * (`ARENA_SOURCES`) sont faites par du code ; exportées (content/arenas/), elles se lisent, se
+ * vérifient et se jouent comme une carte communautaire : c'est d'après ces fichiers que le jeu les
+ * joue (map/gameArenas.ts). L'aller-retour est exact : la carte, relue et reconstruite, redonne au bit
+ * près les mêmes boîtes, accessoires, zones, chemins, bornes, le même relief (le code des arènes
+ * arrondit le sien à la précision du format, `quantizeTerrain`, et l'export réécrit tel quel le relief
+ * de carte d'où vient un relief décodé, `terrainSource`). Pour cela, tout est écrit explicitement (la hauteur de chaque élément, les
  * murs d'enceinte et les limites invisibles en boîtes, `limits.bound: 0`), et chaque nombre que la
  * construction recalcule (un angle en degrés, la base d'un accessoire) est choisi pour redonner
  * exactement celui de l'arène ; une orientation que des degrés ne redonnent pas au bit près (une
@@ -229,6 +231,7 @@ function rawMap(arena: ArenaLayout, meta: MapMeta): MapFile {
     spawns: b.spawns ? { blue: spawnOf(b.spawns.blue), red: spawnOf(b.spawns.red) } : undefined,
     boxes: arena.boxes.length ? arena.boxes.map(boxOf) : undefined,
     props: arena.props.length ? arena.props.map(propOf) : undefined,
-    terrain: t ? encodeTerrain(t.heights, t.cells, t.size / t.cells) : undefined,
+    // (un relief décodé, ou arrondi par le code de son arène : tel quel ; sinon, encodé)
+    terrain: t ? terrainSource(t) ?? encodeTerrain(t.heights, t.cells, t.size / t.cells) : undefined,
   } satisfies MapFile);
 }

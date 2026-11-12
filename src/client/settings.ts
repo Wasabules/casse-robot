@@ -41,6 +41,16 @@ export const FOV_RANGE = { min: 38, max: 70 } as const;
 export const SENSITIVITY_RANGE = { min: 0.25, max: 3 } as const;
 /** Bornes de la zone morte des sticks de la manette (part de leur course). */
 export const DEADZONE_RANGE = { min: 0.05, max: 0.4 } as const;
+/**
+ * Visée au doigt : en glissant le doigt sur l'écran (comme les jeux de tir sur téléphone), ou avec
+ * un second manche à droite, qui tourne la caméra en vitesse comme le stick droit d'une manette
+ * (glisser ailleurs sur l'écran la tourne toujours : voir input/touchPad.ts).
+ */
+export const TOUCH_AIMS = ["swipe", "stick"] as const;
+export type TouchAim = (typeof TOUCH_AIMS)[number];
+/** Bornes de la taille des commandes à l'écran (1 : celle d'origine) et de leur opacité. */
+export const TOUCH_SIZE_RANGE = { min: 0.7, max: 1.4 } as const;
+export const TOUCH_OPACITY_RANGE = { min: 0.3, max: 1 } as const;
 
 /** Réglages du joueur, gardés dans le navigateur d'une visite à l'autre. */
 export interface Settings {
@@ -85,6 +95,21 @@ export interface Settings {
   padInvertX: boolean;
   padInvertY: boolean;
   padDeadzone: number;
+  // --- Tactile (en jouant au doigt) ---
+  /** Visée : en glissant le doigt, ou au manche de visée. */
+  touchAim: TouchAim;
+  /** Sensibilité du glissé (1 : normale ; input/touchLook.ts) et du manche de visée. */
+  touchSensitivity: number;
+  touchStickSensitivity: number;
+  /** Axe vertical inversé : glisser (ou pousser le manche) vers le haut fait regarder vers le bas. */
+  touchInvertY: boolean;
+  /** Bouton du viseur : un appui le met, un autre l'enlève (true), ou à tenir (false). */
+  touchScopeToggle: boolean;
+  /** Taille des commandes à l'écran (1 : celle d'origine), et leur opacité (1 : opaques). */
+  touchSize: number;
+  touchOpacity: number;
+  /** Gaucher : le manche de déplacement à droite, la visée et les boutons à gauche. */
+  touchLeftHanded: boolean;
   // --- Son ---
   sound: boolean;
   /** Volume général (0 à 1). */
@@ -102,6 +127,10 @@ export interface Settings {
   name: string;
   server: string;
 }
+
+/** Les réglages qui sont des nombres (curseurs), et ceux qui sont des interrupteurs. */
+export type NumberSetting = { [K in keyof Settings]: Settings[K] extends number ? K : never }[keyof Settings];
+type BooleanSetting = { [K in keyof Settings]: Settings[K] extends boolean ? K : never }[keyof Settings];
 
 /** Les langues préférées du navigateur (aucune hors du navigateur : les tests). */
 function browserLanguages(): readonly string[] {
@@ -133,6 +162,15 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   padInvertX: false,
   padInvertY: false,
   padDeadzone: 0.15,
+  touchAim: "swipe",
+  touchSensitivity: 1,
+  touchStickSensitivity: 1,
+  touchInvertY: false,
+  // (au doigt, tenir le viseur bloquerait le pouce qui vise : il bascule, comme dans les jeux de tir sur téléphone)
+  touchScopeToggle: true,
+  touchSize: 1,
+  touchOpacity: 1,
+  touchLeftHanded: false,
   sound: true,
   volume: 0.8,
   music: 0.5,
@@ -222,7 +260,7 @@ export function parseSettings(json: string | null): Settings {
     // Texte illisible : réglages par défaut
   }
   const s: Settings = { ...DEFAULT_SETTINGS };
-  const bool = (key: "shadows" | "glow" | "lights" | "heatHaze" | "showFps" | "invertX" | "invertY" | "scopeToggle" | "sound" | "allParts" | "soundLog" | "padInvertX" | "padInvertY"): void => {
+  const bool = (key: BooleanSetting): void => {
     const v = saved[key];
     if (typeof v === "boolean") s[key] = v;
   };
@@ -230,12 +268,15 @@ export function parseSettings(json: string | null): Settings {
     const v = saved[key];
     if (typeof v === "string") s[key] = v;
   };
-  const number = (key: "fov" | "sensitivity" | "volume" | "music" | "padSensitivity" | "padDeadzone", min: number, max: number): void => {
+  const number = (key: NumberSetting, min: number, max: number): void => {
     const v = saved[key];
     if (typeof v === "number" && Number.isFinite(v)) s[key] = Math.min(max, Math.max(min, v));
   };
   const pick = <T extends string | number>(choices: readonly T[], v: unknown): T | undefined => choices.find((c) => c === v);
-  for (const key of ["shadows", "glow", "lights", "heatHaze", "showFps", "invertX", "invertY", "scopeToggle", "sound", "allParts", "soundLog", "padInvertX", "padInvertY"] as const) bool(key);
+  for (const key of [
+    "shadows", "glow", "lights", "heatHaze", "showFps", "invertX", "invertY", "scopeToggle", "sound", "allParts", "soundLog", "padInvertX", "padInvertY",
+    "touchInvertY", "touchScopeToggle", "touchLeftHanded",
+  ] as const) bool(key);
   text("name");
   text("server");
   number("fov", FOV_RANGE.min, FOV_RANGE.max);
@@ -244,6 +285,10 @@ export function parseSettings(json: string | null): Settings {
   number("music", 0, 1);
   number("padSensitivity", SENSITIVITY_RANGE.min, SENSITIVITY_RANGE.max);
   number("padDeadzone", DEADZONE_RANGE.min, DEADZONE_RANGE.max);
+  number("touchSensitivity", SENSITIVITY_RANGE.min, SENSITIVITY_RANGE.max);
+  number("touchStickSensitivity", SENSITIVITY_RANGE.min, SENSITIVITY_RANGE.max);
+  number("touchSize", TOUCH_SIZE_RANGE.min, TOUCH_SIZE_RANGE.max);
+  number("touchOpacity", TOUCH_OPACITY_RANGE.min, TOUCH_OPACITY_RANGE.max);
   // Touches : celles d'avant ces réglages (absentes) sont celles par défaut ; d'une version
   // précédente de la table, celles par défaut qui ont changé sont reprises (`migrateBindings`)
   const version = typeof saved.bindingsVersion === "number" && Number.isFinite(saved.bindingsVersion) ? saved.bindingsVersion : 1;
@@ -256,6 +301,7 @@ export function parseSettings(json: string | null): Settings {
   // (des réglages d'avant celui-ci : la fumée et les flammes réalistes, sauf au préréglage le plus léger)
   s.fxLook = pick(FX_LOOKS, saved.fxLook) ?? (saved.effects === "reduced" && saved.glow === false ? "simple" : s.fxLook);
   s.drive = pick(DRIVE_MODES, saved.drive) ?? s.drive;
+  s.touchAim = pick(TOUCH_AIMS, saved.touchAim) ?? s.touchAim;
   // L'ancien pilotage assisté : à la souris
   s.flight = pick(FLIGHT_MODES, saved.flight === "assisted" ? "mouse" : saved.flight) ?? s.flight;
   if (isLocale(saved.language)) s.language = saved.language;

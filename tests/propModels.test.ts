@@ -4,6 +4,7 @@ import * as B from "../src/client/babylon";
 import { PropBatches } from "../src/client/render/propBatches";
 import { PropModels } from "../src/client/render/propModels";
 import { CAR_HALF, PROP_TYPES } from "../src/shared/catalog/props";
+import { sha256 } from "../src/shared/media/sha256";
 import { writeGlb, type GlbModel, type GlbPrimitive } from "../tools/models/glb";
 
 /*
@@ -15,7 +16,7 @@ import { writeGlb, type GlbModel, type GlbPrimitive } from "../tools/models/glb"
  * illisible laisse le modèle du code. Les fichiers viennent d'un manifeste et d'un réseau simulés.
  */
 
-vi.mock("../src/client/render/propModelFiles", () => ({
+vi.mock("../src/client/render/modelFiles", () => ({
   PROP_MODEL_FILES: {
     pine: { file: "models/props/pine.glb", hash: "essai" },
     lamppost: { file: "models/props/lamppost.glb", hash: "essai" },
@@ -69,6 +70,12 @@ const CAR: GlbModel = {
   meshes: [[box([-1, 0, -0.5], [1, 1, 0.5], 0)]],
   materials: [{ name: "paint", color: [0.6, 0.1, 0.1] }],
 };
+/** Le sapin d'une carte (son paquet) : une seule boîte, une seule matière. */
+const MAP_PINE_BYTES = writeGlb({
+  generator: "essai",
+  meshes: [[box([-1, 0, -1], [1, 9, 1], 0)]],
+  materials: [{ name: "needles", color: [0.1, 0.4, 0.15] }],
+});
 const FILES: Record<string, Uint8Array> = {
   "/models/props/pine.glb": writeGlb(PINE),
   "/models/props/lamppost.glb": writeGlb(LAMPPOST),
@@ -103,7 +110,8 @@ describe("accessoires à modèle glTF (render/propModels.ts)", () => {
     engine = new NullEngine();
     scene = new B.Scene(engine);
     scene.useRightHandedSystem = true;
-    models = new PropModels(scene);
+    // (les ressources d'une carte : un seul modèle, d'après son empreinte)
+    models = new PropModels(scene, async (entry) => (entry.asset.sha256 === sha256(MAP_PINE_BYTES) ? MAP_PINE_BYTES : null));
   });
   afterAll(() => {
     scene.dispose();
@@ -124,6 +132,7 @@ describe("accessoires à modèle glTF (render/propModels.ts)", () => {
     expect(drawn).not.toBe(48);
     // Posé comme l'accessoire : le pied du fichier (y = 0) au bas du corps, le centre à l'origine
     const shape = PROP_TYPES.pine.shape;
+    if (shape.kind !== "cylinder") throw new Error("un pin est un cylindre");
     const { min, max } = bounds(pine);
     expect(min[1]).toBeCloseTo(-shape.halfHeight, 5);
     expect(max[1]).toBeCloseTo(9 - shape.halfHeight, 5);
@@ -175,6 +184,26 @@ describe("accessoires à modèle glTF (render/propModels.ts)", () => {
     expect(max).toEqual([CAR_HALF.x, CAR_HALF.y, CAR_HALF.z].map((v) => expect.closeTo(v, 5)));
     // Un seul matériau : pas de matière multiple
     expect(car.material).toBeInstanceOf(B.StandardMaterial);
+  });
+
+  it("une carte venue d'un paquet donne son modèle à un type : il remplace celui du jeu sur cette carte seulement, avec ses matières", async () => {
+    const own = { sha256: sha256(MAP_PINE_BYTES), bytes: MAP_PINE_BYTES.length };
+    const mine = models.source("pine", null, false, 0, own);
+    await vi.waitFor(() => expect(mine.getTotalVertices()).toBe(24), WAIT);
+    expect((mine.material as B.StandardMaterial).name).toBe("needles");
+    // Le sapin du jeu reste celui du jeu, avec ses matières
+    const game = models.source("pine", null, false);
+    await vi.waitFor(() => expect(game.getTotalVertices()).toBe(48), WAIT);
+    expect((game.material as B.MultiMaterial).subMaterials.map((m) => m?.name)).toEqual(["bark", "leaves"]);
+    // Noirci : ses matières à lui, assombries
+    const burnt = models.source("pine", null, false, 2, own);
+    expect(burnt.getTotalVertices()).toBe(24);
+    expect((burnt.material as B.StandardMaterial).diffuseColor.g).toBeLessThan((mine.material as B.StandardMaterial).diffuseColor.g * 0.5);
+    // Un modèle de carte introuvable (une ressource absente) : celui du jeu
+    const lost = models.source("pine", null, false, 0, { sha256: "f".repeat(64), bytes: 10 });
+    await vi.waitFor(() => expect(warn).toHaveBeenCalledWith(expect.stringContaining("d'une carte"), expect.anything()), WAIT);
+    expect(models.source("pine", null, false, 1, { sha256: "f".repeat(64), bytes: 10 }).getTotalVertices()).toBe(48);
+    expect(lost.isDisposed()).toBe(false);
   });
 
   it("un fichier introuvable laisse le modèle du code, avec un avertissement", async () => {

@@ -527,31 +527,81 @@
     .enemy .integ .bar i, .hint { transition: none; }
   }
 
-  /* Commandes tactiles en pilotant : manche à gauche, boutons à droite, réticule au centre */
+  /*
+   * Commandes tactiles en pilotant (input/touchPad.ts) : manche à gauche, boutons à droite, réticule
+   * au centre ; en visant au manche (.aim-stick), le manche de visée en bas à droite, les boutons
+   * autour de lui, à portée du pouce. Les tailles suivent l'écran (un petit téléphone les resserre),
+   * multipliées par le réglage (--tp-scale) ; leur opacité aussi (--tp-alpha). Gaucher (.lefty) :
+   * tout en miroir. Entre les boutons, le doigt passe à l'écran de jeu (il tourne la caméra).
+   */
   .touchpad {
+    --tp-scale: 1; --tp-alpha: 1;
+    --stick: min(calc(150px * var(--tp-scale)), 38vw, 34vh);
+    --btn: min(calc(64px * var(--tp-scale)), 16vw, 15vh);
+    --gap: calc(var(--btn) * 0.16);
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 7; pointer-events: none;
     display: flex; justify-content: space-between; align-items: flex-end;
-    padding: 0 16px calc(16px + env(safe-area-inset-bottom, 0px));
+    padding: 0 calc(16px + env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px));
   }
   .touchpad[hidden], .crosshair[hidden] { display: none; }
+  .touchpad.lefty { flex-direction: row-reverse; }
   .tp-stick {
-    pointer-events: auto; touch-action: none; position: relative;
-    width: 150px; height: 150px; border-radius: 50%;
+    pointer-events: auto; touch-action: none; position: relative; flex: none;
+    width: var(--stick); height: var(--stick); border-radius: 50%; box-sizing: border-box;
     background: rgba(15, 20, 26, 0.35); border: 2px solid rgba(255, 255, 255, 0.25);
+    opacity: var(--tp-alpha);
   }
+  /* Autour du manche, une marge qu'on peut toucher aussi : un pouce qui le manque de peu le prend quand même */
+  .tp-stick::before { content: ""; position: absolute; inset: calc(var(--stick) * -0.14); border-radius: 50%; }
   .tp-knob {
-    position: absolute; left: 50%; top: 50%; width: 62px; height: 62px; margin: -31px 0 0 -31px;
+    position: absolute; left: 50%; top: 50%; width: calc(var(--stick) * 0.41); height: calc(var(--stick) * 0.41);
+    margin: calc(var(--stick) * -0.205) 0 0 calc(var(--stick) * -0.205);
     border-radius: 50%; background: rgba(240, 244, 247, 0.6); pointer-events: none;
   }
-  .tp-buttons { pointer-events: auto; touch-action: none; display: grid; grid-template-columns: repeat(2, 64px); gap: 10px; }
-  .tp-btn {
-    width: 64px; height: 64px; border-radius: 50%; touch-action: none; user-select: none; -webkit-user-select: none;
-    font: 600 15px/1 var(--display); color: var(--text);
-    background: rgba(15, 20, 26, 0.45); border: 2px solid rgba(255, 255, 255, 0.28);
+  .tp-aim { display: none; grid-area: aim; }
+  .tp-aim .tp-knob { background: rgba(240, 189, 44, 0.6); }
+  .tp-buttons {
+    pointer-events: none; display: grid; gap: var(--gap);
+    grid-template-columns: repeat(2, var(--btn)); grid-template-rows: repeat(3, var(--btn));
+    grid-template-areas: "fire up" "fire down" "boost scope";
   }
-  .tp-btn.tp-fire { grid-row: span 2; height: 138px; border-radius: 32px; background: rgba(240, 180, 40, 0.5); }
-  .tp-btn.tp-boost, .tp-btn.tp-scope { font-size: 12px; }
-  .tp-btn.held { background: var(--signal); color: var(--signal-ink); border-color: var(--signal); }
+  .touchpad.lefty .tp-buttons { direction: rtl; }
+  .tp-btn {
+    pointer-events: auto; width: var(--btn); height: var(--btn); padding: 0; border-radius: 50%; box-sizing: border-box;
+    touch-action: none; user-select: none; -webkit-user-select: none;
+    font: 600 calc(var(--btn) * 0.23)/1 var(--display); color: var(--text);
+    background: rgba(15, 20, 26, 0.45); border: 2px solid rgba(255, 255, 255, 0.28);
+    opacity: var(--tp-alpha);
+  }
+  .tp-fire { grid-area: fire; }
+  .tp-up { grid-area: up; }
+  .tp-down { grid-area: down; }
+  .tp-boost { grid-area: boost; }
+  .tp-scope { grid-area: scope; }
+  .tp-btn.tp-fire { height: auto; border-radius: calc(var(--btn) / 2); background: rgba(240, 180, 40, 0.5); }
+  .tp-btn.tp-boost, .tp-btn.tp-scope { font-size: calc(var(--btn) * 0.19); }
+  .tp-btn.held { background: var(--signal); color: var(--signal-ink); border-color: var(--signal); opacity: 1; }
+  /*
+   * Visée au manche, à l'horizontale (et sur une tablette) : le manche de visée dans le coin, le tir à
+   * sa gauche, le viseur au-dessus de lui ; turbo, monter et descendre plus loin du pouce.
+   */
+  .touchpad.aim-stick .tp-aim { display: block; }
+  .touchpad.aim-stick .tp-buttons {
+    grid-template-columns: var(--btn) calc(var(--btn) * 1.2) var(--stick);
+    grid-template-rows: var(--btn) var(--stick);
+    grid-template-areas: "up down scope" "boost fire aim";
+    place-items: center;
+  }
+  .touchpad.aim-stick .tp-btn.tp-fire { width: calc(var(--btn) * 1.2); height: calc(var(--btn) * 1.2); border-radius: 50%; }
+  /* En hauteur : sur deux colonnes, le tir au-dessus du manche de visée */
+  @media (orientation: portrait) {
+    .touchpad.aim-stick { --stick: min(calc(150px * var(--tp-scale)), 31vw, 34vh); }
+    .touchpad.aim-stick .tp-buttons {
+      grid-template-columns: var(--btn) var(--stick);
+      grid-template-rows: var(--btn) calc(var(--btn) * 1.2) var(--stick);
+      grid-template-areas: "up scope" "down fire" "boost aim";
+    }
+  }
 
   /*
    * Au doigt (hud/touchHud.ts) : en partie, la pause et le plein écran en haut à gauche ; la page ne
@@ -832,6 +882,10 @@
     body.touch-pilot .gunnery dl { display: none; }
     body.touch-pilot .gunnery { left: auto; right: 12px; padding: 5px 7px; }
   }
+  /* En hauteur, visée au manche : les boutons montent plus haut, les armes et l'état du robot aussi */
+  @media (max-width: 760px) and (orientation: portrait) {
+    body.touch-pilot:has(.touchpad.aim-stick) .bottom-dock { bottom: calc(300px + env(safe-area-inset-bottom, 0px)); }
+  }
   /* À l'horizontale (écran bas) : la mini-carte rétrécit au-dessus des boutons, le manche et les boutons aussi */
   @media (max-height: 560px) {
     body.touch-pilot .minimap { width: 116px; top: calc(8px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); }
@@ -845,12 +899,10 @@
     body.touch-pilot .gunnery dl { display: none; }
     body.touch-pilot .gunnery { left: calc(50% + 46px); padding: 5px 7px; }
     body.touch-pilot .flight-hud { left: calc(10px + env(safe-area-inset-left, 0px)); right: auto; top: 62px; bottom: auto; width: 128px; }
-    .touchpad { padding: 0 12px calc(10px + env(safe-area-inset-bottom, 0px)); }
-    .tp-stick { width: 128px; height: 128px; }
-    .tp-knob { width: 54px; height: 54px; margin: -27px 0 0 -27px; }
-    .tp-buttons { grid-template-columns: repeat(2, 56px); gap: 8px; }
-    .tp-btn { width: 56px; height: 56px; }
-    .tp-btn.tp-fire { height: 120px; }
+    .touchpad { padding: 0 calc(12px + env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) calc(12px + env(safe-area-inset-left, 0px)); }
+    /* Visée au manche : les boutons prennent plus de largeur à droite ; les armes et l'état du robot se décalent vers le manche de gauche */
+    body.touch-pilot:has(.touchpad.aim-stick) .bottom-dock { left: calc(50% - 70px); }
+    body.touch-pilot:has(.touchpad.aim-stick.lefty) .bottom-dock { left: calc(50% + 70px); }
   }
 
   /* Menu : écran titre, pause, commandes. Panneau à gauche, l'arène reste visible à droite. */
@@ -1203,6 +1255,60 @@
     .menu-choice { justify-self: start; }
     .menu-panel.settings .menu-entries { grid-template-columns: 1fr; }
   }
+  /*
+   * Petit écran (téléphone, en hauteur ou à l'horizontale). Paramètres et touches : Retour reste au
+   * bas de l'écran pendant qu'on fait défiler les lignes (les deux entrées côte à côte, sans leur
+   * explication). Tuiles (MenuView.tiles : l'accueil, le choix du mode, la pause, la fin de partie) :
+   * les entrées sur la largeur, l'écran tient sans défiler ; deux colonnes en hauteur (l'entrée
+   * principale sur toute la ligne), quatre à l'horizontale (elle sur deux) ; l'explication de chaque
+   * entrée sur deux lignes au plus.
+   */
+  @media (max-width: 760px), (max-height: 560px) {
+    .menu-panel.settings > .menu-entries {
+      position: sticky; bottom: -12px; z-index: 2; grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-top: -4px; padding: 10px 0 12px; background: linear-gradient(rgba(10, 14, 20, 0), rgba(10, 14, 20, 0.96) 28%);
+    }
+    .menu-panel.settings > .menu-entries .menu-entry { padding: 10px 12px; }
+    .menu-panel.settings > .menu-entries .menu-label { font-size: 15px; }
+    .menu-panel.settings > .menu-entries .menu-detail { display: none; }
+    /* (le lecteur de musique cacherait le titre ou les lignes : l'onglet Son a ses boutons) */
+    body.menu-open:has(.menu-panel.settings) .now-playing { display: none !important; }
+    /* Le panneau occupe tout l'écran : le fond s'assombrit partout (les onglets, l'explication restent lisibles sur un ciel clair) */
+    .menu:has(> .menu-panel.settings) { background: rgba(10, 14, 20, 0.9); }
+    .menu:has(> .menu-panel.tiles) { background: linear-gradient(0deg, rgba(10, 14, 20, 0.92) 0%, rgba(10, 14, 20, 0.72) 70%, rgba(10, 14, 20, 0.35) 100%); }
+    .menu-panel.tiles { width: min(760px, 100%); gap: 10px; }
+    .menu-panel.tiles .menu-entries { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .menu-panel.tiles .menu-entry { align-content: start; min-height: 60px; padding: 11px 12px; }
+    .menu-panel.tiles .menu-entry.primary { grid-column: 1 / -1; }
+    .menu-panel.tiles .menu-label { font-size: 17px; }
+    .menu-panel.tiles.hero .menu-entry .menu-label { font-size: 18px; }
+    .menu-panel.tiles .menu-detail {
+      display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+      font-size: 11px; line-height: 1.35;
+    }
+    .menu-panel.tiles.hero .menu-subtitle { margin-bottom: 4px; }
+  }
+  /* En hauteur, un écran étroit : les onglets passent à la ligne plutôt que de se cacher hors de l'écran */
+  @media (max-width: 560px) {
+    .menu-tabs { flex-wrap: wrap; overflow-x: visible; }
+  }
+  @media (max-height: 560px) {
+    .menu-panel.settings { width: min(760px, 100%); }
+    body.menu-open .now-playing.np-on { bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+    .menu-panel.tiles .menu-entries { grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); }
+    .menu-panel.tiles .menu-entry.primary { grid-column: span 2; }
+    .menu-panel.tiles.hero .menu-title { font-size: 34px; }
+    .menu-panel.tiles .menu-title { font-size: 28px; }
+    .menu-panel.tiles .menu-subtitle { margin: 0; font-size: 12.5px; }
+    .menu-panel.tiles .menu-foot { display: none; }
+  }
+  /* Au doigt : des commandes de réglage plus grandes, faciles à toucher */
+  body.touch-ui .menu-choice button { padding: 10px 13px; }
+  body.touch-ui .menu-action { padding: 10px 14px; }
+  body.touch-ui .menu-key { padding: 10px 6px; }
+  body.touch-ui .menu-key-reset { min-height: 34px; }
+  body.touch-ui .menu-slider input { height: 30px; }
+  body.touch-ui .menu-tab { padding: 12px 14px 11px; }
 
   /* Images par seconde (réglage) : au-dessus de tout, même des menus */
   .fps-badge {
@@ -1266,6 +1372,13 @@
   @media (max-width: 900px) { body.in-garage .now-playing.np-on { display: none; } }
   /* Commandes tactiles : le mot passe en haut, à gauche de la mini-carte */
   body.touch-pilot:not(.menu-open) .now-playing { right: 224px; top: calc(14px + env(safe-area-inset-top, 0px)); }
+  /* Sur un téléphone, à gauche sous la pause et le plein écran (il les cachait en hauteur, et le score à l'horizontale) ; en hauteur, sous le score */
+  @media (max-width: 760px), (max-height: 560px) {
+    body.touch-pilot:not(.menu-open) .now-playing { right: auto; left: calc(10px + env(safe-area-inset-left, 0px)); top: calc(62px + env(safe-area-inset-top, 0px)); }
+  }
+  @media (max-width: 760px) and (orientation: portrait) {
+    body.touch-pilot:not(.menu-open) .now-playing { top: calc(104px + env(safe-area-inset-top, 0px)); }
+  }
   /* Écran étroit : les menus occupent le bas de l'écran ; la ligne passe en haut */
   @media (max-width: 760px) {
     body.menu-open .now-playing.np-on { top: calc(8px + env(safe-area-inset-top, 0px)); bottom: auto; right: 10px; }

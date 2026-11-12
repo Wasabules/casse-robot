@@ -10,8 +10,9 @@ import { TEAM_COLORS } from "../teams";
  * Dessiné une fois par arène et gardé le temps de la visite. Le relief, calculé point par point, est
  * le plus cher (de 0,13 à 0,33 s de calcul pour une grande carte) : il se calcule par tranches, entre deux
  * images, à une résolution moitié moindre que le plan, puis il est agrandi ; les plans se font l'un
- * après l'autre, celui de l'arène sélectionnée d'abord. Une grande arène qui construit son relief à
- * sa première lecture (le Canyon, une carte communautaire) le fait d'une traite.
+ * après l'autre, celui de l'arène sélectionnée d'abord. Une grande arène du jeu attend son fichier
+ * (chargé à la demande : client/maps/gameArenas.ts), puis se construit d'une traite, comme une carte
+ * communautaire.
  */
 
 /** Côté d'un plan (px) : assez pour la grande vue de la fiche. */
@@ -128,9 +129,12 @@ export function paintPlan(target: HTMLCanvasElement, plan: HTMLCanvasElement): v
   c.drawImage(plan, (plan.width - sw) / 2, (plan.height - sh) / 2, sw, sh, 0, 0, target.width, target.height);
 }
 
+/** L'arène d'un plan : tout de suite, ou une fois chargée (une grande arène du jeu : client/maps/gameArenas.ts). */
+export type PlanLayout = () => ArenaLayout | undefined | Promise<ArenaLayout | undefined>;
+
 interface PlanRequest {
   key: string;
-  layout: () => ArenaLayout | undefined;
+  layout: PlanLayout;
   done: ((plan: HTMLCanvasElement) => void)[];
 }
 
@@ -144,7 +148,7 @@ export class PlanQueue {
   private stopped = false;
 
   /** Demande le plan d'une arène ; `done` est appelé quand il est prêt (tout de suite s'il l'est déjà). */
-  request(key: string, layout: () => ArenaLayout | undefined, done: (plan: HTMLCanvasElement) => void): void {
+  request(key: string, layout: PlanLayout, done: (plan: HTMLCanvasElement) => void): void {
     const ready = plans.get(key);
     if (ready) {
       done(ready);
@@ -174,8 +178,8 @@ export class PlanQueue {
     while (this.queue.length && !this.stopped) {
       const request = this.queue.shift()!;
       try {
-        const layout = request.layout();
-        const plan = layout ? await drawArenaPlan(layout, () => !this.stopped) : null;
+        const layout = await request.layout();
+        const plan = layout && !this.stopped ? await drawArenaPlan(layout, () => !this.stopped) : null;
         if (plan) {
           plans.set(request.key, plan);
           for (const done of request.done) done(plan);

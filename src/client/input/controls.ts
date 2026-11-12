@@ -7,13 +7,9 @@ import {
   type ActionId, type Bindings, type InputContext,
 } from "./bindings";
 import { GamepadInput } from "./gamepad";
-import { TouchPad } from "./touchPad";
+import { TouchPad, type TouchLayout } from "./touchPad";
+import { stickRates, swipeAngles, TouchLook, type TouchLookSettings } from "./touchLook";
 import { t } from "../i18n/i18n";
-
-/** Au-delà de ce déplacement (px), un glisser tourne la caméra au lieu de tirer. */
-const DRAG_THRESHOLD = 8;
-/** Durée maximale d'un toucher pour qu'il compte comme un tir (ms). */
-const TAP_MAX_MS = 400;
 /** Boutons de la souris : bit du masque `buttons` d'un événement, et code (`Mouse` + `button`). */
 const MOUSE_BUTTONS: readonly (readonly [number, string])[] = [[1, "Mouse0"], [2, "Mouse2"], [4, "Mouse1"], [8, "Mouse3"], [16, "Mouse4"]];
 /**
@@ -42,6 +38,9 @@ export interface PadLook {
   invertX: boolean;
   invertY: boolean;
 }
+
+/** Réglages du jeu au doigt (onglet Tactile) : la visée, et la disposition des commandes à l'écran. */
+export type TouchSettings = TouchLookSettings & TouchLayout;
 
 /** Hauteur du réticule en vue de dos (part de la hauteur de l'écran, depuis le haut). Voir `.crosshair` dans style.css. */
 export const RETICLE_HEIGHT = 0.45;
@@ -78,8 +77,15 @@ export class Controls {
   private waitRelease = false;
   /** Réglage : le viseur bascule au lieu de devoir être maintenu. */
   scopeToggle = false;
+  /**
+   * Les doigts qui tournent la caméra : posés sur l'écran de jeu, ou sur le bouton de tir qu'on fait
+   * glisser ; un seul la tourne à la fois (input/touchLook.ts).
+   */
+  readonly look = new TouchLook();
   /** Commandes tactiles du pilote, montrées dès que l'on pilote au doigt. */
-  readonly touch = new TouchPad();
+  readonly touch = new TouchPad(this.look);
+  /** Réglages de la visée au doigt (sensibilités, axe vertical). */
+  private touchLook: TouchLookSettings = { sensitivity: 1, stickSensitivity: 1, invertY: false };
   /** Manette, et ses réglages de regard. */
   readonly pad = new GamepadInput();
   padLook: PadLook = { sensitivity: 1, invertX: false, invertY: false };
@@ -107,7 +113,8 @@ export class Controls {
   onMenu: ((command: MenuCommand) => void) | null = null;
   /** Réattribution d'un bouton de la manette en cours : le prochain bouton appuyé lui revient. */
   padCapture: ((code: string) => void) | null = null;
-  private drag: { x: number; y: number; moved: number; t: number } | null = null;
+  /** Glissé du bouton droit de la souris libre (la caméra tourne autour de sa cible). */
+  private drag: { x: number; y: number } | null = null;
   /** Direction des menus tenue à la manette, et prochaine répétition (s). */
   private nav: { dir: MenuCommand | null; next: number } = { dir: null, next: 0 };
 
@@ -148,9 +155,11 @@ export class Controls {
     canvas.addEventListener("pointerdown", (e) => this.onPointerDown(canvas, e));
     canvas.addEventListener("pointermove", (e) => this.onPointerMove(e));
     canvas.addEventListener("pointerup", (e) => this.onPointerUp(e));
-    canvas.addEventListener("pointercancel", () => {
-      this.drag = null;
-      this.releaseButtons();
+    canvas.addEventListener("pointercancel", (e) => {
+      if (e.pointerType === "mouse") {
+        this.drag = null;
+        this.releaseButtons();
+      } else this.look.cancel(e.pointerId);
     });
     // Souris capturée : les boutons latéraux ne font pas revenir la page en arrière
     canvas.addEventListener("mouseup", (e) => {
@@ -221,6 +230,13 @@ export class Controls {
   /** La souris est-elle capturée (regard à la souris) ? */
   get mouseLook(): boolean {
     return this.locked;
+  }
+
+  /** Réglages du jeu au doigt : visée (sensibilités, axe vertical) et commandes à l'écran. */
+  setTouch(settings: TouchSettings): void {
+    const { sensitivity, stickSensitivity, invertY, ...layout } = settings;
+    this.touchLook = { sensitivity, stickSensitivity, invertY };
+    this.touch.configure(layout);
   }
 
   /** Cette action vaut-elle maintenant (au sol, en vol, en pilotant, à la caméra libre) ? */
@@ -319,7 +335,10 @@ export class Controls {
    */
   updatePointer(piloting: boolean): void {
     this.aiming = piloting;
+    const shown = this.touch.visible;
     this.touch.show(this.touchUsed && piloting);
+    // Les commandes tactiles qui paraissent ou s'en vont : les doigts suivis sont oubliés
+    if (shown !== this.touch.visible) this.look.clear();
     if (!piloting && this.locked) document.exitPointerLock();
     if (!piloting) this.scopeOn = false;
     byId("lockHint").hidden = !(piloting && !this.touch.visible && !this.locked && !this.pad.active);
@@ -340,12 +359,17 @@ export class Controls {
       return;
     }
     if (this.menuOpen()) {
+      this.look.drop();
       this.navigateMenu(dt, pressed);
       return;
     }
     this.nav.dir = null;
     if (pressed.includes(PAD_MENU)) this.onPadPause?.();
-    if (!this.game.inputEnabled || this.game.frozen) return;
+    if (!this.game.inputEnabled || this.game.frozen) {
+      this.look.drop();
+      return;
+    }
+    this.touchCamera(dt);
     for (const code of pressed) this.press(code, true, false);
     for (const code of this.pad.released()) this.release(code, true);
     // Stick droit : la caméra
@@ -357,6 +381,28 @@ export class Controls {
         curve(x) * PAD_LOOK_YAW * look.sensitivity * dt * (look.invertX ? -1 : 1),
         curve(y) * PAD_LOOK_PITCH * look.sensitivity * dt * (look.invertY ? -1 : 1),
       );
+    }
+  }
+
+  /**
+   * La caméra au doigt, à chaque image : le glissé (lissé) du doigt qui la tourne et, si on vise au
+   * manche, le manche de visée. En pilotant, on vise comme dans un jeu de tir sur téléphone (le doigt
+   * vers la droite, la vue tourne à droite ; vers le haut, elle regarde en haut) ; à la caméra libre,
+   * on « attrape » la scène, comme au bouton droit de la souris.
+   */
+  private touchCamera(dt: number): void {
+    const rig = this.game.rig;
+    const { dx, dy } = this.look.take(dt);
+    if (dx || dy) {
+      if (this.game.piloting) {
+        const a = swipeAngles(dx, dy, this.touchLook);
+        rig.turn(a.yaw, a.pitch);
+      } else rig.orbit(dx, dy);
+    }
+    const stick = this.touch.aimStick;
+    if (this.touch.visible && (stick.x || stick.y)) {
+      const r = stickRates(stick.x, stick.y, this.touchLook);
+      if (r.yaw || r.pitch) rig.turn(r.yaw * dt, r.pitch * dt);
     }
   }
 
@@ -572,13 +618,14 @@ export class Controls {
     this.game.hud.hideHintLater();
     if (e.pointerType === "mouse") {
       if (e.button === 2) {
-        this.drag = { x: e.clientX, y: e.clientY, moved: Infinity, t: 0 };
+        this.drag = { x: e.clientX, y: e.clientY };
       } else if (e.button === 0) {
         if (!this.game.piloting) this.game.tryFire(e.offsetX, e.offsetY);
         this.triggerHeld = true;
       }
     } else {
-      this.drag = { x: e.clientX, y: e.clientY, moved: 0, t: performance.now() };
+      // Un doigt (ou un stylet) : suivi par son identifiant ; seul le premier posé tourne la caméra
+      this.look.down(e.pointerId, e.clientX, e.clientY, performance.now());
     }
   }
 
@@ -588,30 +635,36 @@ export class Controls {
       this.game.rig.lookBy(e.movementX, e.movementY);
       return;
     }
+    if (e.pointerType !== "mouse") {
+      // (un doigt, un stylet : la caméra tourne à l'image suivante, voir `touchCamera`)
+      if (e.pointerId === this.look.active) this.pointer = { x: e.offsetX, y: e.offsetY };
+      this.look.move(e.pointerId, e.clientX, e.clientY);
+      return;
+    }
     // Bouton gauche relâché pendant que le droit était tenu : pas de pointerup, seulement ce pointermove
-    if (e.pointerType === "mouse" && !(e.buttons & 1)) this.triggerHeld = false;
+    if (!(e.buttons & 1)) this.triggerHeld = false;
     this.pointer = { x: e.offsetX, y: e.offsetY };
     const drag = this.drag;
     if (!drag) return;
     const dx = e.clientX - drag.x;
     const dy = e.clientY - drag.y;
-    drag.moved += Math.abs(dx) + Math.abs(dy);
     drag.x = e.clientX;
     drag.y = e.clientY;
-    if (drag.moved > DRAG_THRESHOLD) this.game.rig.orbit(dx, dy);
+    this.game.rig.orbit(dx, dy);
   }
 
   private onPointerUp(e: PointerEvent): void {
-    const isMouse = e.pointerType === "mouse";
-    // Toucher bref sans glisser : un tir
-    if (!isMouse && !this.game.piloting && this.drag && this.drag.moved <= DRAG_THRESHOLD && performance.now() - this.drag.t < TAP_MAX_MS) {
-      this.game.fireAt(e.offsetX, e.offsetY);
+    if (e.pointerType !== "mouse") {
+      // Toucher bref sans glisser, à la caméra libre : un tir
+      const tap = this.look.up(e.pointerId, performance.now());
+      if (tap && !this.game.piloting && this.game.inputEnabled && !this.game.frozen) this.game.fireAt(e.offsetX, e.offsetY);
+      return;
     }
-    if (isMouse && this.locked) {
+    if (this.locked) {
       this.syncButtons(e.buttons, false);
       return;
     }
-    if (isMouse && !(e.buttons & 1)) this.triggerHeld = false;
-    if (!isMouse || e.button === 2) this.drag = null;
+    if (!(e.buttons & 1)) this.triggerHeld = false;
+    if (e.button === 2) this.drag = null;
   }
 }

@@ -2,29 +2,31 @@ import * as B from "../babylon";
 import { LoadAssetContainerAsync, type AssetContainer } from "../babylonGltf";
 
 /*
- * Lecture d'un modèle glTF d'accessoire (public/models/props/<type>.glb ; les conventions :
- * docs/models.md). Ce module ne se charge qu'à la demande (`import("./propGltf")` dans
- * render/propModels.ts) : le lecteur glTF de Babylon ne pèse rien dans le paquet principal.
+ * Lecture d'un modèle glTF (un accessoire, public/models/props/<type>.glb ; un bloc, une tête de
+ * tourelle, une roue : public/models/blocks/, heads/, wheels/ ; les conventions : docs/models.md).
+ * Ce module ne se charge qu'à la demande (`import("./gltfModel")` dans render/gltfModels.ts) : le
+ * lecteur glTF de Babylon ne pèse rien dans le paquet principal.
  *
  * Le fichier devient une géométrie fusionnée (toutes ses pièces, leurs nœuds appliqués, ses
- * instances GPU dépliées), dans le repère du fichier (mètres, +y en haut, l'origine au milieu du
- * bas de l'emprise), et des matières du jeu, une par matière du fichier : des `StandardMaterial`,
- * comme celles des modèles faits par le code, qui s'éclairent pareil (soleil, ciel, lumières de la
- * nuit en grappes) sans compiler les shaders de la PBR. Ce qu'on en garde : la couleur de base (son
- * facteur et sa texture), l'émission (facteur, force, texture), l'opacité (mélange ou découpe), les
- * deux faces ; la rugosité et le métal deviennent un reflet. Les cartes de normales, de rugosité et
+ * instances GPU dépliées), dans le repère du fichier (mètres, +y en haut ; son origine dépend de
+ * la famille : le milieu du bas de l'emprise d'un accessoire, le centre de la case d'un bloc), et
+ * des matières du jeu, une par matière du fichier : des `StandardMaterial`, comme celles des
+ * modèles faits par le code, qui s'éclairent pareil (soleil, ciel, lumières de la nuit en grappes)
+ * sans compiler les shaders de la PBR. Ce qu'on en garde : la couleur de base (son facteur et sa
+ * texture), l'émission (facteur, force, texture), l'opacité (mélange ou découpe), les deux faces ;
+ * la rugosité et le métal deviennent un reflet. Les cartes de normales, de rugosité et
  * d'occultation, les animations, les squelettes et les cibles de déformation sont ignorés.
  */
 
 /** Une part de la géométrie : les triangles d'une matière (indices `indexStart` à `indexStart + indexCount`). */
-export interface PropModelPart {
+export interface GltfModelPart {
   readonly material: number;
   readonly indexStart: number;
   readonly indexCount: number;
 }
 
 /** Un modèle lu : sa géométrie (couleurs de sommets dans l'espace gamma, alpha 1), ses parts et ses matières. */
-export interface PropModelData {
+export interface GltfModel {
   readonly positions: Float32Array;
   readonly normals: Float32Array;
   /** Coordonnées de texture (0 là où une pièce n'en a pas), ou rien si aucune pièce n'en a. */
@@ -32,7 +34,7 @@ export interface PropModelData {
   /** Couleurs des sommets (RVBA, blanches là où une pièce n'en a pas), ou rien si aucune pièce n'en a. */
   readonly colors: Float32Array | null;
   readonly indices: Uint32Array;
-  readonly parts: readonly PropModelPart[];
+  readonly parts: readonly GltfModelPart[];
   readonly materials: readonly B.StandardMaterial[];
 }
 
@@ -67,7 +69,7 @@ interface Piece {
 const GAMMA = 1 / 2.2;
 
 /** Lit un fichier .glb dans `scene` : sa géométrie fusionnée et ses matières (le fichier lui-même ne reste pas dans la scène). */
-export async function readPropModel(scene: B.Scene, bytes: ArrayBuffer, name: string): Promise<PropModelData> {
+export async function readGltfModel(scene: B.Scene, bytes: ArrayBuffer, name: string): Promise<GltfModel> {
   const container = await LoadAssetContainerAsync(new Uint8Array(bytes), scene, { pluginExtension: ".glb", name });
   // Les textures que reprennent les matières du jeu (les autres sont libérées avec le fichier)
   const kept = new Set<B.BaseTexture>();
@@ -152,7 +154,7 @@ function piece(mesh: B.Mesh, matrix: B.Matrix): Piece {
 }
 
 /** Toutes les pièces en une géométrie, une part par matière (dans l'ordre de `materials`). */
-function merge(pieces: readonly Piece[], materials: readonly (B.Material | null)[]): Omit<PropModelData, "materials"> {
+function merge(pieces: readonly Piece[], materials: readonly (B.Material | null)[]): Omit<GltfModel, "materials"> {
   const vertexCount = pieces.reduce((n, p) => n + p.positions.length / 3, 0);
   const positions = new Float32Array(vertexCount * 3);
   const normals = new Float32Array(vertexCount * 3);
@@ -171,7 +173,7 @@ function merge(pieces: readonly Piece[], materials: readonly (B.Material | null)
     at += p.positions.length / 3;
   }
   const indices: number[] = [];
-  const parts: PropModelPart[] = [];
+  const parts: GltfModelPart[] = [];
   materials.forEach((material, index) => {
     const indexStart = indices.length;
     pieces.forEach((p, k) => {

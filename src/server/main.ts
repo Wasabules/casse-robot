@@ -1,16 +1,20 @@
-import { readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync, type Dirent } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { join, resolve, sep } from "node:path";
-import { gzipSync } from "node:zlib";
+import { gzipSync, inflateRawSync, inflateSync } from "node:zlib";
 import { WebSocketServer, type WebSocket } from "ws";
+import { ARENA_IDS, gameArena, type ArenaId } from "../shared/arena/layout";
 import { STEP } from "../shared/config";
-import { MAP_LIMITS, type MapFile } from "../shared/map/format";
-import { checkMapText } from "../shared/map/validate";
-import { DEFAULT_PORT } from "../shared/net/protocol";
+import { MAP_LIMITS, PACKAGE_LIMITS, type MapFile, type MapIssue } from "../shared/map/format";
+import { GAME_ARENA_DIR, gameArenaFileName, provideGameArenaText } from "../shared/map/gameArenas";
+import { assetEntries, folderSource, isArchive, PACKAGE_FILES, readMapArchive, readPackage, type FolderAccess, type PackageRead } from "../shared/map/pack";
+import { readMapText } from "../shared/map/read";
+import { checkMap } from "../shared/map/validate";
+import { DEFAULT_PORT, MAP_ASSET_PATH } from "../shared/net/protocol";
 import { initPhysics } from "../shared/sim/simulation";
 import { ProgressBook } from "./progressBook";
 import { Room, type Player } from "./room";
-import { cacheControl, contentType, staticPath } from "./staticFiles";
+import { cacheControl, contentType, IMMUTABLE, mapAssetHash, staticPath } from "./staticFiles";
 
 /*
  * Serveur de jeu : une salle (room.ts) qui simule à pas fixe, et un serveur WebSocket qui relie
@@ -46,35 +50,120 @@ book.onChange = () => {
   }, SAVE_DELAY * 1000);
 };
 /**
- * Dossier des cartes communautaires (MAPS_DIR pour en changer) : chaque fichier `.json` y est lu et
- * vérifié au démarrage (`checkMapText`) ; une carte valide entre dans la rotation, après les
+ * Dossier des arènes du jeu (ARENAS_DIR pour en changer) : leurs fichiers de carte (content/arenas/,
+ * faits par `npm run map:export`), lus et construits au démarrage (map/gameArenas.ts). Une arène dont
+ * le fichier manque ou ne se lit pas sort de la rotation, et le journal dit pourquoi ; sans le Dépôt,
+ * l'arène par défaut, la salle ne se crée pas. ARENAS=valley,canyon : seulement ces arènes du jeu dans
+ * la rotation, dans cet ordre.
+ */
+const ARENAS_DIR = resolve(process.env.ARENAS_DIR || GAME_ARENA_DIR);
+
+/** Les arènes du jeu de la rotation : celles de ARENAS (parmi celles qui se sont chargées), sinon toutes. */
+function rotationOf(loaded: readonly ArenaId[]): ArenaId[] {
+  const wanted = (process.env.ARENAS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (!wanted.length) return [...loaded];
+  for (const id of wanted) if (!loaded.some((a) => a === id)) console.warn(`ARENAS : ${id} n'est pas une arène du jeu chargée`);
+  const picked = loaded.length ? wanted.flatMap((id) => loaded.filter((a) => a === id)) : [];
+  return picked.length ? picked : [...loaded];
+}
+
+function loadGameArenas(dir: string): ArenaId[] {
+  const loaded: ArenaId[] = [];
+  for (const id of ARENA_IDS) {
+    const name = gameArenaFileName(id);
+    try {
+      const start = performance.now();
+      provideGameArenaText(id, readFileSync(join(dir, name), "utf8"));
+      // Construite tout de suite : un fichier qui ne se joue pas se voit au démarrage, pas à son tour
+      const arena = gameArena(id);
+      console.log(`Arène : ${id} (${name}, ${arena.boxes.length} boîtes, ${arena.props.length} accessoires, ${Math.round(performance.now() - start)} ms)`);
+      loaded.push(id);
+    } catch (e) {
+      console.warn(`Arène écartée : ${id} (${join(dir, name)} : ${e instanceof Error ? e.message : String(e)})`);
+    }
+  }
+  return loaded;
+}
+
+/**
+ * Dossier des cartes communautaires (MAPS_DIR pour en changer) : chaque carte y est lue et vérifiée
+ * au démarrage (`checkMap`) : un fichier `.json`, un paquet en archive (`.zip`) ou en dossier (un
+ * dossier qui a un map.json : map/pack.ts) ; une carte valide entre dans la rotation, après les
  * arènes du jeu (MAPS_ONLY=1 : seulement les cartes), une carte invalide est écartée, et le journal
- * dit pourquoi.
+ * dit pourquoi. Les ressources d'un paquet (modèles, ambiance) sont gardées en mémoire et servies
+ * d'après leur empreinte (`MAP_ASSET_PATH`) au client qui reçoit la carte.
  */
 const MAPS_DIR = resolve(process.env.MAPS_DIR || "maps");
 
-function loadMaps(dir: string): MapFile[] {
-  let files: string[];
+/** Décompression zlib (le relief d'un paquet), bornée à la taille de l'image qu'on attend. */
+const inflate = (d: Uint8Array, max?: number): Uint8Array => new Uint8Array(inflateSync(d, max ? { maxOutputLength: max } : {}));
+/** Décompression brute bornée : au-delà de la taille annoncée par l'archive, elle s'arrête. */
+const inflateRaw = (d: Uint8Array, max: number): Uint8Array => new Uint8Array(inflateRawSync(d, { maxOutputLength: Math.max(1, max) }));
+
+/** Un paquet en dossier, lu par node:fs (les chemins du paquet séparés par « / »). */
+function folderAccess(dir: string): FolderAccess {
+  return {
+    list: (sub) => {
+      try {
+        return readdirSync(join(dir, sub), { withFileTypes: true }).map((e) => ({ name: e.name, dir: e.isDirectory() }));
+      } catch {
+        return [];
+      }
+    },
+    size: (path) => statSync(join(dir, path)).size,
+    read: (path) => new Uint8Array(readFileSync(join(dir, path))),
+  };
+}
+
+/** Une carte du dossier : un fichier de carte, un paquet en archive ou en dossier. */
+async function readMapSource(file: string, folder: boolean): Promise<PackageRead> {
+  if (folder) return readPackage(folderSource(folderAccess(file)), inflate);
+  const size = statSync(file).size;
+  const max = file.toLowerCase().endsWith(".zip") ? PACKAGE_LIMITS.archive : MAP_LIMITS.bytes;
+  if (size > max) return { ok: false, issues: [{ code: "tooLarge", size: Math.ceil(size / 1024), max: max / 1024 }] };
+  const bytes = new Uint8Array(readFileSync(file));
+  if (isArchive(bytes)) return readMapArchive(bytes, inflate, inflateRaw);
+  const read = readMapText(new TextDecoder().decode(bytes));
+  return read.ok ? { ok: true, map: read.map, assets: new Map(), license: null } : read;
+}
+
+/** Une ressource servie : ses octets, son type, et sa version compressée (un modèle), faite une fois. */
+interface Shelved {
+  readonly bytes: Uint8Array;
+  readonly type: string;
+  gzip?: Buffer;
+}
+
+/** Les ressources des cartes de la rotation, d'après leur empreinte. */
+const shelf = new Map<string, Shelved>();
+
+/** Pourquoi une carte est écartée, pour le journal (des codes : le serveur n'écrit pas de texte au joueur). */
+const why = (issues: readonly MapIssue[]): string => issues.map((i) => `${i.code}${Object.keys(i).length > 1 ? ` ${JSON.stringify({ ...i, code: undefined })}` : ""}`).join(" ; ");
+
+async function loadMaps(dir: string): Promise<MapFile[]> {
+  let entries: Dirent[];
   try {
-    files = readdirSync(dir).filter((f) => f.toLowerCase().endsWith(".json")).sort();
+    entries = readdirSync(dir, { withFileTypes: true });
   } catch {
     console.log(`Cartes communautaires : pas de dossier ${dir}`);
     return [];
   }
+  const sources = entries
+    .filter((e) => (e.isDirectory() ? existsSync(join(dir, e.name, PACKAGE_FILES.map)) : /\.(json|zip)$/i.test(e.name)))
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   const maps: MapFile[] = [];
   const keys = new Set<string>();
-  for (const name of files) {
-    const file = join(dir, name);
+  for (const entry of sources) {
+    const name = entry.name;
     try {
-      const size = statSync(file).size;
-      if (size > MAP_LIMITS.bytes) {
-        console.warn(`Carte écartée : ${name} (${Math.round(size / 1024)} Ko, au plus ${MAP_LIMITS.bytes / 1024} Ko)`);
+      const read = await readMapSource(join(dir, name), entry.isDirectory());
+      if (!read.ok) {
+        console.warn(`Carte écartée : ${name} — ${why(read.issues)}`);
         continue;
       }
-      const check = checkMapText(readFileSync(file, "utf8"));
+      const check = checkMap(read.map);
       if (!check.map || !check.key || check.issues.length) {
-        const why = check.issues.map((i) => `${i.code}${Object.keys(i).length > 1 ? ` ${JSON.stringify({ ...i, code: undefined })}` : ""}`);
-        console.warn(`Carte écartée : ${name} — ${why.join(" ; ")}`);
+        console.warn(`Carte écartée : ${name} — ${why(check.issues)}`);
         continue;
       }
       if (keys.has(check.key)) {
@@ -83,7 +172,10 @@ function loadMaps(dir: string): MapFile[] {
       }
       keys.add(check.key);
       maps.push(check.map);
-      console.log(`Carte : ${check.map.meta.name} (${name}, ${check.key})`);
+      const assets = assetEntries(check.map.assets);
+      for (const a of assets) shelf.set(a.asset.sha256, { bytes: read.assets.get(a.asset.sha256)!, type: a.type ? contentType("x.glb") : contentType("x.ogg") });
+      const extra = assets.length ? `, ${assets.length} ressource(s), ${Math.round(assets.reduce((n, a) => n + a.asset.bytes, 0) / 1024)} Ko` : "";
+      console.log(`Carte : ${check.map.meta.name} (${name}, ${check.key}${extra})`);
     } catch (e) {
       console.warn(`Carte écartée : ${name} (illisible : ${String(e)})`);
     }
@@ -91,7 +183,7 @@ function loadMaps(dir: string): MapFile[] {
   return maps;
 }
 
-const room = new Room(book, { maps: loadMaps(MAPS_DIR), mapsOnly: process.env.MAPS_ONLY === "1" });
+const room = new Room(book, { arenas: rotationOf(loadGameArenas(ARENAS_DIR)), maps: await loadMaps(MAPS_DIR), mapsOnly: process.env.MAPS_ONLY === "1" });
 console.log(`Rotation des arènes : ${room.rotation.length}`);
 const port = Number(process.env.PORT) || DEFAULT_PORT;
 
@@ -110,12 +202,42 @@ const http = createServer((req, res) => {
     res.end(`Casse-Robot : serveur de jeu, ${room.playerCount} joueur(s)\n`); // i18n-ignore
     return;
   }
+  const asset = mapAssetHash(url, MAP_ASSET_PATH);
+  if (asset !== null && (req.method === "GET" || req.method === "HEAD")) {
+    serveAsset(req, res, asset);
+    return;
+  }
   if ((req.method === "GET" || req.method === "HEAD") && serveFile(req, res, url)) return;
   res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
   res.end(staticPath(url) === "index.html"
     ? `Casse-Robot : serveur de jeu, ${room.playerCount} joueur(s). La page du jeu n'est pas compilée : npm run build.\n` // i18n-ignore
     : "Introuvable\n");
 });
+
+/**
+ * Sert une ressource d'une carte de la rotation, d'après son empreinte : à n'importe quelle page
+ * (`access-control-allow-origin` : en développement, la page vient de Vite, sur un autre port), et
+ * pour toujours (l'adresse dit le contenu). Un modèle se compresse (une fois) ; un Ogg l'est déjà.
+ */
+function serveAsset(req: IncomingMessage, res: ServerResponse, hash: string): void {
+  const item = shelf.get(hash);
+  const headers: Record<string, string | number> = { "access-control-allow-origin": "*" };
+  if (!item) {
+    res.writeHead(404, { ...headers, "content-type": "text/plain; charset=utf-8" });
+    res.end("Introuvable\n");
+    return;
+  }
+  Object.assign(headers, { "content-type": item.type, "cache-control": IMMUTABLE, vary: "accept-encoding" });
+  let body: Uint8Array = item.bytes;
+  if (item.type === contentType("x.glb") && /\bgzip\b/.test(String(req.headers["accept-encoding"] ?? ""))) {
+    item.gzip ??= gzipSync(item.bytes);
+    body = item.gzip;
+    headers["content-encoding"] = "gzip";
+  }
+  headers["content-length"] = body.length;
+  res.writeHead(200, headers);
+  res.end(req.method === "HEAD" ? undefined : body);
+}
 
 /** Sert un fichier du client compilé, s'il existe (et sans sortir de son dossier). */
 function serveFile(req: IncomingMessage, res: ServerResponse, url: string): boolean {

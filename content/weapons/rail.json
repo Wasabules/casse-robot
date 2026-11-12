@@ -1,0 +1,22 @@
+{
+  "$schema": "../schemas/weapons.schema.json",
+  "$comment": "Canon électrique : un projectile lancé à 1 200 m/s qui traverse plusieurs blocs, avec un fort recul. Pas de chargeur : chaque tir vide une bonne part des batteries (la batterie du cockpit en tient deux ; le générateur en recharge un en un peu plus de huit secondes).",
+  "cooldown": 3,
+  "automatic": false,
+  "spread": 0.0003,
+  "recoil": 70,
+  "range": 100,
+  "engage": 50,
+  "power": 10,
+  "handling": { "hip": 6, "move": 0.012, "turn": 0.05 },
+  "projectile": {
+    "look": "rail",
+    "speed": 1200,
+    "gravity": 0,
+    "life": 0.12,
+    "damage": 380,
+    "damageType": "pierce",
+    "penetrating": true,
+    "impulse": 70
+  }
+}

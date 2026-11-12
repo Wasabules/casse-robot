@@ -104,6 +104,12 @@ export interface MenuView {
   wide?: boolean;
   /** Écran titre : le nom du jeu en grand. */
   hero?: boolean;
+  /**
+   * Entrées en tuiles sur la largeur, sur un petit écran (téléphone, en hauteur comme à
+   * l'horizontale : style.css) : l'écran tient sans défiler et chaque entrée se touche facilement.
+   * Les écrans qu'on voit souvent : l'accueil, le choix du mode, la pause, la fin de partie.
+   */
+  tiles?: boolean;
   /** Contenu construit ailleurs, entre le titre et les entrées (choix du robot : menu/robotPicker.ts), dans le panneau le plus large. */
   content?: HTMLElement;
   /** Appelé quand l'écran est remplacé ou fermé : le contenu libère ce qu'il a pris (l'aperçu 3D). */
@@ -129,6 +135,11 @@ export class Menu {
     return !this.root.hidden;
   }
 
+  /** L'écran affiché (son identifiant, sinon son titre) ; vide si aucun. */
+  get screen(): string {
+    return this.visible ? this.current : "";
+  }
+
   /** Remet le focus sur la première commande (l'écran était caché derrière l'écran de chargement). */
   focus(): void {
     if (this.visible) this.root.querySelector<HTMLElement>(".menu-entries button:not(:disabled), .menu-tab[aria-selected=true]")?.focus();
@@ -145,7 +156,7 @@ export class Menu {
     this.close = view.onClose;
 
     const panel = document.createElement("div");
-    panel.className = ["menu-panel", view.wide && "wide", view.hero && "hero", view.rows && "settings", view.content && "custom"].filter(Boolean).join(" ");
+    panel.className = ["menu-panel", view.wide && "wide", view.hero && "hero", view.rows && "settings", view.content && "custom", view.tiles && "tiles"].filter(Boolean).join(" ");
     panel.setAttribute("role", "dialog");
     panel.setAttribute("aria-label", view.title);
 
@@ -214,9 +225,14 @@ export class Menu {
     this.root.scrollTop = redraw ? scroll : 0;
     if (again) {
       again.focus({ preventScroll: true });
+    } else if (view.tabs) {
+      panel.querySelector<HTMLElement>(".menu-tab[aria-selected=true]")?.focus();
+    } else if (view.rows) {
+      // Des lignes sans onglets (l'écran des touches) : la première commande, en haut (les entrées sont en bas)
+      panel.querySelector<HTMLElement>(".menu-rows button:not(:disabled)")?.focus({ preventScroll: true });
     } else if (!view.content) {
       // Un contenu construit ailleurs place le focus lui-même (le choix du robot, sur le robot sélectionné)
-      panel.querySelector<HTMLElement>(view.tabs ? ".menu-tab[aria-selected=true]" : ".menu-entries button:not(:disabled)")?.focus();
+      panel.querySelector<HTMLElement>(".menu-entries button:not(:disabled)")?.focus();
     }
   }
 

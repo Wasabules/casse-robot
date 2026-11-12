@@ -11,3 +11,12 @@ codegen-units = 1
 panic = "abort"
 debug = false
 strip = true
+
+# La sonde construite vite, pour itérer (`npm run native -- --probe --dev`) : sans LTO, en plusieurs
+# morceaux, peu optimisée. Les calculs flottants n'en changent pas (Rust ne fusionne pas les
+# opérations), mais la parité se vérifie à la fin avec le profil `release`.
+[profile.probe-dev]
+inherits = "release"
+lto = false
+codegen-units = 16
+opt-level = 1

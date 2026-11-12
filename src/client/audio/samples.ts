@@ -207,6 +207,39 @@ export const SAMPLES = {
 
 export type SampleKey = keyof typeof SAMPLES;
 
+/** Durée (s) du fondu d'une boucle qui ne vient pas du jeu (l'ambiance d'une carte : voir `mendForeignLoop`). */
+const FOREIGN_FADE = 0.25;
+/** Niveau moyen visé d'une boucle qui ne vient pas du jeu (dB), celui des boucles du jeu (tools/sounds/build.mjs). */
+const FOREIGN_RMS_DB = -16;
+
+/**
+ * Prépare une boucle que le jeu n'a pas faite (l'ambiance d'un paquet de carte), déjà décodée : son
+ * niveau moyen ramené à celui des boucles du jeu (on ne sait pas à quel volume son auteur l'a
+ * enregistrée), et sa fin fondue à puissance constante dans son début (son auteur ne l'a peut-être pas
+ * raccordée). Elle se joue ensuite de `loopStart` (la fin du fondu) à sa fin : le dernier échantillon
+ * mène au premier après le fondu, sans à-coup. Rend `loopStart` (s).
+ */
+export function mendForeignLoop(buffer: AudioBuffer): number {
+  const n = Math.min(Math.round(FOREIGN_FADE * buffer.sampleRate), Math.floor(buffer.length / 4));
+  const end = buffer.length - n;
+  let sum = 0;
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const d = buffer.getChannelData(c);
+    for (let i = 0; i < d.length; i++) sum += d[i] * d[i];
+  }
+  const rms = Math.sqrt(sum / Math.max(1, buffer.length * buffer.numberOfChannels));
+  const gain = rms > 1e-5 ? Math.min(4, Math.max(0.05, 10 ** (FOREIGN_RMS_DB / 20) / rms)) : 1;
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const d = buffer.getChannelData(c);
+    for (let i = 0; i < d.length; i++) d[i] *= gain;
+    for (let i = 0; i < n; i++) {
+      const w = ((i + 0.5) / n) * (Math.PI / 2);
+      d[end + i] = d[end + i] * Math.cos(w) + d[i] * Math.sin(w);
+    }
+  }
+  return n / buffer.sampleRate;
+}
+
 /** Fichier d'une variante (n à partir de 1), par rapport à la racine du site. */
 export const sampleFile = (key: SampleKey, n: number): string => `sounds/${key}-${n}.ogg`;
 

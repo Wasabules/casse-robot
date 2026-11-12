@@ -110,8 +110,29 @@ const BLOCK_SHAPES = ["cube", "plate", ...all<ShapeId>({ wedge: 0, corner: 0, in
 
 // --- Le schéma ---
 
-/** Les définitions partagées du schéma du catalogue. */
-function catalogDefs(): Record<string, Schema> {
+/**
+ * Où va une définition : dans le catalogue (content/catalog.json, chaque entrée avec ses noms et ce
+ * qui s'en déduit), ou dans le fichier d'un élément (content/<famille>/<id>.json, que lit le jeu).
+ */
+type Target = "catalog" | "file";
+
+/** Les champs d'un fichier d'élément qui ne sont pas des données : le jeu les ignore (catalog/content.ts). */
+const FILE_NOTES = {
+  $schema: may(str("The schema of this file's family (content/schemas/<family>.schema.json), relative to the file, for the editor of whoever "
+    + "edits it. The game ignores it, like every field whose name starts with `$`.")),
+  $comment: may(str("A note for whoever edits this file (why the values are what they are). The game ignores it.")),
+};
+
+/** Les définitions partagées du schéma du catalogue, ou de ceux des fichiers des éléments. */
+function contentDefs(target: Target): Record<string, Schema> {
+  /**
+   * Ce qu'une entrée ajoute aux champs de sa définition : dans le catalogue, ses noms (les catalogues
+   * de messages du client) et ce qui s'en déduit ; dans son fichier, `$schema`, `$comment` et les
+   * données de l'élément qui ne sont pas dans sa définition (le prix d'une pièce).
+   */
+  const extra = (catalog: Record<string, Field<boolean>>, file: Record<string, Field<boolean>> = {}): Record<string, Field<boolean>> =>
+    target === "catalog" ? catalog : { ...FILE_NOTES, ...file };
+  const price = need(int("Unlock price (credits); 0: available from the start."));
   const robot = robotSchema();
   const props = robot.properties as Record<string, Schema>;
   return {
@@ -235,10 +256,7 @@ function catalogDefs(): Record<string, Schema> {
         support: may(ref("support")),
         melee: may(choice(MELEE_IDS, "The melee weapon whose motor and hub it is (`melee`).")),
       },
-      {
-        names: need(ref("names")),
-        price: need(int("Unlock price (credits); 0: available from the start.")),
-      },
+      extra({ names: need(ref("names")), price }, { price }),
     ),
     shape: {
       description: "A block shape other than the cube, in the block's frame (left +x, up +y, forward +z), in a cube of half-side 1 (scale by half a block, "
@@ -300,11 +318,7 @@ function catalogDefs(): Record<string, Schema> {
         track: may(bool("A track roller: the neighboring rollers of a side form a track.")),
         drop: may(pos("The hub hangs this far below its block's center (m): ground clearance.")),
       },
-      {
-        names: need(ref("names")),
-        price: need(int("Unlock price (credits); 0: available from the start.")),
-        kind: need(choice(WHEEL_KINDS, "Fixed, steered, caster or track roller.")),
-      },
+      extra({ names: need(ref("names")), price, kind: need(choice(WHEEL_KINDS, "Fixed, steered, caster or track roller.")) }, { price }),
     ),
     // Armes
     guidance: fields<Guidance>("A missile's guidance: `command`, it follows its launcher's aim; `homing`, it chases its target on its own; `piloted`, the player who fired it flies it.", {
@@ -421,7 +435,7 @@ function catalogDefs(): Record<string, Schema> {
         autoSupport: may(bool("Automatic support weapon: its turrets pick the ally to heal and fire on their own.")),
         projectile: need(ref("projectile")),
       },
-      { names: need(ref("names")) },
+      extra({ names: need(ref("names")) }),
     ),
     // Armes de contact
     blade: fields<SweptRing>("The volume a rotor's blade sweeps: a thick ring around its axis.", {
@@ -564,7 +578,7 @@ function catalogDefs(): Record<string, Schema> {
         hit: need(ref("meleeHit")),
         engage: need(pos("Distance at which the AI engages with it (m, between the robots' centers).")),
       },
-      { names: need(ref("names")) },
+      extra({ names: need(ref("names")) }),
     ),
     // Accessoires
     propType: fields<PropTypeDef>(
@@ -600,7 +614,7 @@ function catalogDefs(): Record<string, Schema> {
           reach: need(pos("Reach of its flames beyond its surface (m): the neighbors it can set alight.")),
         })),
       },
-      { names: need(ref("names")) },
+      extra({ names: need(ref("names")) }),
     ),
     // Robots
     robot: fields<Omit<BotProfile, "id" | "name" | "design">>(
@@ -612,13 +626,13 @@ function catalogDefs(): Record<string, Schema> {
         behavior: need(choice(BEHAVIORS, "What its AI does when hit: flee, or charge (a robot made for melee).")),
         mobility: need(choice(MOBILITIES, "How it moves, which picks its AI pilot: on the ground, hovering (rotors), or flying like a plane.")),
       },
-      {
+      extra({
         names: need(ref("names")),
         traits: need(ref("names", "Its short description in each language.")),
         cost: need(pos("Build cost of its design (blocks and wheels).")),
         mass: need(pos("Mass of its design (kg).")),
         design: need(ref("design")),
-      },
+      }, { design: need(ref("design")) }),
     ),
     design: {
       description: "A robot design, as the garage saves it (the same as schemas/robot.schema.json): blocks on a grid of 0.5 m cells, wheels on their faces. "
@@ -674,7 +688,94 @@ export function catalogSchema(): Schema {
       robots: byId(ROBOT_IDS, "robot", "The preset robots, by identifier."),
     },
     required: ["format", "constants", "damageTypes", "shapes", "blocks", "wheels", "weapons", "melee", "props", "robots"],
-    $defs: catalogDefs(),
+    $defs: contentDefs("catalog"),
+  };
+}
+
+// --- Les schémas des fichiers des éléments ---
+
+/**
+ * Les familles d'éléments en fichiers de données, que lit le jeu : content/<famille>/<id>.json, un
+ * fichier par élément, qui suit content/schemas/<famille>.schema.json (la définition `def` du
+ * catalogue, sans ses noms : ils sont dans les catalogues de messages du client).
+ */
+export const CONTENT_FAMILIES = {
+  props: {
+    def: "propType",
+    title: "Casse-Robot prop type",
+    description: "One file per prop type: content/props/<type>.json, named after the type's identifier (a map's "
+      + "`props[].type`), read by the game as it is (src/shared/catalog/props.ts). Adding a type also takes its look and its name in each "
+      + "language in the client (docs/architecture.md, \"Architecture rules\").",
+  },
+  wheels: {
+    def: "wheelType",
+    title: "Casse-Robot wheel type",
+    description: "One file per wheel type: content/wheels/<type>.json, named after the type's identifier (a robot design's "
+      + "`wheels[].type`), read by the game as it is (src/shared/catalog/wheels.ts), with its unlock price. Adding a type also takes its look "
+      + "and its name in each language in the client (docs/architecture.md, \"Architecture rules\").",
+  },
+  weapons: {
+    def: "weapon",
+    title: "Casse-Robot weapon",
+    description: "One file per weapon: content/weapons/<id>.json, named after the weapon's identifier (a turret's `weapon`), read by the game "
+      + "as it is (src/shared/catalog/weapons.ts), in the order of the weapon keys. Adding a weapon also takes its sounds, its sight, its muzzle "
+      + "flash and its name in each language in the client, and a block whose turret carries it (docs/architecture.md, \"Architecture rules\").",
+  },
+  melee: {
+    def: "meleeWeapon",
+    title: "Casse-Robot melee weapon",
+    description: "One file per melee weapon: content/melee/<id>.json, named after the weapon's identifier (a block type's `melee`), read by "
+      + "the game as it is (src/shared/catalog/melee.ts). Adding a melee weapon also takes its block, its models, its sight, its sounds and its "
+      + "name in each language in the client (docs/architecture.md, \"Architecture rules\").",
+  },
+  blocks: {
+    def: "blockType",
+    title: "Casse-Robot block type",
+    description: "One file per block type: content/blocks/<type>.json, named after the type's identifier (a robot design's "
+      + "`blocks[].type`), read by the game as it is (src/shared/catalog/blocks.ts), with its unlock price. The shaped blocks (wedges, "
+      + "corners, rounds…) have no file: the game cuts them out of the light, normal and heavy armors, their mass, hit points and cost in "
+      + "proportion to their volume. Adding a type also takes its look, its name in each language and its sentence in the garage "
+      + "(docs/architecture.md, \"Architecture rules\").",
+  },
+} as const;
+export type ContentFamily = keyof typeof CONTENT_FAMILIES;
+export const CONTENT_FAMILY_IDS = Object.keys(CONTENT_FAMILIES) as ContentFamily[];
+
+/** Où est le schéma des fichiers d'une famille, depuis la racine du dépôt et depuis un de ses fichiers (son `$schema`). */
+export const familySchemaPath = (family: ContentFamily): string => `content/schemas/${family}.schema.json`;
+export const familySchemaRef = (family: ContentFamily): string => `../schemas/${family}.schema.json`;
+
+/** Les définitions qu'emploie un schéma (« #/$defs/… »), de proche en proche, dans l'ordre de `defs`. */
+function usedDefs(root: Schema, defs: Readonly<Record<string, Schema>>): Record<string, Schema> {
+  const used = new Set<string>();
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) value.forEach(visit);
+    else if (value && typeof value === "object") {
+      for (const [key, x] of Object.entries(value)) {
+        if (key !== "$ref" || typeof x !== "string") visit(x);
+        else if (x.startsWith("#/$defs/") && !used.has(x.slice(8))) {
+          used.add(x.slice(8));
+          visit(defs[x.slice(8)]);
+        }
+      }
+    }
+  };
+  visit(root);
+  return Object.fromEntries(Object.keys(defs).filter((name) => used.has(name)).map((name) => [name, defs[name]]));
+}
+
+/** Le schéma des fichiers d'une famille (content/schemas/<famille>.schema.json). */
+export function familySchema(family: ContentFamily): Schema {
+  const { def, title, description } = CONTENT_FAMILIES[family];
+  const defs = contentDefs("file");
+  const { description: what, ...entry } = defs[def];
+  return {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: `${BASE}schemas/${family}.schema.json`,
+    title,
+    description: `${what} ${description} Generated from the game's code (npm run schemas). Units: meters, kilograms, seconds, radians, newtons.`,
+    ...entry,
+    $defs: usedDefs(entry, defs),
   };
 }
 

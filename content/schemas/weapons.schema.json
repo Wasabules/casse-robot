@@ -1,0 +1,719 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Wasabules/casse-robot/main/content/schemas/weapons.schema.json",
+  "title": "Casse-Robot weapon",
+  "description": "A weapon, carried by a turret block. Every shot launches a projectile. One file per weapon: content/weapons/<id>.json, named after the weapon's identifier (a turret's `weapon`), read by the game as it is (src/shared/catalog/weapons.ts), in the order of the weapon keys. Adding a weapon also takes its sounds, its sight, its muzzle flash and its name in each language in the client, and a block whose turret carries it (docs/architecture.md, \"Architecture rules\"). Generated from the game's code (npm run schemas). Units: meters, kilograms, seconds, radians, newtons.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "description": "The schema of this file's family (content/schemas/<family>.schema.json), relative to the file, for the editor of whoever edits it. The game ignores it, like every field whose name starts with `$`.",
+      "type": "string"
+    },
+    "$comment": {
+      "description": "A note for whoever edits this file (why the values are what they are). The game ignores it.",
+      "type": "string"
+    },
+    "cooldown": {
+      "description": "Minimum time between two shots (s).",
+      "type": "number",
+      "minimum": 0
+    },
+    "automatic": {
+      "description": "It fires as long as the trigger is held.",
+      "type": "boolean"
+    },
+    "spread": {
+      "description": "Dispersion with the scope, robot still (rad): its best accuracy.",
+      "type": "number",
+      "minimum": 0
+    },
+    "handling": {
+      "description": "What degrades its accuracy.",
+      "type": "object",
+      "properties": {
+        "hip": {
+          "description": "Factor on the dispersion without the scope.",
+          "type": "number",
+          "minimum": 0
+        },
+        "move": {
+          "description": "Added dispersion per m/s of the robot's speed (rad).",
+          "type": "number",
+          "minimum": 0
+        },
+        "turn": {
+          "description": "Added dispersion per rad/s of the robot's rotation (rad).",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "hip",
+        "move",
+        "turn"
+      ]
+    },
+    "recoil": {
+      "description": "Impulse sent back on the robot that fires (N·s).",
+      "type": "number",
+      "minimum": 0
+    },
+    "range": {
+      "description": "Useful range (m): the AI engages closer targets.",
+      "type": "number",
+      "minimum": 0
+    },
+    "engage": {
+      "description": "Distance at which the AI likes to fight with it (m).",
+      "type": "number",
+      "minimum": 0
+    },
+    "heat": {
+      "description": "Overheating: each shot heats it; overheated, it waits until it cools down to `constants.resumeHeat`.",
+      "type": "object",
+      "properties": {
+        "perShot": {
+          "description": "Heat per shot (1: overheat).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "cooling": {
+          "description": "Cooling per second.",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "perShot",
+        "cooling"
+      ]
+    },
+    "ammo": {
+      "description": "A magazine that regains one round at a time.",
+      "type": "object",
+      "properties": {
+        "capacity": {
+          "description": "Rounds.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "reload": {
+          "description": "Time to regain one round (s); null: it never reloads (one shot per life).",
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        }
+      },
+      "required": [
+        "capacity",
+        "reload"
+      ]
+    },
+    "minRange": {
+      "description": "The AI doesn't fire at a closer target (m): the explosion would hit itself.",
+      "type": "number",
+      "minimum": 0
+    },
+    "scopeOnly": {
+      "description": "The player can only fire it with the scope.",
+      "type": "boolean"
+    },
+    "power": {
+      "description": "An electric weapon: each shot takes this much energy from the batteries (kJ).",
+      "type": "number",
+      "minimum": 0
+    },
+    "lock": {
+      "description": "Lock-on: an enemy must stay in a cone around the aim before the weapon can fire; its missiles then chase it.",
+      "type": "object",
+      "properties": {
+        "time": {
+          "description": "Time to lock (s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "cone": {
+          "description": "Half angle of the cone (rad).",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "time",
+        "cone"
+      ]
+    },
+    "dropped": {
+      "description": "Dropped (bombs): released under the robot without aiming.",
+      "type": "boolean"
+    },
+    "autoSupport": {
+      "description": "Automatic support weapon: its turrets pick the ally to heal and fire on their own.",
+      "type": "boolean"
+    },
+    "projectile": {
+      "$ref": "#/$defs/projectile"
+    }
+  },
+  "required": [
+    "cooldown",
+    "automatic",
+    "spread",
+    "handling",
+    "recoil",
+    "range",
+    "projectile"
+  ],
+  "$defs": {
+    "damageType": {
+      "description": "A kind of damage: kinetic (bullets), pierce (armor-piercing), explosive, impact (collisions, hammers), fire, energy (lasers: heavy armor doesn't stop it better), cut (blades).",
+      "enum": [
+        "kinetic",
+        "pierce",
+        "explosive",
+        "impact",
+        "fire",
+        "energy",
+        "cut"
+      ]
+    },
+    "groundFire": {
+      "description": "A puddle of fire on the ground: it burns what stands in it (fire damage, and it may set it ablaze) and sets wood alight.",
+      "type": "object",
+      "properties": {
+        "radius": {
+          "description": "Radius (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "life": {
+          "description": "How long it burns (s).",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "radius",
+        "life"
+      ]
+    },
+    "explosion": {
+      "description": "An explosion: area damage decreasing linearly to its edge, and a blast that pushes bodies.",
+      "type": "object",
+      "properties": {
+        "look": {
+          "description": "Its look (effect and sound in the client).",
+          "enum": [
+            "shell",
+            "missile",
+            "rocket",
+            "flak",
+            "mine",
+            "bomb",
+            "napalm",
+            "warhead",
+            "barrel",
+            "gas",
+            "car"
+          ]
+        },
+        "radius": {
+          "description": "Radius of the damage area (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "damage": {
+          "description": "Damage at the center, decreasing to 0 at the edge (explosive damage).",
+          "type": "number",
+          "minimum": 0
+        },
+        "blastRadius": {
+          "description": "Radius of the blast (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "power": {
+          "description": "Impulse of the blast at the center (N·s per block hit).",
+          "type": "number",
+          "minimum": 0
+        },
+        "lift": {
+          "description": "Vertical component added to the blast's direction.",
+          "type": "number"
+        },
+        "ignite": {
+          "description": "Chance to set fire to each block left whole in the damage area.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "puddle": {
+          "description": "A puddle of fire left on the ground (napalm).",
+          "$ref": "#/$defs/groundFire"
+        }
+      },
+      "required": [
+        "look",
+        "radius",
+        "damage",
+        "blastRadius",
+        "power",
+        "lift"
+      ]
+    },
+    "guidance": {
+      "description": "A missile's guidance: `command`, it follows its launcher's aim; `homing`, it chases its target on its own; `piloted`, the player who fired it flies it.",
+      "type": "object",
+      "properties": {
+        "mode": {
+          "description": "Guidance mode.",
+          "enum": [
+            "command",
+            "homing",
+            "piloted"
+          ]
+        },
+        "turnRate": {
+          "description": "Maximum turn rate (rad/s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "airOnly": {
+          "description": "It only targets flying robots (anti-air).",
+          "type": "boolean"
+        },
+        "launch": {
+          "description": "It first flies straight along the weapon's axis for this time (s), then its guidance takes over.",
+          "type": "number",
+          "minimum": 0
+        },
+        "maxAccel": {
+          "description": "Momentum: it doesn't turn tighter than this lateral acceleration (m/s²).",
+          "type": "number",
+          "minimum": 0
+        },
+        "bleed": {
+          "description": "Share of its speed lost per radian of turn.",
+          "type": "number",
+          "minimum": 0
+        },
+        "recover": {
+          "description": "Rate at which its motor gives the speed back (1/s).",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "mode",
+        "turnRate"
+      ]
+    },
+    "mine": {
+      "description": "A mine: it lands where it falls, arms after `armDelay` s, then waits for what triggers it.",
+      "type": "object",
+      "properties": {
+        "armDelay": {
+          "description": "Time before it arms (s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "trigger": {
+          "description": "An enemy on the ground within `radius`, an enemy in flight within `radius`, its layer's order, or nothing (a sensor).",
+          "enum": [
+            "ground",
+            "air",
+            "remote",
+            "none"
+          ]
+        },
+        "radius": {
+          "description": "Trigger radius (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "action": {
+          "description": "What it does when triggered, instead of bursting on the spot.",
+          "anyOf": [
+            {
+              "description": "It jumps and bursts in the air.",
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "bounce"
+                },
+                "height": {
+                  "description": "Height of the jump (m).",
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "kind",
+                "height"
+              ]
+            },
+            {
+              "description": "It launches a projectile of another weapon at its target.",
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "launch"
+                },
+                "weapon": {
+                  "description": "The weapon whose projectile it launches.",
+                  "enum": [
+                    "rifle",
+                    "sniper",
+                    "cannon",
+                    "missile",
+                    "flak",
+                    "mine",
+                    "flamer",
+                    "emp",
+                    "smoke",
+                    "laser",
+                    "rail",
+                    "shotgun",
+                    "rockets",
+                    "plasma",
+                    "warhead",
+                    "lockon",
+                    "bombs",
+                    "empMine",
+                    "fireMine",
+                    "smokeMine",
+                    "bounceMine",
+                    "aaMine",
+                    "remoteMine",
+                    "sensorMine",
+                    "stickyMine",
+                    "flare",
+                    "repair",
+                    "nanites",
+                    "barrier"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "weapon"
+              ]
+            },
+            {
+              "description": "It sticks to its target and bursts later.",
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "stick"
+                },
+                "fuse": {
+                  "description": "Delay before it bursts (s).",
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "kind",
+                "fuse"
+              ]
+            }
+          ]
+        },
+        "sense": {
+          "description": "A sensor: its team spots enemies within this radius (m), through everything.",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "armDelay",
+        "trigger",
+        "radius"
+      ]
+    },
+    "projectile": {
+      "description": "What a shot launches: it flies with its speed and gravity, may be guided, pierces or explodes on impact.",
+      "type": "object",
+      "properties": {
+        "look": {
+          "description": "Its look in the client.",
+          "enum": [
+            "bullet",
+            "pellet",
+            "shell",
+            "missile",
+            "rocket",
+            "warhead",
+            "mine",
+            "bomb",
+            "flame",
+            "plasma",
+            "orb",
+            "grenade",
+            "beam",
+            "rail",
+            "repair",
+            "flare",
+            "nanites",
+            "barrier"
+          ]
+        },
+        "speed": {
+          "description": "Muzzle speed (m/s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "gravity": {
+          "description": "Share of gravity it undergoes: 0, a straight line (a propelled missile); 1, ballistic.",
+          "type": "number"
+        },
+        "life": {
+          "description": "Maximum flight time (s); an explosive projectile explodes at the end of its course.",
+          "type": "number",
+          "minimum": 0
+        },
+        "damage": {
+          "description": "Damage on a direct hit.",
+          "type": "number",
+          "minimum": 0
+        },
+        "damageType": {
+          "description": "The kind of that damage.",
+          "$ref": "#/$defs/damageType"
+        },
+        "penetrating": {
+          "description": "If it destroys what it hits, it goes on with the damage it has left.",
+          "type": "boolean"
+        },
+        "impulse": {
+          "description": "Impulse given to what it hits (N·s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "explosion": {
+          "$ref": "#/$defs/explosion"
+        },
+        "guidance": {
+          "$ref": "#/$defs/guidance"
+        },
+        "proximity": {
+          "description": "Proximity fuse: it explodes when a target passes within this radius (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "mine": {
+          "$ref": "#/$defs/mine"
+        },
+        "hull": {
+          "description": "It can be shot down: a sphere that bullets and explosions hit.",
+          "type": "object",
+          "properties": {
+            "radius": {
+              "description": "Radius (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "hp": {
+              "description": "Hit points.",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "radius",
+            "hp"
+          ]
+        },
+        "decoy": {
+          "description": "A flare: enemy missiles that see it may follow it.",
+          "type": "boolean"
+        },
+        "repair": {
+          "description": "A repair shot: on an ally, the blocks and wheels near the impact regain hit points; on an enemy, it drains life.",
+          "type": "object",
+          "properties": {
+            "amount": {
+              "description": "Hit points regained by each block and wheel.",
+              "type": "number",
+              "minimum": 0
+            },
+            "radius": {
+              "description": "Radius (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "drain": {
+              "description": "Energy damage to the enemy block hit.",
+              "type": "number",
+              "minimum": 0
+            },
+            "steal": {
+              "description": "Share of what the enemy really lost that repairs the shooter.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "swarm": {
+              "description": "Nanites: they spread over the whole robot and mend its this-many most damaged blocks.",
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "amount",
+            "radius"
+          ]
+        },
+        "barrier": {
+          "description": "An energy wall: it flies `reach` m then unfolds into a vertical rectangle that stops enemy shots.",
+          "type": "object",
+          "properties": {
+            "width": {
+              "description": "Width (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "height": {
+              "description": "Height (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "hp": {
+              "description": "Hit points.",
+              "type": "number",
+              "minimum": 0
+            },
+            "life": {
+              "description": "Lifetime (s).",
+              "type": "number",
+              "minimum": 0
+            },
+            "reach": {
+              "description": "Distance before it unfolds (m).",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "width",
+            "height",
+            "hp",
+            "life",
+            "reach"
+          ]
+        },
+        "ignite": {
+          "description": "Chance to set fire to the block hit.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "puddle": {
+          "description": "A flame jet that touches the ground or the scenery may leave a puddle of fire.",
+          "type": "object",
+          "properties": {
+            "radius": {
+              "description": "Radius (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "life": {
+              "description": "How long it burns (s).",
+              "type": "number",
+              "minimum": 0
+            },
+            "chance": {
+              "description": "Chance to leave one.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "required": [
+            "radius",
+            "life",
+            "chance"
+          ]
+        },
+        "emp": {
+          "description": "An electromagnetic pulse on impact: engines, rotors and turrets nearby cut out.",
+          "type": "object",
+          "properties": {
+            "radius": {
+              "description": "Radius (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "duration": {
+              "description": "Stun at the center (s); half as long at the edge.",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "radius",
+            "duration"
+          ]
+        },
+        "smoke": {
+          "description": "A smoke cloud on impact (or at the end of its course): it hides what is behind it.",
+          "type": "object",
+          "properties": {
+            "radius": {
+              "description": "Final radius (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "duration": {
+              "description": "Time before it clears (s).",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "radius",
+            "duration"
+          ]
+        },
+        "pellets": {
+          "description": "A spread (shotgun): each shot launches several pellets.",
+          "type": "object",
+          "properties": {
+            "count": {
+              "description": "Pellets per shot.",
+              "type": "integer",
+              "minimum": 0
+            },
+            "spread": {
+              "description": "Maximum deviation of each pellet (rad).",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "count",
+            "spread"
+          ]
+        },
+        "fan": {
+          "description": "A fan (rocket salvo): each projectile leaves up to this angle (rad) off the aim, then its guidance brings it back.",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "look",
+        "speed",
+        "gravity",
+        "life",
+        "damage",
+        "damageType",
+        "penetrating",
+        "impulse"
+      ]
+    }
+  }
+}

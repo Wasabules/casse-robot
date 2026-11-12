@@ -1,6 +1,8 @@
 import { arenaById, isArenaId, type ArenaKey, type ArenaLayout, type ArenaPlace, type CommunityMeta, type PlaceId } from "../../shared/arena/layout";
 import type { MapIssue } from "../../shared/map/format";
 import type { HeightmapErrorCode } from "../../shared/map/heightmap";
+import type { GlbProblem } from "../../shared/media/glb";
+import type { OpusProblem } from "../../shared/media/ogg";
 import type { BlockType } from "../../shared/catalog/blocks";
 import { isMeleeId, type ArmId, type MeleeId } from "../../shared/catalog/melee";
 import type { PropType } from "../../shared/catalog/props";
@@ -93,6 +95,40 @@ export function mapIssueText(issue: MapIssue): string {
     case "spawnHazard": return t("mapIssue.spawnHazard", { team: t(`team.${issue.team}`) });
     case "spawnOutside": return t("mapIssue.spawnOutside", { team: t(`team.${issue.team}`) });
     case "spawnClose": return t("mapIssue.spawnClose", { distance: issue.distance, min: issue.min });
+    case "archive": return t("mapIssue.archive");
+    case "packagePath": return t("mapIssue.packagePath", { path: issue.path });
+    case "packageMap": return t("mapIssue.packageMap");
+    case "assetSize": return t("mapIssue.assetSize", { path: issue.path, size: issue.size, max: issue.max });
+    case "assetName": return t("mapIssue.assetName", { path: issue.path });
+    case "assetModel": return t("mapIssue.assetModel", { path: issue.path, why: glbProblemText(issue.problem) });
+    case "assetSound": return t("mapIssue.assetSound", { path: issue.path, why: opusProblemText(issue.problem) });
+  }
+}
+
+/** Ce qui ne va pas dans un modèle glTF d'un paquet de carte. */
+export function glbProblemText(problem: GlbProblem): string {
+  switch (problem.code) {
+    case "short": return t("glbProblem.short");
+    case "magic": return t("glbProblem.magic");
+    case "container": return t("glbProblem.container", { version: problem.version });
+    case "length": return t("glbProblem.length", { declared: problem.declared, actual: problem.actual });
+    case "jsonChunk": return t("glbProblem.jsonChunk");
+    case "json": return t("glbProblem.json");
+    case "version": return t("glbProblem.version", { version: problem.version });
+    case "externalBuffer": return t("glbProblem.externalBuffer");
+    case "bufferSize": return t("glbProblem.bufferSize", { buffer: problem.buffer, bin: problem.bin });
+    case "externalImage": return t("glbProblem.externalImage");
+    case "noMesh": return t("glbProblem.noMesh");
+    case "extensions": return t("glbProblem.extensions", { list: problem.list.join(", ") });
+  }
+}
+
+/** Ce qui ne va pas dans l'ambiance d'un paquet de carte. */
+export function opusProblemText(problem: OpusProblem): string {
+  switch (problem.code) {
+    case "format": return t("opusProblem.format");
+    case "channels": return t("opusProblem.channels", { channels: problem.channels });
+    case "duration": return t("opusProblem.duration", { seconds: problem.seconds, min: problem.min, max: problem.max });
   }
 }
 

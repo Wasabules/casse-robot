@@ -1,9 +1,12 @@
 import * as B from "../babylon";
+import type { MapAsset } from "../../shared/arena/layout";
 import { CAR_HALF, propDef, type PropType } from "../../shared/catalog/props";
+import { modelPath, type AssetEntry } from "../../shared/map/pack";
 import type { Vec3 } from "../../shared/math/vec";
+import type { GltfModel } from "./gltfModel";
+import { adoptModel, modelMaterial, modelMesh, ModelReads } from "./gltfModels";
 import { context2d } from "./materials";
-import type { PropModelData } from "./propGltf";
-import { PROP_MODEL_FILES } from "./propModelFiles";
+import { PROP_MODEL_FILES } from "./modelFiles";
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -14,12 +17,18 @@ type Ctx = CanvasRenderingContext2D;
  * voitures (intactes ou brûlées) et lampadaires.
  *
  * Un accessoire peut avoir un modèle glTF (public/models/props/<type>.glb, listé dans
- * render/propModelFiles.ts par `npm run models` ; les conventions : docs/models.md) : il remplace
+ * render/modelFiles.ts par `npm run models` ; les conventions : docs/models.md) : il remplace
  * alors celui que fait le code. Le fichier se lit à la demande, la première fois qu'on demande ce
- * type d'accessoire (le lecteur glTF, render/propGltf.ts, ne se charge qu'alors) ; en attendant, la
+ * type d'accessoire (le lecteur glTF, render/gltfModel.ts, ne se charge qu'alors) ; en attendant, la
  * source est celle du code, puis elle prend sur place la géométrie et les matières du modèle (ses
- * instances et ses lots suivent : voir `adopt` et render/propBatches.ts). Un fichier illisible
- * laisse le modèle du code (un avertissement dans la console).
+ * instances et ses lots suivent : voir render/gltfModels.ts et render/propBatches.ts). Un fichier
+ * illisible laisse le modèle du code (un avertissement dans la console).
+ *
+ * Une carte venue d'un paquet (shared/map/pack.ts) peut avoir son propre modèle pour un type
+ * d'accessoire (`MapAssets.models`) : sur cette carte, il remplace celui du jeu. Il se lit de même,
+ * une fois par scène, d'après son empreinte, ses octets venant des ressources de la carte
+ * (client/maps/assets.ts : la bibliothèque du navigateur, ou le serveur qui a envoyé la carte) ; sa
+ * source est à part de celle du jeu (une autre clé dans `Assets`), et ses matières aussi.
  */
 
 /** Motif d'un matériau de construction, dessiné sur une texture carrée (une façade : deux travées de fenêtres). */
@@ -321,27 +330,71 @@ function drawFacade(c: Ctx, brick: boolean, random: () => number): void {
   }
 }
 
+/** D'où vient un modèle glTF : le jeu (public/models/props/), sinon l'empreinte d'un modèle de carte. */
+const GAME = "game";
+
+/** Les octets d'un modèle d'une carte (ses ressources, vérifiées) ; null : absent ou fautif. */
+export type MapModelBytes = (entry: AssetEntry) => Promise<Uint8Array | null>;
+
 /** Matériaux partagés : un par type d'accessoire (toutes les tailles d'un même mur le partagent). */
 export class PropModels {
   private readonly scene: B.Scene;
   private readonly materials = new Map<string, B.StandardMaterial>();
 
-  constructor(scene: B.Scene) {
+  constructor(scene: B.Scene, mapBytes: MapModelBytes = async () => null) {
     this.scene = scene;
+    // (ce qu'est l'accessoire, dans l'avertissement d'un fichier illisible : un message de la console)
+    this.reads = new ModelReads(scene, PROP_MODEL_FILES, (type) => `de l'accessoire « ${type} »`); // i18n-ignore
+    this.mapReads = new ModelReads<string>(
+      scene,
+      (hash) => (this.mapEntries.has(hash) ? { file: this.mapEntries.get(hash)!.path, hash } : undefined),
+      (hash) => `d'une carte (${this.mapEntries.get(hash)?.path ?? hash})`, // i18n-ignore
+      () => {},
+      async (file) => {
+        const bytes = await mapBytes(this.mapEntries.get(file.hash)!);
+        if (!bytes) throw new Error("Ressource absente ou fautive");
+        return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+      },
+    );
   }
 
   /**
    * Mesh source d'un accessoire : à ses dimensions pour une dalle (`half`), sinon à sa taille
    * nominale (un arbre plus grand est une instance agrandie). `diamond` : une dalle posée en
    * losange, dont la texture est redressée. `char` : bois noirci par le feu (voir `CharLevel`).
+   * `own` : le modèle que la carte donne à ce type (ses ressources), à la place de celui du jeu.
    */
-  source(type: PropType, half: Vec3 | null, diamond: boolean, char: CharLevel = 0): B.Mesh {
-    const model = this.modelOf(type);
-    if (model) return this.fromModel(type, model, half, char);
+  source(type: PropType, half: Vec3 | null, diamond: boolean, char: CharLevel = 0, own: MapAsset | null = null): B.Mesh {
+    if (own) {
+      const hash = own.sha256;
+      if (!this.mapEntries.has(hash)) this.mapEntries.set(hash, { path: modelPath(type), asset: own, type });
+      const mine = this.mapReads.get(hash);
+      if (mine) return this.fromModel(type, mine, half, char, hash);
+      // Le modèle de la carte est en route : la source du code en attendant, qui le prendra quand il sera lu
+      if (mine === undefined) {
+        const mesh = this.drawn(type, half, diamond, char);
+        this.mapReads.whenRead(hash, (read) => {
+          if (!mesh.isDisposed()) adoptModel(mesh, this.fromModel(type, read, half, char, hash));
+        });
+        return mesh;
+      }
+      // (illisible : le modèle du jeu)
+    }
+    const model = this.reads.get(type);
+    if (model) return this.fromModel(type, model, half, char, GAME);
     const mesh = this.drawn(type, half, diamond, char);
     // Le modèle glTF est en route : cette source le prendra quand il sera lu
-    if (model === undefined) this.awaiting.get(type)?.push({ mesh, half, char });
+    if (model === undefined) {
+      this.reads.whenRead(type, (read) => {
+        if (!mesh.isDisposed()) adoptModel(mesh, this.fromModel(type, read, half, char, GAME));
+      });
+    }
     return mesh;
+  }
+
+  /** Nombre de modèles glTF en cours de lecture dans cette scène. */
+  get pending(): number {
+    return this.reads.pending + this.mapReads.pending;
   }
 
   /** La source faite par le code. */
@@ -452,56 +505,23 @@ export class PropModels {
     return tex;
   }
 
-  /** Les modèles glTF de cette scène, par type : lu, ou illisible (null) ; absent : pas encore lu. */
-  private readonly models = new Map<PropType, PropModelData | null>();
-  /** Les sources faites par le code en attendant le modèle glTF de leur type (sa lecture est en cours) : elles le prendront. */
-  private readonly awaiting = new Map<PropType, { mesh: B.Mesh; half: Vec3 | null; char: CharLevel }[]>();
+  /** Les modèles glTF de cette scène (render/gltfModels.ts). */
+  private readonly reads: ModelReads<PropType>;
+  /** Les modèles des cartes (leurs ressources), d'après leur empreinte, et ce qu'on en sait (le type, le chemin). */
+  private readonly mapReads: ModelReads<string>;
+  private readonly mapEntries = new Map<string, AssetEntry>();
   /** Le verre des modèles glTF : ses couleurs de jour, et celle qu'il prend la nuit. */
   private readonly glass = new Map<B.StandardMaterial, { diffuse: B.Color3; emissive: B.Color3; lit: B.Color3 }>();
   /** Les matières d'un modèle à un cran de noircissement (une seule, ou plusieurs réunies). */
   private readonly modelMaterials = new Map<string, B.Material>();
 
   /**
-   * Le modèle glTF d'un type d'accessoire : lu (ses données), en route (undefined : sa lecture
-   * commence, si elle n'est pas déjà en cours), ou aucun (null : pas de fichier, ou illisible).
-   */
-  private modelOf(type: PropType): PropModelData | null | undefined {
-    const model = this.models.get(type);
-    if (model !== undefined) return model;
-    const entry = PROP_MODEL_FILES[type];
-    if (!entry) return null;
-    if (!this.awaiting.has(type)) {
-      this.awaiting.set(type, []);
-      void this.load(type, entry);
-    }
-    return undefined;
-  }
-
-  private async load(type: PropType, entry: { readonly file: string; readonly hash: string }): Promise<void> {
-    let model: PropModelData | null = null;
-    try {
-      const [reader, bytes] = await Promise.all([gltfReader(), modelBytes(entry)]);
-      if (this.scene.isDisposed) return;
-      model = await reader.readPropModel(this.scene, bytes, `${type}.glb`);
-    } catch (e) {
-      console.warn(`Modèle glTF de l'accessoire « ${type} » illisible (${entry.file}) : on garde celui du code.`, e);
-    }
-    if (this.scene.isDisposed) return;
-    this.models.set(type, model);
-    const waiting = this.awaiting.get(type) ?? [];
-    this.awaiting.delete(type);
-    if (!model) return;
-    for (const { mesh, half, char } of waiting) {
-      if (!mesh.isDisposed()) adopt(mesh, this.fromModel(type, model, half, char));
-    }
-  }
-
-  /**
    * Une source d'après le modèle glTF : sa géométrie posée comme celle du code (le centre du corps
    * de l'accessoire à l'origine ; une dalle étirée à ses dimensions), ses matières au cran de
-   * noircissement voulu.
+   * noircissement voulu. `origin` : d'où vient le modèle (`GAME`, ou l'empreinte d'un modèle de
+   * carte), pour ne pas mêler ses matières à celles d'un autre modèle du même type.
    */
-  private fromModel(type: PropType, model: PropModelData, half: Vec3 | null, char: CharLevel): B.Mesh {
+  private fromModel(type: PropType, model: GltfModel, half: Vec3 | null, char: CharLevel, origin: string): B.Mesh {
     const shape = propDef(type).shape;
     const positions = Float32Array.from(model.positions);
     const normals = Float32Array.from(model.normals);
@@ -514,30 +534,17 @@ export class PropModels {
       const lift = shape.kind === "box" ? shape.half : shape.halfHeight;
       for (let i = 1; i < positions.length; i += 3) positions[i] -= lift;
     }
-    const mesh = new B.Mesh(`src-prop-${type}`, this.scene);
-    const data = new B.VertexData();
-    data.positions = positions;
-    data.normals = normals;
-    if (model.uvs) data.uvs = model.uvs;
-    if (model.colors) data.colors = model.colors;
-    data.indices = model.indices;
-    data.applyToMesh(mesh);
-    mesh.hasVertexAlpha = false;
-    mesh.releaseSubMeshes();
-    for (const part of model.parts) new B.SubMesh(part.material, 0, mesh.getTotalVertices(), part.indexStart, part.indexCount, mesh);
-    mesh.material = this.modelMaterial(type, model, char);
-    mesh.isVisible = false;
-    mesh.receiveShadows = true;
-    mesh.refreshBoundingInfo();
-    return mesh;
+    return modelMesh(this.scene, `src-prop-${type}`, model, this.modelMaterial(type, model, char, origin), { positions, normals });
   }
 
   /** Les matières d'un modèle à un cran de noircissement : les mêmes textures, les couleurs assombries (`CHAR_TINT`). */
-  private modelMaterial(type: PropType, model: PropModelData, char: CharLevel): B.Material {
-    const key = `${type}-${char}`;
+  private modelMaterial(type: PropType, model: GltfModel, char: CharLevel, origin: string): B.Material {
+    // (celles du modèle du jeu gardent leurs clés ; celles d'un modèle de carte ont la sienne)
+    const name = origin === GAME ? type : `${type}@${origin.slice(0, 16)}`;
+    const key = `${name}-${char}`;
     const made = this.modelMaterials.get(key);
     if (made) return made;
-    const list = model.materials.map((base, i) => this.material(`gltf-${type}-${i}-${char}`, () => {
+    const list = model.materials.map((base, i) => this.material(`gltf-${name}-${i}-${char}`, () => {
       const mat = char ? (base.clone(`${base.name}-${char}`) as B.StandardMaterial) : base;
       if (char) mat.diffuseColor = base.diffuseColor.multiply(CHAR_TINT[char]);
       if (GLASS.test(base.name)) {
@@ -546,13 +553,7 @@ export class PropModels {
       }
       return mat;
     }));
-    let material: B.Material;
-    if (list.length === 1) material = list[0];
-    else {
-      const multi = new B.MultiMaterial(`gltf-${type}-${char}`, this.scene);
-      multi.subMaterials = list;
-      material = multi;
-    }
+    const material = modelMaterial(this.scene, `gltf-${name}-${char}`, list);
     this.modelMaterials.set(key, material);
     return material;
   }
@@ -950,27 +951,6 @@ function finish(mesh: B.Mesh, material: B.Material): B.Mesh {
 /** Une matière de modèle glTF nommée `glass` (ou `glass.001`… : les copies de Blender) : le verre d'une lampe, qui s'allume la nuit. */
 const GLASS = /^glass(\.\d+)?$/i;
 
-/** Le lecteur glTF (render/propGltf.ts), chargé à la première demande : il n'est pas dans le paquet principal. */
-let reader: Promise<typeof import("./propGltf")> | null = null;
-const gltfReader = (): Promise<typeof import("./propGltf")> => (reader ??= import("./propGltf"));
-
-/** Les octets de chaque fichier de modèle, téléchargés une fois pour toutes les scènes (le jeu, l'éditeur de cartes). */
-const downloads = new Map<string, Promise<ArrayBuffer>>();
-function modelBytes(entry: { readonly file: string; readonly hash: string }): Promise<ArrayBuffer> {
-  let bytes = downloads.get(entry.file);
-  if (!bytes) {
-    // (l'empreinte dans l'adresse : un fichier changé ne vient pas du cache du navigateur)
-    bytes = fetch(`${import.meta.env.BASE_URL}${entry.file}?v=${entry.hash}`).then((r) => {
-      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-      return r.arrayBuffer();
-    });
-    // Un échec n'est pas gardé : une autre scène réessaiera
-    bytes.catch(() => downloads.delete(entry.file));
-    downloads.set(entry.file, bytes);
-  }
-  return bytes;
-}
-
 /** Étire des positions (et leurs normales) pour que leur boîte englobante remplisse la boîte de demi-côtés `half`, centrée. */
 function fitInto(positions: Float32Array, normals: Float32Array, half: readonly number[]): void {
   const min = [Infinity, Infinity, Infinity];
@@ -994,23 +974,4 @@ function fitInto(positions: Float32Array, normals: Float32Array, half: readonly 
     normals[i + 1] = y / n;
     normals[i + 2] = z / n;
   }
-}
-
-/**
- * La source `target` (faite par le code, déjà instanciée, peut-être dans des lots) prend sur place
- * la géométrie, les parts et les matières de `from`, qui disparaît. Ses instances la suivent (leur
- * boîte englobante est refaite) ; un lot d'instances fines voit que la géométrie de sa source a
- * changé et se refait (render/propBatches.ts).
- */
-function adopt(target: B.Mesh, from: B.Mesh): void {
-  const old = target.geometry;
-  from.geometry!.applyToMesh(target);
-  if (old && !old.meshes.length) old.dispose();
-  target.releaseSubMeshes();
-  for (const sub of from.subMeshes) new B.SubMesh(sub.materialIndex, sub.verticesStart, sub.verticesCount, sub.indexStart, sub.indexCount, target);
-  target.material = from.material;
-  target.hasVertexAlpha = false;
-  target.refreshBoundingInfo();
-  from.dispose(false, false);
-  for (const instance of target.instances) instance.refreshBoundingInfo();
 }

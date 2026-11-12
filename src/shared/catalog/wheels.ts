@@ -1,12 +1,22 @@
 import { dcos, dsin } from "../math/det";
+import { splitFiles } from "./content";
+import caster from "../../../content/wheels/caster.json";
+import heavy from "../../../content/wheels/heavy.json";
+import heavySteered from "../../../content/wheels/heavySteered.json";
+import small from "../../../content/wheels/small.json";
+import smallSteered from "../../../content/wheels/smallSteered.json";
+import standard from "../../../content/wheels/standard.json";
+import steered from "../../../content/wheels/steered.json";
+import track from "../../../content/wheels/track.json";
 /**
  * Types de roue. Le moteur est dans la roue : chaque type a son couple, sa vitesse et la
  * charge qu'il est fait pour porter. Un robot lourd a besoin de plus de roues, ou de roues
  * plus fortes. Quatre sortes (`wheelKind`) : la roue fixe ; la roue directrice (`steering` : une
  * fusée qui braque, plus chère) ; la roulette (`caster` : une roue folle, sans moteur, qui pivote
  * librement et suit le mouvement) ; le galet de chenille (`track`). Les roues fixes et directrices
- * existent en trois tailles. Chaque type a son apparence côté client (`WHEEL_LOOKS`) et son nom dans
- * chaque langue (`wheel.<type>`, client/i18n/locales/<langue>/catalog.ts).
+ * existent en trois tailles. Chaque type est un fichier de données (content/wheels/<type>.json : voir
+ * catalog/content.ts), et a son apparence côté client (`WHEEL_LOOKS`) et son nom dans chaque langue
+ * (`wheel.<type>`, client/i18n/locales/<langue>/catalog.ts).
  */
 export interface WheelTypeDef {
   /** Coût de construction. */
@@ -79,65 +89,25 @@ export interface SuspensionDef {
   readonly dampingRatio: number;
 }
 
-/** Les trois tailles de roue fixe ou directrice. */
-const STANDARD = {
-  radius: 0.55, width: 0.3, mass: 4, hp: 50, grip: 0.9,
-  stallTorque: 300, freeSpeed: 12, ratedLoad: 25,
-  suspension: { travelUp: 0.14, travelDown: 0.1, frequency: 2.4, dampingRatio: 0.6 },
-} as const;
-const SMALL = {
-  radius: 0.3, width: 0.2, mass: 1.2, hp: 30, grip: 0.9,
-  stallTorque: 50, freeSpeed: 25, ratedLoad: 10,
-  suspension: { travelUp: 0.1, travelDown: 0.08, frequency: 2.6, dampingRatio: 0.55 },
-} as const;
-const HEAVY = {
-  radius: 0.75, width: 0.45, mass: 9, hp: 120, grip: 0.95,
-  stallTorque: 900, freeSpeed: 7, ratedLoad: 70,
-  suspension: { travelUp: 0.2, travelDown: 0.14, frequency: 1.9, dampingRatio: 0.55 },
-} as const;
-/** Une roue directrice coûte plus que la fixe de sa taille : sa fusée et son servomoteur (points de construction). */
-const STEER_EXTRA = 3;
+/**
+ * Les types de roue, un fichier chacun (content/wheels/<type>.json, qui suit
+ * content/schemas/wheels.schema.json), dans l'ordre du catalogue : leurs noms font `WheelType`. Un
+ * fichier donne aussi le prix de déblocage de sa roue (`price`).
+ */
+const FILES = { standard, steered, small, smallSteered, heavy, heavySteered, caster, track };
 
-export const WHEEL_TYPES = {
-  standard: { cost: 6, ...STANDARD },
-  steered: { cost: 6 + STEER_EXTRA, ...STANDARD, steering: { maxAngle: 0.6, rate: 1.6 } },
-  /** Petite roue légère et rapide, pour les engins légers (ou le train d'atterrissage d'un avion). */
-  small: { cost: 3, ...SMALL },
-  smallSteered: { cost: 3 + STEER_EXTRA, ...SMALL, steering: { maxAngle: 0.7, rate: 2.5 } },
-  /** Grande roue à fort couple mais lente, avec un grand débattement, pour les engins lourds. */
-  heavy: { cost: 12, ...HEAVY },
-  heavySteered: { cost: 12 + STEER_EXTRA, ...HEAVY, steering: { maxAngle: 0.5, rate: 1 } },
-  /**
-   * Roulette : une petite roue folle, sans moteur, qui pivote librement et suit le mouvement. Elle
-   * porte (roue de queue d'un avion, appui d'un robot à deux roues motrices) sans gêner les
-   * virages ; seule, elle ne fait pas avancer.
-   */
-  caster: {
-    cost: 2,
-    radius: 0.22, width: 0.14, mass: 0.8, hp: 30, grip: 0.9,
-    stallTorque: 0, freeSpeed: 30, ratedLoad: 15,
-    // Long débattement vers le bas : elle garde le contact même sous un robot que ses roues motrices
-    // (réglées pour une charge plus lourde) tiennent plus haut que prévu
-    suspension: { travelUp: 0.1, travelDown: 0.22, frequency: 2.2, dampingRatio: 0.6 },
-    caster: { trail: 0.08 },
-  },
-  /**
-   * Galet de chenille : petit, très adhérent, lent et fort ; un galet toutes les une ou deux cases,
-   * le long du flanc. On en pose aussi au-dessus ou au-dessous d'un autre (une chenille plus
-   * haute), ou sur un autre vers l'extérieur (une chenille plus large, qui porte et agrippe plus :
-   * chaque galet a son moteur et son appui).
-   */
-  track: {
-    cost: 8,
-    radius: 0.24, width: 0.4, mass: 3, hp: 120, grip: 1.3,
-    stallTorque: 300, freeSpeed: 16, ratedLoad: 60,
-    suspension: { travelUp: 0.08, travelDown: 0.06, frequency: 2.8, dampingRatio: 0.7 },
-    track: true,
-    drop: 0.12,
-  },
-} as const satisfies Record<string, WheelTypeDef>;
+export type WheelType = keyof typeof FILES;
 
-export type WheelType = keyof typeof WHEEL_TYPES;
+const WHEELS = splitFiles<typeof FILES, WheelTypeDef, number>(FILES, "price");
+
+/** Les types de roue, lus de leurs fichiers. */
+export const WHEEL_TYPES = WHEELS.defs;
+
+/**
+ * Prix de déblocage de chaque type de roue (crédits ; 0 : disponible dès le départ ; une roue
+ * directrice coûte plus que la fixe de sa taille), que donne son fichier.
+ */
+export const WHEEL_PRICES: Readonly<Record<WheelType, number>> = WHEELS.split;
 
 export const isWheelType = (value: string): value is WheelType => Object.hasOwn(WHEEL_TYPES, value);
 

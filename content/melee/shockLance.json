@@ -1,0 +1,32 @@
+{
+  "$schema": "../schemas/melee.schema.json",
+  "$comment": "Lance électrique : une pointe qui sort droit devant son bloc (à la gâchette) et décharge ce qu'elle touche : peu de dégâts, mais une paralysie locale (une IEM ciblée) des organes autour du point touché pendant 2,5 s : les roues de ce côté en roue libre, une tourelle muette, un moteur coupé ; le reste du robot marche.",
+  "look": "lance",
+  "motion": "thrust",
+  "axis": "up",
+  "hub": [0, 0.08, 0.2],
+  "thrust": {
+    "retracted": 0.3,
+    "reach": 1.6,
+    "radius": 0.16,
+    "strike": 0.14,
+    "recover": 0.6,
+    "energy": 800,
+    "cost": 2.5
+  },
+  "hit": {
+    "damageType": "energy",
+    "damage": 90,
+    "bite": 1,
+    "fling": 0,
+    "push": { "tangent": 1, "radial": 0, "axial": 0, "lift": 0 },
+    "recoil": 0,
+    "spread": 0.25,
+    "wheels": 1,
+    "wear": 1,
+    "gap": 0,
+    "minSpeed": 0,
+    "stun": { "radius": 1.1, "duration": 2.5 }
+  },
+  "engage": 1.8
+}

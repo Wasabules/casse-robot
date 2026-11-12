@@ -1,7 +1,9 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { VALLEY_GROUND } from "../src/shared/arena/features";
+import { arenaGround } from "../src/shared/arena/grounds";
 import { ARENA_IDS, ARENAS, PLAIN_SKY, type ArenaId, type ArenaLayout, type PropSpot, type StaticBox } from "../src/shared/arena/layout";
+import { ARENA_SOURCES } from "../src/shared/arena/sources";
 import { propHalf } from "../src/shared/catalog/props";
 import { BATTLE_ROSTER } from "../src/shared/design/presets";
 import { arenaFromMap, checkMapText, MAP_EXTENSION, mapFromArena, mapText, readMapText, type MapFile } from "../src/shared/map";
@@ -13,10 +15,11 @@ import { seedRandom } from "./seed";
 /*
  * Les arènes du jeu en cartes (`mapFromArena`, shared/map/export.ts) : chacune, exportée, écrite en
  * texte (`mapText`), relue (`readMapText`) et reconstruite (`arenaFromMap`), redonne la même arène,
- * champ par champ, au bit près (le relief, à la précision de son encodage sur 16 bits) ; chaque carte
- * exportée se joue (`checkMap`) ; les fichiers de content/arenas/ sont ceux que fait l'export
- * (`npm run map:export -- all`) ; une bataille sur l'arène rebâtie donne le même monde que sur celle
- * du code.
+ * champ par champ, au bit près, relief compris (le code des arènes l'arrondit à la précision du
+ * format : `quantizeTerrain`) ; chaque carte exportée se joue (`checkMap`) ; les fichiers de
+ * content/arenas/ sont ceux que fait l'export
+ * (`npm run map:export -- all`) ; l'arène que joue le jeu, lue de son fichier (`ARENAS`), est celle
+ * de son code (`ARENA_SOURCES`), et une bataille y donne le même monde.
  */
 
 /** Deux valeurs égales : les nombres au bit près (signe des zéros compris), un champ indéfini comme absent. */
@@ -64,33 +67,23 @@ const PROP_FIELDS: { [K in keyof PropSpot]-?: Compare<PropSpot> } = {
   diamond: (a, b) => flag(a.diamond, b.diamond),
 };
 
-/** Écart permis entre deux hauteurs du relief : la moitié d'un pas du codage sur 16 bits, et l'arrondi en Float32. */
-function terrainSlack(a: ArenaLayout): number {
-  if (!a.terrain) return 0;
-  let lo = Infinity;
-  let hi = -Infinity;
-  for (const h of a.terrain.heights) {
-    lo = Math.min(lo, h);
-    hi = Math.max(hi, h);
-  }
-  return (hi - lo + 0.02) / 65535 / 2 + 1e-5;
-}
-
 /** Ce qu'on attend de chaque champ d'une arène, rebâtie d'après sa carte (TypeScript réclame tout champ nouveau). */
 const ARENA_FIELDS: { [K in keyof ArenaLayout]-?: Compare<ArenaLayout> | null } = {
   // (l'identifiant d'une carte est celui de son contenu ; ce qu'en dit son auteur n'est pas une arène du jeu)
   id: null,
   community: null,
   ambience: (a, b) => (a.ambience ?? a.id) === (b.ambience ?? b.id),
+  // (une arène du jeu n'a pas de ressources : ni dans son code, ni dans son fichier)
+  assets: (a, b) => a.assets === undefined && b.assets === undefined,
   bounds: (a, b) => same({ ...a.bounds, airFloor: a.bounds.airFloor ?? 0, hoverFloor: a.bounds.hoverFloor ?? 0 }, { ...b.bounds, airFloor: b.bounds.airFloor ?? 0, hoverFloor: b.bounds.hoverFloor ?? 0 }),
   boxes: null,
   props: null,
   zones: (a, b) => same(a.zones, b.zones),
+  // Au bit près : le code des arènes arrondit son relief à la précision du format (`quantizeTerrain`, map/codec.ts)
   terrain: (a, b) => {
     if (!a.terrain || !b.terrain) return !a.terrain && !b.terrain;
     if (a.terrain.size !== b.terrain.size || a.terrain.cells !== b.terrain.cells || a.terrain.heights.length !== b.terrain.heights.length) return false;
-    const slack = terrainSlack(a);
-    return a.terrain.heights.every((h, i) => Math.abs(h - b.terrain!.heights[i]) <= slack);
+    return a.terrain.heights.every((h, i) => Object.is(h, b.terrain!.heights[i]));
   },
   water: (a, b) => a.water === b.water,
   paths: (a, b) => same(a.paths?.length ? a.paths : undefined, b.paths?.length ? b.paths : undefined),
@@ -157,8 +150,23 @@ describe("arènes du jeu en cartes", () => {
   it("chaque arène, exportée, écrite, relue et reconstruite, redonne la même arène, champ par champ", { timeout: 120_000 }, () => {
     for (const id of ARENA_IDS) {
       const rebuilt = arenaFromMap(maps[id].read);
-      expect(arenaDiff(ARENAS[id], rebuilt), id).toEqual([]);
+      expect(arenaDiff(ARENA_SOURCES[id], rebuilt), id).toEqual([]);
     }
+  });
+
+  it("l'arène que joue le jeu, lue de son fichier (ARENAS, map/gameArenas.ts), est celle de son code, avec son identifiant et ses noms traduits", { timeout: 120_000 }, () => {
+    for (const id of ARENA_IDS) {
+      const played = ARENAS[id];
+      expect(arenaDiff(ARENA_SOURCES[id], played), id).toEqual([]);
+      expect(played.id).toBe(id);
+      expect(played.community, id).toBeUndefined();
+      // La même, à chaque lecture (sa grille de passage, calculée une fois, lui reste)
+      expect(ARENAS[id]).toBe(played);
+    }
+  });
+
+  it("la palette du sol de chaque arène (arena/grounds.ts, celle d'une carte qui la nomme) est celle de son fichier", () => {
+    for (const id of ARENA_IDS) expect(same(arenaGround(id), ARENAS[id].ground ?? VALLEY_GROUND), id).toBe(true);
   });
 
   it("les fichiers de content/arenas/ sont ceux que fait l'export", () => {
@@ -177,7 +185,7 @@ describe("arènes du jeu en cartes", () => {
   });
 
   it("une arène exportée sans ses noms (mapFromArena seul) est la même carte, à ce qu'en dit la carte près", () => {
-    const plain = mapFromArena(ARENAS.depot);
+    const plain = mapFromArena(ARENA_SOURCES.depot);
     const unnamed = (m: MapFile): object => ({ ...m, meta: undefined });
     expect(same(unnamed(plain), unnamed(maps.depot.map))).toBe(true);
     expect(plain.meta).toEqual({ name: "depot", author: "Casse-Robot", license: "AGPL-3.0-or-later" });
@@ -191,18 +199,13 @@ describe("arènes du jeu en cartes", () => {
     for (const id of ARENA_IDS) expect(checkMapText(maps[id].text).issues, id).toEqual([]);
   });
 
-  it("une bataille sur l'arène rebâtie donne le même monde, au bit près, que sur celle du code (même graine)", { timeout: 600_000 }, async () => {
+  it("une bataille sur l'arène lue de son fichier donne le même monde, au bit près, que sur celle du code (même graine)", { timeout: 600_000 }, async () => {
     await initPhysics();
     for (const id of ARENA_IDS) {
-      const original = ARENAS[id];
-      const rebuilt = arenaFromMap(maps[id].read);
-      // Le relief n'est le même qu'à la précision de son codage : l'arène du code prend celui de la carte,
-      // tout le reste (boîtes, accessoires, zones, bornes, grille ou réseau de passage) est le sien. Une
-      // copie, pour que les deux simulations la chargent de la même façon (le Dépôt est l'arène par
+      // Des copies, pour que les deux simulations les chargent de la même façon (le Dépôt est l'arène par
       // défaut : `loadArena` ne referait pas son décor, et la physique numéroterait autrement ses corps)
-      const reference: ArenaLayout = { ...original, ...(original.terrain ? { terrain: rebuilt.terrain } : {}) };
-      const a = fingerprint(reference, 7, BATTLE_SECONDS);
-      const b = fingerprint(rebuilt, 7, BATTLE_SECONDS);
+      const a = fingerprint({ ...ARENA_SOURCES[id] }, 7, BATTLE_SECONDS);
+      const b = fingerprint({ ...ARENAS[id] }, 7, BATTLE_SECONDS);
       expect(a.events, id).toBeGreaterThan(0);
       expect(b, id).toEqual(a);
     }

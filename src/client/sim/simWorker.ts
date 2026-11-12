@@ -1,5 +1,7 @@
 import { LocalSession, type SessionCommand } from "../../shared/net/session";
 import { initPhysics } from "../../shared/sim/simulation";
+// Les petites arènes du jeu, dont le Dépôt où naît la session ; les grandes viennent avec la partie (`start`)
+import "../maps/smallArenas";
 
 /*
  * La simulation de la partie solo, hors du fil du rendu (un Worker) : reçoit les commandes du jeu

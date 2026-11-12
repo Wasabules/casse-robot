@@ -180,6 +180,7 @@ export const hud = {
   "hud.page.touchDown": "Descend",
   "hud.page.touchBoost": "Turbo",
   "hud.page.touchScope": "Scope",
+  "hud.page.touchAim": "Aim stick: turn the camera",
   "hud.page.pause": "Pause",
   "hud.page.fullscreen": "Full screen",
   "hud.page.exitFullscreen": "Exit full screen",

@@ -1,0 +1,19 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Turboréacteur : une nacelle qui dépasse de son bloc, beaucoup de poussée (cinq propulseurs), lent à monter en régime, et une longue flamme de postcombustion ; il garde sa poussée à toute vitesse. Deux tournent sur le générateur ; au-delà, il faut des batteries. Placé vers l'avant, il propulse ; vers le haut, il porte (décollage vertical) ; de côté, il fait tourner. Sa flamme part du bout de la nacelle, à 0,68 m du centre du bloc ; plus de 4 m en postcombustion.",
+  "cost": 35,
+  "mass": 6,
+  "hp": 120,
+  "tinted": false,
+  "bond": 150,
+  "resist": { "fire": 0.8, "explosive": 0.9 },
+  "thruster": {
+    "maxThrust": 700,
+    "spoolTime": 1.4,
+    "torqueRatio": 0,
+    "power": 0.6,
+    "look": "jet",
+    "exhaust": { "nozzle": 0.68, "reach": 2.7, "dps": 40, "radius": 0.2, "flare": 0.08, "afterburner": 0.85 }
+  },
+  "price": 400
+}

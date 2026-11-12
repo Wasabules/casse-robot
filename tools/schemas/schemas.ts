@@ -5,9 +5,9 @@ import { WHEEL_TYPES, wheelDef, type WheelType } from "../../src/shared/catalog/
 import { ROBOT_BUDGET } from "../../src/shared/design/budget";
 import { AXES, TRACK_LAYERS, TRACK_RISE, type Axis } from "../../src/shared/design/robotDesign";
 import {
-  MAP_CHOICES, MAP_FORMAT, MAP_LIMITS, MAP_LISTS, MAP_PATTERNS, MAP_RANGES, MAX_ANGLE, needsSize, QUAT_SLACK, ZONE_LABELS, type NumberRange,
+  MAP_CHOICES, MAP_FORMAT, MAP_LIMITS, MAP_LISTS, MAP_PATTERNS, MAP_RANGES, MAX_ANGLE, needsSize, PACKAGE_LIMITS, QUAT_SLACK, ZONE_LABELS, type NumberRange,
 } from "../../src/shared/map";
-import { catalogData, catalogSchema, catalogText } from "./catalog";
+import { CONTENT_FAMILY_IDS, catalogData, catalogSchema, catalogText, familySchema, familySchemaPath } from "./catalog";
 
 /*
  * Les schémas JSON des deux formats ouverts du jeu : une carte communautaire (`MapFile`,
@@ -53,6 +53,14 @@ function object(description: string, properties: Record<string, Schema>, require
 
 function list(description: string, items: Schema, max: number, min = 0): Schema {
   return { description, type: "array", ...(min ? { minItems: min } : {}), maxItems: max, items };
+}
+
+/** Une ressource d'un paquet : l'empreinte SHA-256 de son fichier, et sa taille (octets). */
+function asset(range: NumberRange, description: string): Schema {
+  return object(description, {
+    sha256: { description: "The SHA-256 of the file, 64 lowercase hexadecimal digits.", type: "string", pattern: MAP_PATTERNS.sha256.source },
+    bytes: num(range, "Its size (bytes)."),
+  }, ["sha256", "bytes"]);
 }
 
 /** Deux nombres [a, b] (a ≤ b). */
@@ -406,6 +414,21 @@ export function mapSchema(): Schema {
         blue: ref("spawn"),
         red: ref("spawn"),
       }, ["blue", "red"]),
+      assets: object(
+        "The resources of a map package (models/props/<prop type>.glb, sounds/ambience.ogg): the SHA-256 and size of each file, which the map's "
+          + "identifier covers. The files travel beside the map (the package, the browser's library, the server that sent it). Reading a package "
+          + "writes this field from its files (in a package's map.json, it's ignored); a map without resources doesn't have it.",
+        {
+          models: {
+            description: `glTF binary models that replace, on this map only, the game's model of an existing prop type (at most ${PACKAGE_LIMITS.models} bytes in all).`,
+            type: "object",
+            maxProperties: Object.keys(PROP_TYPES).length,
+            propertyNames: choice(PROP_TYPES),
+            additionalProperties: asset(R.asset.model, "A model (models/props/<prop type>.glb)."),
+          },
+          ambience: asset(R.asset.ambience, `The ambient sound (sounds/ambience.ogg): an Ogg Opus loop, mono or stereo, ${PACKAGE_LIMITS.ambienceMin} to ${PACKAGE_LIMITS.ambienceMax} s; it replaces \`ambience\`.`),
+        },
+      ),
     },
     required: ["format", "meta", "bounds", "zones"],
     $defs: mapDefs(),
@@ -508,6 +531,7 @@ export function schemaFiles(): Record<string, string> {
     "schemas/map.schema.json": schemaText(mapSchema()),
     "schemas/robot.schema.json": schemaText(robotSchema()),
     "content/catalog.schema.json": schemaText(catalogSchema()),
+    ...Object.fromEntries(CONTENT_FAMILY_IDS.map((family) => [familySchemaPath(family), schemaText(familySchema(family))])),
     "content/catalog.json": catalogText(catalogData()),
   };
 }

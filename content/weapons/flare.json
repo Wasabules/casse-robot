@@ -1,0 +1,22 @@
+{
+  "$schema": "../schemas/weapons.schema.json",
+  "$comment": "Leurre : éjecté par salves de quatre par un lance-leurres (ce n'est pas une arme de tourelle : voir combat/decoys.ts), il brûle 3,5 s en retombant lentement ; les missiles ennemis qui le voient peuvent le suivre.",
+  "cooldown": 1.5,
+  "automatic": false,
+  "spread": 0.2,
+  "recoil": 0,
+  "range": 0,
+  "handling": { "hip": 1, "move": 0, "turn": 0 },
+  "projectile": {
+    "look": "flare",
+    "speed": 11,
+    "gravity": 0.25,
+    "life": 3.5,
+    "damage": 0,
+    "damageType": "fire",
+    "penetrating": false,
+    "impulse": 0,
+    "decoy": true,
+    "pellets": { "count": 4, "spread": 0.55 }
+  }
+}

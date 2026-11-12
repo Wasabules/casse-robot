@@ -1,0 +1,11 @@
+{
+  "$schema": "../schemas/props.schema.json",
+  "$comment": "Un cierge du désert : charnu, il ne brûle pas ; il éclate sous un obus ou un robot lancé.",
+  "shape": { "kind": "cylinder", "radius": 0.32, "halfHeight": 2 },
+  "mass": 300,
+  "friction": 0.8,
+  "hp": 70,
+  "shatters": true,
+  "anchored": true,
+  "resist": { "kinetic": 0.5, "pierce": 0.5, "energy": 0.8, "explosive": 1.4, "impact": 1.6, "fire": 0.3 }
+}

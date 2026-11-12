@@ -1,0 +1,25 @@
+{
+  "$schema": "../schemas/melee.schema.json",
+  "$comment": "Anneau-coque : un anneau d'acier qui tourne autour du robot entier, pendu à des rayons posés sur le dessus (son bloc, au centre du robot, en est le moyeu). Il frappe de tous côtés sans viser ; il sert aussi de blindage (un tir de côté le touche). Énorme moment cinétique vertical : tout le robot devient un gyroscope, et la réaction de son moteur le fait pivoter et déraper quand l'anneau reprend de la vitesse.",
+  "look": "shell",
+  "motion": "spin",
+  "axis": "up",
+  "hub": [0, -0.185, 0],
+  "blade": { "inner": 1.48, "outer": 1.6, "half": 0.475, "web": { "at": 0.475, "half": 0.04 } },
+  "spin": { "inertia": 24, "speed": 24, "spinUp": 3.2, "spinDown": 25, "gyro": 1, "unbalance": 0.05, "mass": 11 },
+  "hit": {
+    "damageType": "cut",
+    "damage": 100,
+    "bite": 0.25,
+    "fling": 0.55,
+    "push": { "tangent": 1, "radial": 0.5, "axial": 0, "lift": 0.25 },
+    "recoil": 1,
+    "spread": 0.3,
+    "wheels": 1.4,
+    "wear": 2,
+    "gap": 0.2,
+    "minSpeed": 0.25,
+    "ground": 0.15
+  },
+  "engage": 2.3
+}

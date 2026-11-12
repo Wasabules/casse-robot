@@ -1,0 +1,33 @@
+{
+  "$schema": "../schemas/weapons.schema.json",
+  "$comment": "Missile filoguidé : il suit l'axe de visée de son lanceur (guidage `command`) ; on peut l'abattre en vol (`hull`).",
+  "cooldown": 3,
+  "automatic": false,
+  "spread": 0,
+  "recoil": 10,
+  "range": 80,
+  "engage": 40,
+  "handling": { "hip": 1, "move": 0, "turn": 0 },
+  "ammo": { "capacity": 3, "reload": 8 },
+  "projectile": {
+    "look": "missile",
+    "speed": 28,
+    "gravity": 0,
+    "life": 7,
+    "damage": 70,
+    "damageType": "explosive",
+    "penetrating": false,
+    "impulse": 20,
+    "hull": { "radius": 0.4, "hp": 45 },
+    "explosion": {
+      "look": "missile",
+      "radius": 1.4,
+      "damage": 150,
+      "blastRadius": 3.2,
+      "power": 5,
+      "lift": 0.4,
+      "ignite": 0.2
+    },
+    "guidance": { "mode": "command", "turnRate": 2.2, "launch": 0.35 }
+  }
+}

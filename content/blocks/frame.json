@@ -1,0 +1,11 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Châssis : léger, pas cher, la structure d'un robot.",
+  "cost": 1,
+  "mass": 1,
+  "hp": 80,
+  "tinted": false,
+  "bond": 60,
+  "resist": { "cut": 1.1 },
+  "price": 0
+}

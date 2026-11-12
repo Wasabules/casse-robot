@@ -1,0 +1,12 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Foreuse (arme de contact qui mord) : le moteur, le volant et le réducteur d'une mèche d'un mètre ; lourde et solide.",
+  "cost": 42,
+  "mass": 14,
+  "hp": 230,
+  "tinted": false,
+  "bond": 280,
+  "resist": { "cut": 0.7, "kinetic": 0.85, "impact": 0.8 },
+  "melee": "drill",
+  "price": 480
+}

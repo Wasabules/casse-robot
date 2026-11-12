@@ -1,0 +1,12 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Anneau-coque : le moyeu d'un anneau d'acier qui tourne autour du robot entier (posé sur le dessus, au centre) ; l'anneau lui sert de blindage : tout tir de côté le touche (sa zone touchable fait le tour du robot), d'où sa solidité, celle d'une coque d'acier épaisse (à 600 points, le fusil et le lance-flammes d'un Bélier le cassaient en cinq secondes).",
+  "cost": 80,
+  "mass": 20,
+  "hp": 1400,
+  "tinted": false,
+  "bond": 300,
+  "resist": { "cut": 0.5, "kinetic": 0.45, "pierce": 0.7, "explosive": 0.7, "impact": 0.7, "fire": 0.35, "energy": 0.8 },
+  "melee": "shellSpinner",
+  "price": 600
+}

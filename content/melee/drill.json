@@ -1,0 +1,25 @@
+{
+  "$schema": "../schemas/melee.schema.json",
+  "$comment": "Foreuse : une mèche hélicoïdale d'un mètre devant son bloc, menée par un volant et un réducteur (1/16) : elle tourne lentement, avec un couple énorme. Très perforante, elle traverse une ligne de blocs jusqu'au cockpit ; son couple tord la cible, et, en réaction, fait rouler sur lui-même un robot léger autour de l'axe du foret : il faut de la masse ou des appuis larges.",
+  "look": "drill",
+  "motion": "spin",
+  "axis": "forward",
+  "hub": [0, 0, 0.75],
+  "blade": { "inner": 0, "outer": 0.11, "half": 0.5 },
+  "spin": { "inertia": 0.5, "speed": 120, "spinUp": 2, "spinDown": 8, "gyro": 1, "unbalance": 0.008, "mass": 4 },
+  "bite": { "power": 4, "feed": "axial", "grab": 0, "gear": 16, "depth": 1.2 },
+  "hit": {
+    "damageType": "cut",
+    "damage": 120,
+    "bite": 0,
+    "fling": 0,
+    "push": { "tangent": 0, "radial": 0, "axial": 1, "lift": 0 },
+    "recoil": 0,
+    "spread": 0,
+    "wheels": 1,
+    "wear": 0.6,
+    "gap": 0,
+    "minSpeed": 0.2
+  },
+  "engage": 1.5
+}

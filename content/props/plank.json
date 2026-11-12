@@ -1,0 +1,12 @@
+{
+  "$schema": "../schemas/props.schema.json",
+  "$comment": "Du bois : un robot lancé le traverse, le feu le ronge, une lame le tranche.",
+  "shape": { "kind": "slab" },
+  "mass": 500,
+  "friction": 0.7,
+  "hp": 35,
+  "shatters": true,
+  "anchored": true,
+  "resist": { "kinetic": 0.6, "pierce": 0.8, "energy": 0.8, "explosive": 1.5, "impact": 2.5, "fire": 2.5, "cut": 1.5 },
+  "burns": { "time": 14, "reach": 0.3 }
+}

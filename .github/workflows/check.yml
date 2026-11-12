@@ -39,15 +39,17 @@ jobs:
       - run: npm ci
       - run: npm run native:test
       - run: npm run native
-      # (et la sonde de la physique : Rapier 0.36 compilé ici contre celui du jeu, au bit près)
+      # (et la sonde : Rapier 0.36 compilé ici contre celui du jeu, et la simulation portée qui fait
+      # rouler un robot contre celle du TypeScript, au bit près)
       - run: npm run native -- --probe
-      - run: npx vitest run tests/native.test.ts tests/nativePhysics.test.ts
+      - run: npx vitest run tests/native.test.ts tests/nativePhysics.test.ts tests/nativeSim.test.ts
 
   # Le rendu : le jeu construit, dans Chrome sans carte graphique (SwiftShader) ; chaque écran se
   # dessine sans erreur ni shader qui ne compile pas, et survit à une perte du contexte WebGL
   render:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # (sans carte graphique, chaque écran prend deux à trois minutes, et le passage WebGPU démarre aussi le jeu)
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

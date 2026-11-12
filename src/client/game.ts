@@ -46,6 +46,7 @@ import { ZoneView } from "./render/zoneView";
 import { ARENA_IDS, DEFAULT_ARENA, groundLevel, isMapKey, type ArenaId, type ArenaKey, type ArenaLayout } from "../shared/arena/layout";
 import type { MapFile } from "../shared/map/format";
 import { mapFileOf } from "../shared/map/load";
+import { arenaFile, arenaReady, loadArena, readyArenas } from "./maps/gameArenas";
 import { rayArena } from "../shared/arena/ray";
 import { Effects } from "./render/effects";
 import { Fx } from "./render/fx/fx";
@@ -79,12 +80,25 @@ const AIM_RANGE = 400;
 /** Démonstration derrière le menu : on relance une vague quand il reste si peu de robots actifs, ou au bout de ce temps (s). */
 const ATTRACT_MIN_ACTIVE = 3;
 const ATTRACT_MAX_WAVE = 120;
-/** La carte d'une arène communautaire (la partie solo dans un Worker la lui donne), ou rien pour une arène du jeu. */
-const communityMap = (key: ArenaKey): MapFile | undefined => (isMapKey(key) ? mapFileOf(key) : undefined);
+/**
+ * Le fichier d'une arène, que la partie solo dans un Worker reçoit avec la partie : une carte
+ * communautaire, ou une grande arène du jeu (le Worker n'a que les petites ; client/maps/gameArenas.ts).
+ */
+const arenaFileFor = (key: ArenaKey): MapFile | undefined => (isMapKey(key) ? mapFileOf(key) : arenaFile(key));
 /** Démonstration : le temps (s) qu'une nouvelle vague arrive du Worker avant qu'on juge ce qu'il en reste. */
 const ATTRACT_SETTLE = 3;
-/** Une arène au hasard (démonstration derrière le menu). */
-const randomArena = (): ArenaId => ARENA_IDS[Math.floor(Math.random() * ARENA_IDS.length)];
+/**
+ * Une arène au hasard (démonstration derrière le menu), parmi celles dont le fichier est là ; le
+ * tirage tombe-t-il sur une autre, son fichier se charge pour une prochaine fois (une grande arène ne se
+ * télécharge que si on la montre : client/maps/gameArenas.ts).
+ */
+function randomArena(): ArenaId {
+  const wish = ARENA_IDS[Math.floor(Math.random() * ARENA_IDS.length)];
+  if (arenaReady(wish)) return wish;
+  loadArena(wish).catch(() => {});
+  const ready = readyArenas();
+  return ready[Math.floor(Math.random() * ready.length)] ?? DEFAULT_ARENA;
+}
 /** Distance de la caméra au robot piloté, au départ (m). */
 const PILOT_CAMERA = 13;
 /** Intervalle entre deux bips du verrouillage en cours (s) : au début, puis juste avant le verrou. */
@@ -1124,7 +1138,7 @@ export class ArenaGame {
     if (this.inWorker) {
       this.prepare();
       const pilot = mode.pilot ? this.playerProfile : null;
-      this.local!.command({ t: "start", mode: this.mode, arena: this.arenaId, map: communityMap(this.arenaId), pilot, roster: pilot ? null : this.fixedRoster ?? pickRoster(mode), seed: this.seed ?? undefined });
+      this.local!.command({ t: "start", mode: this.mode, arena: this.arenaId, map: arenaFileFor(this.arenaId), pilot, roster: pilot ? null : this.fixedRoster ?? pickRoster(mode), seed: this.seed ?? undefined });
       this.finish();
       return;
     }

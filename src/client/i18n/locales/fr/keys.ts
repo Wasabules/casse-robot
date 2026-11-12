@@ -252,7 +252,7 @@ export const keys = {
   "help.map": "Carte entière",
   "help.music": "Musique : morceau précédent · suivant",
   "help.padPilot": "{move} : conduire ; {look} : caméra (en avion, la direction) ; {scope} · {fire} : viseur, tir ; {pause} : pause",
-  "help.touchPilot": "Manche à gauche ; tir, viseur, montée, turbo à droite ; on vise au réticule ; glisser : caméra",
+  "help.touchPilot": "Manche à gauche ; tir, viseur, montée, turbo à droite ; on vise au réticule ; glisser le doigt (ou le manche de visée) : caméra ; glisser depuis Tir : viser en tirant",
   "help.escape": "Rendre la souris, pause",
   "help.freeFire": "Tirer (maintenir : rafale au fusil)",
   "help.turnCamera": "Tourner la caméra",

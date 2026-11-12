@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { cacheControl, contentType, staticPath } from "../src/server/staticFiles";
+import { cacheControl, contentType, mapAssetHash, staticPath } from "../src/server/staticFiles";
+import { MAP_ASSET_PATH } from "../src/shared/net/protocol";
 
 /* La page du jeu servie par le serveur de jeu (npm run share) : quel fichier pour quelle adresse. */
 describe("pages servies par le serveur de jeu", () => {
@@ -25,5 +26,15 @@ describe("pages servies par le serveur de jeu", () => {
     expect(contentType("inconnu.xyz")).toBe("application/octet-stream");
     expect(cacheControl("assets/index-abc.js")).toContain("immutable");
     expect(cacheControl("index.html")).toBe("no-cache");
+    expect(contentType("models/props/crate.glb")).toBe("model/gltf-binary");
+  });
+
+  it("les ressources des cartes : une empreinte SHA-256 sous MAP_ASSET_PATH, rien d'autre", () => {
+    const hash = "0123456789abcdef".repeat(4);
+    expect(mapAssetHash(`${MAP_ASSET_PATH}${hash}`, MAP_ASSET_PATH)).toBe(hash);
+    expect(mapAssetHash(`${MAP_ASSET_PATH}${hash}?v=1`, MAP_ASSET_PATH)).toBe(hash);
+    for (const url of [`${MAP_ASSET_PATH}${hash.toUpperCase()}`, `${MAP_ASSET_PATH}${hash}0`, `${MAP_ASSET_PATH}../${hash}`, `/assets/${hash}`, MAP_ASSET_PATH, "/"]) {
+      expect(mapAssetHash(url, MAP_ASSET_PATH), url).toBeNull();
+    }
   });
 });

@@ -1,0 +1,22 @@
+{
+  "$schema": "../schemas/weapons.schema.json",
+  "$comment": "Projecteur de barrière : un mur d'énergie déployé à `reach` m, debout face au tireur, qui arrête les tirs ennemis pendant `life` s ou jusqu'à perdre ses points ; ses alliés tirent au travers.",
+  "cooldown": 12,
+  "automatic": false,
+  "spread": 0,
+  "recoil": 0,
+  "range": 30,
+  "power": 6,
+  "handling": { "hip": 1, "move": 0, "turn": 0 },
+  "projectile": {
+    "look": "barrier",
+    "speed": 30,
+    "gravity": 0,
+    "life": 0.3,
+    "damage": 0,
+    "damageType": "energy",
+    "penetrating": false,
+    "impulse": 0,
+    "barrier": { "width": 4.5, "height": 2.8, "hp": 700, "life": 10, "reach": 5 }
+  }
+}

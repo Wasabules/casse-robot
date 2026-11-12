@@ -1,0 +1,11 @@
+{
+  "$schema": "../schemas/props.schema.json",
+  "$comment": "Une carcasse déjà brûlée, posée sur ses jantes (dimensions : `CAR_HALF`) : un abri qu'on ne pousse pas. De la tôle d'acier peinte : elle ne brûle pas d'elle-même.",
+  "shape": { "kind": "slab" },
+  "mass": 80,
+  "friction": 0.8,
+  "hp": 40,
+  "shatters": true,
+  "anchored": true,
+  "resist": { "kinetic": 0.6, "pierce": 0.85, "energy": 0.7, "explosive": 1.2, "impact": 0.6, "fire": 0, "cut": 0.7 }
+}

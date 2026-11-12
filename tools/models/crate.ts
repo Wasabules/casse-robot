@@ -1,4 +1,5 @@
-import type { GlbModel, GlbPrimitive } from "./glb";
+import { Builder, hex, shade } from "./builder";
+import type { GlbModel } from "./glb";
 
 /*
  * Le modèle d'exemple : une caisse de 1 m (l'accessoire `crate`, une boîte de demi-côté 0,5),
@@ -6,68 +7,14 @@ import type { GlbModel, GlbPrimitive } from "./glb";
  * les douze arêtes, des planches sur chaque face (chacune de sa teinte, en couleurs de sommets),
  * une écharpe en diagonale sur les quatre flancs, des cornières d'acier aux huit coins. Deux
  * matières : `wood` (blanche, la teinte vient des sommets) et `steel`. Origine au milieu du bas de
- * l'emprise, +y en haut (docs/models.md). `npm run models:example` l'écrit dans
- * public/models/props/crate.glb ; `npm run models` met ensuite le manifeste à jour.
+ * l'emprise, +y en haut (docs/models.md). `npm run models -- example` l'écrit dans
+ * public/models/props/crate.glb et met le manifeste à jour.
  */
-
-type V3 = readonly [number, number, number];
-
-/** Une couleur « #rrggbb » en trois composantes sRGB (0 à 1). */
-const hex = (h: string): V3 => [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255];
-const shade = (c: V3, k: number): V3 => [Math.min(1, c[0] * k), Math.min(1, c[1] * k), Math.min(1, c[2] * k)];
 
 const PLANK = hex("#b98f5c");
 const GAP = hex("#3b2817");
 const FRAME = hex("#8a6537");
 const BRACE = hex("#9c7442");
-
-/** Les triangles d'une matière, qu'on remplit de boîtes. */
-class Builder {
-  readonly positions: number[] = [];
-  readonly normals: number[] = [];
-  readonly colors: number[] = [];
-  readonly indices: number[] = [];
-
-  /**
-   * Une boîte de demi-dimensions `half` autour de `center`, tournée de `angle` autour de l'axe
-   * `axis` (0 : x, 1 : y, 2 : z), d'une couleur. Faces en sens trigonométrique vues de dehors (glTF).
-   */
-  box(center: V3, half: V3, color: V3 = [1, 1, 1], axis = 1, angle = 0): void {
-    const turn = (v: V3): V3 => {
-      const c = Math.cos(angle);
-      const s = Math.sin(angle);
-      const [a, b] = axis === 0 ? [1, 2] : axis === 1 ? [2, 0] : [0, 1];
-      const out = [v[0], v[1], v[2]];
-      out[a] = v[a] * c - v[b] * s;
-      out[b] = v[a] * s + v[b] * c;
-      return [out[0], out[1], out[2]];
-    };
-    for (let face = 0; face < 6; face++) {
-      const k = face >> 1; // l'axe de la normale
-      const sign = face & 1 ? -1 : 1;
-      const [u, v] = [(k + 1) % 3, (k + 2) % 3];
-      const normal: [number, number, number] = [0, 0, 0];
-      normal[k] = sign;
-      const base = this.positions.length / 3;
-      // Quatre coins, dans le sens trigonométrique autour de la normale
-      for (const [du, dv] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
-        const p: [number, number, number] = [0, 0, 0];
-        p[k] = sign * half[k];
-        p[u] = du * sign * half[u];
-        p[v] = dv * half[v];
-        const q = turn(p);
-        this.positions.push(center[0] + q[0], center[1] + q[1], center[2] + q[2]);
-        this.normals.push(...turn(normal));
-        this.colors.push(...color);
-      }
-      this.indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
-    }
-  }
-
-  primitive(material: number, colors: boolean): GlbPrimitive {
-    return { positions: this.positions, normals: this.normals, ...(colors ? { colors: this.colors } : {}), indices: this.indices, material };
-  }
-}
 
 /** Un petit hasard fixe : chaque planche a sa teinte, la même à chaque fois. */
 function tints(seed: number): () => number {

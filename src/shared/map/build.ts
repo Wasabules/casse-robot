@@ -1,10 +1,11 @@
 import { box } from "../arena/builders";
 import { VALLEY_GROUND, type GroundStyle, type LavaShape } from "../arena/features";
+import { ARENA_GROUNDS } from "../arena/grounds";
 import {
-  ARENAS, GROUND_HALF, type ArenaBounds, type ArenaLayout, type ArenaPlace, type CaptureZone, type MapKey, type SpawnLine, type StaticBox,
+  GROUND_HALF, isMapKey, type ArenaBounds, type ArenaKey, type ArenaLayout, type ArenaPlace, type CaptureZone, type SpawnLine, type StaticBox,
 } from "../arena/layout";
 import { terrainHeight, type Terrain } from "../arena/terrain";
-import { PropList } from "../arena/valley";
+import { PropList } from "../arena/buildings";
 import { CAR_HALF, propDef, propHalf } from "../catalog/props";
 import { axisAngle, NO_ROTATION, qmul, vec3, type Quat, type Vec3 } from "../math/vec";
 import { decodeTerrain } from "./codec";
@@ -74,7 +75,7 @@ function quatOf([x, y, z, w]: MapQuat): Quat {
 export function groundStyle(g: MapGround | undefined): GroundStyle {
   if (!g) return VALLEY_GROUND;
   const { preset, ...changes } = g;
-  const base = (preset && ARENAS[preset].ground) || VALLEY_GROUND;
+  const base = (preset && ARENA_GROUNDS[preset]) || VALLEY_GROUND;
   const set = Object.fromEntries(Object.entries(changes).filter(([, v]) => v !== undefined));
   return { ...base, ...set } as GroundStyle;
 }
@@ -122,12 +123,13 @@ export interface ArenaOrigins {
 }
 
 /**
- * La carte, en arène. `key` : son identifiant (celui de son contenu par défaut). Une carte dont le
- * relief est illisible (ce que `readMap` refuse) est construite à plat. Les préfabriqués s'arrêtent
- * de se déplier au-delà du nombre d'accessoires permis : `validateMap` le signale. `origins`, s'il est
- * donné, reçoit d'où vient chaque boîte et chaque accessoire.
+ * La carte, en arène. `key` : son identifiant (celui de son contenu par défaut) ; celui d'une arène du
+ * jeu pour son fichier (map/gameArenas.ts) : ses noms sont alors ceux du jeu, traduits, et pas ceux
+ * qu'écrit la carte (`community`). Une carte dont le relief est illisible (ce que `readMap` refuse) est
+ * construite à plat. Les préfabriqués s'arrêtent de se déplier au-delà du nombre d'accessoires permis :
+ * `validateMap` le signale. `origins`, s'il est donné, reçoit d'où vient chaque boîte et chaque accessoire.
  */
-export function arenaFromMap(map: MapFile, key: MapKey = mapKey(map), origins?: ArenaOrigins): ArenaLayout {
+export function arenaFromMap(map: MapFile, key: ArenaKey = mapKey(map), origins?: ArenaOrigins): ArenaLayout {
   const terrain: Terrain | undefined = (map.terrain && decodeTerrain(map.terrain)) || undefined;
   const ground = (x: number, z: number): number => (terrain ? Math.max(0, terrainHeight(terrain, x, z)) : 0);
   const side = terrain ? terrain.size : 2 * GROUND_HALF;
@@ -235,8 +237,9 @@ export function arenaFromMap(map: MapFile, key: MapKey = mapKey(map), origins?: 
 
   const arena: ArenaLayout = {
     id: key,
-    community: map.meta,
+    community: isMapKey(key) ? map.meta : undefined,
     ambience: map.ambience ?? "valley",
+    assets: map.assets,
     bounds: mapBounds(map, airFloor),
     boxes,
     props: P.spots,

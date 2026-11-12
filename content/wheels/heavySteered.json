@@ -1,0 +1,16 @@
+{
+  "$schema": "../schemas/wheels.schema.json",
+  "$comment": "Une roue directrice : la roue fixe de sa taille et une fusée qui braque, plus chère (3 points de construction de plus : sa fusée et son servomoteur). Ses dimensions, son moteur et sa suspension restent ceux de la roue fixe (`steeredVariant`).",
+  "cost": 15,
+  "radius": 0.75,
+  "width": 0.45,
+  "mass": 9,
+  "hp": 120,
+  "grip": 0.95,
+  "stallTorque": 900,
+  "freeSpeed": 7,
+  "ratedLoad": 70,
+  "suspension": { "travelUp": 0.2, "travelDown": 0.14, "frequency": 1.9, "dampingRatio": 0.55 },
+  "steering": { "maxAngle": 0.5, "rate": 1 },
+  "price": 230
+}

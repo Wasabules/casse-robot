@@ -1,0 +1,12 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Toupie horizontale (arme de contact, content/melee/spinner.json) : le moteur et le moyeu d'une barre qui tourne à plat au-dessus de son bloc (au-dessous, posé tête en bas). Lourde : la barre pèse 6 kg. Bloc lourd et solide, comme les autres armes de contact mécaniques.",
+  "cost": 45,
+  "mass": 12,
+  "hp": 220,
+  "tinted": false,
+  "bond": 250,
+  "resist": { "cut": 0.7, "kinetic": 0.85, "impact": 0.8 },
+  "melee": "spinner",
+  "price": 450
+}

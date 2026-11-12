@@ -1,10 +1,11 @@
 import { CAR_HALF, type PropType } from "../catalog/props";
 import { axisAngle, NO_ROTATION, qmul, vec3, type Quat, type Vec3 } from "../math/vec";
 import { barrier, box, incline, zone } from "./builders";
-import { NO_PEAK } from "./features";
 import type { ArenaLayout, ArenaPlace, CaptureZone, PropSpot, StaticBox, TerrainPath } from "./layout";
 import { makeTerrain, noise2, smoothstep } from "./terrain";
-import { PropList } from "./valley";
+import { quantizeTerrain } from "../map/codec";
+import { building, PropList, seeded, STOREY, WALL, type Area, type Side } from "./buildings";
+import { CITY_GROUND } from "./grounds";
 import { dcos, dsin } from "../math/det";
 
 /*
@@ -110,26 +111,10 @@ function cityHeight(x: number, z: number): number {
   return h;
 }
 
-const TERRAIN = makeTerrain(440, 220, cityHeight);
-
-/** Tirage fixe (générateur congruentiel) : la carte est une donnée, la même à chaque partie. */
-function seeded(seed: number): () => number {
-  let s = seed >>> 0;
-  return () => {
-    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
-}
+const TERRAIN = quantizeTerrain(makeTerrain(440, 220, cityHeight));
 
 const yaw = (a: number): Quat => axisAngle(vec3(0, 1, 0), a);
 
-/** Rectangle du plan (m). */
-export interface Area {
-  minX: number;
-  maxX: number;
-  minZ: number;
-  maxZ: number;
-}
 const area = (minX: number, maxX: number, minZ: number, maxZ: number): Area => ({ minX, maxX, minZ, maxZ });
 /** L'image d'un rectangle par la symétrie de centre l'origine. */
 const mirror = (a: Area): Area => area(-a.maxX, -a.minX, -a.maxZ, -a.minZ);
@@ -340,107 +325,6 @@ const PATHS: readonly TerrainPath[] = [
 ];
 
 
-/** Épaisseur d'une façade, d'un toit (m) ; hauteur d'un étage ; largeur maximale d'un pan (m). */
-const WALL = 0.3;
-const ROOF = 0.3;
-const STOREY = 3.6;
-const PANEL = 6;
-
-/** Un côté d'un immeuble : nord (+z), sud, ouest (+x), est. */
-export type Side = "n" | "s" | "w" | "e";
-
-export interface BuildingSpec {
-  /** Emprise (m). */
-  at: Area;
-  /** Sol de l'immeuble (m) : la rue de la Cité, sans lui (une carte communautaire le donne). */
-  ground?: number;
-  floors: number;
-  wall: PropType;
-  /** Ouvertures au rez-de-chaussée : le côté, et le rang du pan (depuis l'est ou le sud). */
-  doors?: readonly [Side, number][];
-  /** Part des colonnes de pans dont les étages du haut se sont effondrés (0 à 1). */
-  ruin?: number;
-  seed: number;
-}
-
-/**
- * Un immeuble en pans de façade ancrés, un par étage et par colonne : chaque pan repose sur celui
- * du dessous (il tombe quand celui-ci disparaît), et le toit plat, en bandes, sur les pans du haut.
- * Une ouverture au rez-de-chaussée (une porte cochère, une vitrine soufflée) laisse un linteau, qui
- * repose sur ses voisins. Une ruine a perdu le haut de quelques colonnes, et le toit au-dessus.
- */
-export function building(P: PropList, s: BuildingSpec): void {
-  const id = P.newBuilding();
-  const random = seeded(s.seed);
-  const base = s.ground ?? BASE;
-  const { minX, maxX, minZ, maxZ } = s.at;
-  const alongX = maxX - minX >= maxZ - minZ; // le faîte, le long du plus grand côté
-  // Repère local : u le long du grand côté, v en travers
-  const [u0, u1, v0, v1] = alongX ? [minX, maxX, minZ, maxZ] : [minZ, maxZ, minX, maxX];
-  const place = (u: number, y: number, v: number): Vec3 => (alongX ? vec3(u, y, v) : vec3(v, y, u));
-  const size = (hu: number, hy: number, hv: number): Vec3 => (alongX ? vec3(hu, hy, hv) : vec3(hv, hy, hu));
-  const sideOf = (long: boolean, k: number): Side => (long === alongX ? (k ? "n" : "s") : (k ? "w" : "e"));
-  const door = (side: Side, i: number): boolean => !!s.doors?.some(([d, j]) => d === side && j === i);
-
-  const n = Math.ceil((u1 - u0) / PANEL);
-  const pw = (u1 - u0) / n;
-  const inner = v1 - v0 - 2 * WALL;
-  const m = Math.ceil(inner / PANEL);
-  const pd = inner / m;
-  // Hauteur de chaque colonne (en étages) : une ruine en a perdu
-  const height = (): number => (random() < (s.ruin ?? 0) ? Math.max(1, s.floors - 1 - (random() < 0.4 ? 1 : 0)) : s.floors);
-  /** Pans par côté (0 : u ou v bas, 1 : haut), par colonne, par étage. */
-  const long: (number | undefined)[][][] = [[], []];
-  const ends: (number | undefined)[][][] = [[], []];
-  const raise = (cols: (number | undefined)[][][], k: number, count: number, isLong: boolean, at: (i: number, y: number) => Vec3, half: Vec3): void => {
-    for (let i = 0; i < count; i++) {
-      const top = height();
-      const column: (number | undefined)[] = [];
-      for (let f = 0; f < top; f++) {
-        const y = base + STOREY * (f + 0.5);
-        if (f === 0 && door(sideOf(isLong, k), i)) {
-          column.push(undefined);
-          continue;
-        }
-        // Sur le pan du dessous ; un linteau, sur ses voisins du même étage
-        const below = f > 0 ? column[f - 1] : undefined;
-        const rests = f === 0 ? undefined : below !== undefined ? [below] : [cols[k][i - 1]?.[f], undefined].filter((r): r is number => r !== undefined);
-        column.push(P.add({ type: s.wall, pos: at(i, y), half, building: id, rests }));
-      }
-      cols[k][i] = column;
-    }
-  };
-  for (const k of [0, 1]) {
-    const v = k ? v1 - WALL / 2 : v0 + WALL / 2;
-    raise(long, k, n, true, (i, y) => place(u0 + pw * (i + 0.5), y, v), size(pw / 2, STOREY / 2, WALL / 2));
-    const u = k ? u1 - WALL / 2 : u0 + WALL / 2;
-    raise(ends, k, m, false, (j, y) => place(u, y, v0 + WALL + pd * (j + 0.5)), size(WALL / 2, STOREY / 2, pd / 2));
-  }
-  // Un linteau dont le voisin de droite n'existait pas encore : il repose aussi sur lui
-  for (const cols of [long, ends]) {
-    for (const k of [0, 1]) {
-      cols[k].forEach((column, i) => {
-        if (column[0] !== undefined) return;
-        const lintel = column[1];
-        const right = cols[k][i + 1]?.[1];
-        if (lintel === undefined || right === undefined) return;
-        const spot = P.spots[lintel];
-        spot.rests = [...(spot.rests ?? []), right];
-      });
-    }
-  }
-  // Toit plat en bandes : chacune sur les pans du dernier étage de sa colonne (et des pignons au bout) ;
-  // pas de bande là où les deux côtés se sont effondrés
-  const roofY = base + STOREY * s.floors + ROOF / 2;
-  for (let i = 0; i < n; i++) {
-    const rests = [long[0][i]?.[s.floors - 1], long[1][i]?.[s.floors - 1]].filter((r): r is number => r !== undefined);
-    if (!rests.length) continue;
-    if (i === 0) rests.push(...ends[0].map((c) => c[s.floors - 1]).filter((r): r is number => r !== undefined));
-    if (i === n - 1) rests.push(...ends[1].map((c) => c[s.floors - 1]).filter((r): r is number => r !== undefined));
-    P.add({ type: "concrete", pos: place(u0 + pw * (i + 0.5), roofY, (v0 + v1) / 2), half: size(pw / 2, ROOF / 2, (v1 - v0) / 2), building: id, rests });
-  }
-}
-
 /** Un accessoire posé sur la rue (ou sur ce qui est à `ground` m). */
 function put(P: PropList, type: PropType, x: number, z: number, half: Vec3, rot: Quat = NO_ROTATION, ground = BASE): number {
   return P.add({ type, pos: vec3(x, ground + half.y, z), half, rot });
@@ -484,15 +368,15 @@ function buildProps(): PropList {
   twice((s, _t, flip) => {
     const mx = (a: Area): Area => (s > 0 ? a : mirror(a));
     const door: Side = s > 0 ? "e" : "w";
-    building(P, { at: mx(area(31, 43, 5, 24)), floors: 3, wall: "facade", doors: [[door, 1]], ruin: 0.25, seed: 1 + flip });
-    building(P, { at: mx(area(31, 43, -24, -5)), floors: 3, wall: "tenement", doors: [[s > 0 ? "s" : "n", 0]], ruin: 0.35, seed: 2 + flip });
-    building(P, { at: mx(area(7, 22, 33, 61)), floors: 3, wall: "tenement", doors: [[door, 2], [s > 0 ? "n" : "s", 1]], ruin: 0.3, seed: 3 + flip });
+    building(P, { ground: BASE, at: mx(area(31, 43, 5, 24)), floors: 3, wall: "facade", doors: [[door, 1]], ruin: 0.25, seed: 1 + flip });
+    building(P, { ground: BASE, at: mx(area(31, 43, -24, -5)), floors: 3, wall: "tenement", doors: [[s > 0 ? "s" : "n", 0]], ruin: 0.35, seed: 2 + flip });
+    building(P, { ground: BASE, at: mx(area(7, 22, 33, 61)), floors: 3, wall: "tenement", doors: [[door, 2], [s > 0 ? "n" : "s", 1]], ruin: 0.3, seed: 3 + flip });
     // Les immeubles du bord : à l'est (au nord), à l'ouest (au sud), en face de la gare et de la voie rapide
-    building(P, { at: mx(area(-92, -80, 22, 60)), floors: 2, wall: "facade", doors: [[s > 0 ? "w" : "e", 3]], ruin: 0.3, seed: 4 + flip });
+    building(P, { ground: BASE, at: mx(area(-92, -80, 22, 60)), floors: 2, wall: "facade", doors: [[s > 0 ? "w" : "e", 3]], ruin: 0.3, seed: 4 + flip });
   });
   // La gare, à l'ouest des voies, et les bureaux, à l'est de la voie rapide
-  building(P, { at: area(80, 92, -16, 16), floors: 2, wall: "tenement", doors: [["e", 2], ["e", 3]], seed: 7 });
-  building(P, { at: area(-92, -80, -16, 16), floors: 3, wall: "facade", doors: [["w", 2]], ruin: 0.2, seed: 8 });
+  building(P, { ground: BASE, at: area(80, 92, -16, 16), floors: 2, wall: "tenement", doors: [["e", 2], ["e", 3]], seed: 7 });
+  building(P, { ground: BASE, at: area(-92, -80, -16, 16), floors: 3, wall: "facade", doors: [["w", 2]], ruin: 0.2, seed: 8 });
 
   // Les immeubles effondrés : un tas de gravats, quelques pans encore debout
   for (const h of HEAPS) {
@@ -509,7 +393,7 @@ function buildProps(): PropList {
   // La place : deux kiosques à journaux, un arbre à chaque coin, deux épaves à distance du monument
   // (de la place entre eux, qu'on y manœuvre, même en camion)
   twice((s) => {
-    building(P, { at: s > 0 ? area(15, 19, -20, -16) : area(-19, -15, 16, 20), floors: 1, wall: "sheet", seed: 11 + s });
+    building(P, { ground: BASE, at: s > 0 ? area(15, 19, -20, -16) : area(-19, -15, 16, 20), floors: 1, wall: "sheet", seed: 11 + s });
     for (const [x, z] of [[21.5, 21.5], [-21.5, 21.5]]) P.add({ type: "oak", pos: vec3(s * x, BASE + 3.2 * 0.8, s * z), scale: 0.8 });
   });
   car(P, "wreck", 16, -4, 0.5);
@@ -677,11 +561,7 @@ export const CITY: ArenaLayout = {
   terrain: TERRAIN,
   paths: PATHS,
   // Dalles et pavés tachés de crasse, talus de terre sèche sur les pentes, gravats au-dessus de 10,5 m
-  ground: {
-    base: ["#8d8980", "#a09a8e"], dirt: "#6d675c", sand: "#8d8980", mud: "#6d675c", rock: "#726c64", peak: "#726c64",
-    rockLine: 10.5, rockSpan: 3, peakLine: NO_PEAK, grain: 7, stains: 0.35,
-    slope: { color: "#77705d", from: 0.985, span: 0.04 }, lawn: "#5d7a3e",
-  },
+ground: CITY_GROUND,
   urban: true,
   sky: { color: "#aaa59a", fog: 0.0065, dust: 14 },
   places: PLACES,

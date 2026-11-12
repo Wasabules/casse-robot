@@ -1,0 +1,33 @@
+{
+  "$schema": "../schemas/melee.schema.json",
+  "$comment": "Tambour : un cylindre à dents, large et bas, couché à l'avant, qui tourne vers le haut par devant. La version stable : petit rayon, régime élevé, peu de moment cinétique (peu de précession) ; des coups brefs et répétés qui font sautiller l'adversaire, et qui arrachent roues et galets.",
+  "look": "drum",
+  "motion": "spin",
+  "axis": "left",
+  "hub": [0, 0, 0.5],
+  "blade": { "inner": 0, "outer": 0.25, "half": 0.45 },
+  "spin": {
+    "inertia": 0.32,
+    "speed": 115,
+    "spinUp": 1.8,
+    "spinDown": 10,
+    "gyro": 1,
+    "unbalance": 0.02,
+    "mass": 10,
+    "direction": -1
+  },
+  "hit": {
+    "damageType": "cut",
+    "damage": 140,
+    "bite": 0.3,
+    "fling": 0.45,
+    "push": { "tangent": 0.7, "radial": 0.3, "axial": 0, "lift": 0.7 },
+    "recoil": 1,
+    "spread": 0.3,
+    "wheels": 2.6,
+    "wear": 3,
+    "gap": 0.12,
+    "minSpeed": 0.3
+  },
+  "engage": 1.4
+}

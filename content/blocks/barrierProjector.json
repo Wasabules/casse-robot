@@ -1,0 +1,21 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Projecteur de barrière : il déploie un mur d'énergie devant lui, qui arrête les tirs ennemis.",
+  "cost": 35,
+  "mass": 5,
+  "hp": 110,
+  "tinted": false,
+  "bond": 150,
+  "turret": {
+    "weapon": "barrier",
+    "yawRate": 2.2,
+    "pitchRate": 1.5,
+    "minPitch": -0.2,
+    "maxPitch": 0.3,
+    "height": 0.3,
+    "barrel": 0.4,
+    "head": [0.46, 0.2, 0.34],
+    "caliber": 0.3
+  },
+  "price": 500
+}

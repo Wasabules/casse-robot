@@ -1,0 +1,22 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Soute à bombes : sous un avion, elle lâche ses bombes à la verticale ; la case du dessous doit rester libre.",
+  "cost": 40,
+  "mass": 5,
+  "hp": 100,
+  "tinted": false,
+  "bond": 150,
+  "turret": {
+    "weapon": "bombs",
+    "yawRate": 0,
+    "pitchRate": 0,
+    "minPitch": 0,
+    "maxPitch": 0,
+    "height": -0.3,
+    "barrel": 0.2,
+    "fixed": "down",
+    "head": [0.36, 0.1, 0.42],
+    "caliber": 0.1
+  },
+  "price": 350
+}

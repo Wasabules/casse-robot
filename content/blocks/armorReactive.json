@@ -1,0 +1,11 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Blindage réactif : il arrête les explosions, mais un obus perforant le traverse.",
+  "cost": 4,
+  "mass": 1.2,
+  "hp": 90,
+  "tinted": true,
+  "bond": 120,
+  "resist": { "explosive": 0.35, "fire": 0.7, "kinetic": 1.1, "pierce": 1.4, "cut": 1.2 },
+  "price": 200
+}

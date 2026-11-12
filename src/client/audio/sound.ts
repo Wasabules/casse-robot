@@ -14,7 +14,10 @@ import type { ImpactSurface, SimEvent } from "../../shared/sim/events";
 import type { World } from "../../shared/sim/world";
 import { Music, type MusicListener, type MusicNow, type MusicTheme } from "./music";
 import { cueAllowed, soundScene, STINGER_DUCK, type SoundScene, type SoundScreen } from "./soundScene";
-import { canPlayOpus, LOOP_PAD, SampleBank, SAMPLES, type SampleKey } from "./samples";
+import { canPlayOpus, LOOP_PAD, mendForeignLoop, SampleBank, SAMPLES, type SampleKey } from "./samples";
+import type { MapAsset } from "../../shared/arena/layout";
+import { PACKAGE_FILES } from "../../shared/map/pack";
+import { mapAssets } from "../maps/assets";
 // (en espace de noms : `t` est ici le temps)
 import * as i18n from "../i18n/i18n";
 
@@ -385,6 +388,17 @@ const UI_SAMPLES: Partial<Record<UiKind, { key: SampleKey; gain?: number; rate?:
 /** Sons d'interface qui ne se répètent pas plus vite que cela (s) : une rafale, un survol rapide des boutons. */
 const UI_GAP: Partial<Record<UiKind, number>> = { hit: 0.06, hover: 0.05, dry: 0.25, click: 0.03 };
 
+/** Volume de base de l'ambiance d'une carte (ramenée au niveau des boucles du jeu : `mendForeignLoop`), celui des ambiances du jeu. */
+const MAP_AMBIENCE_GAIN = 0.25;
+
+/** L'ambiance d'une carte venue d'un paquet : son empreinte, son décodage, la boucle décodée. */
+interface OwnAmbience {
+  readonly hash: string;
+  state: "loading" | "ready" | "failed";
+  buffer: AudioBuffer | null;
+  loopStart: number;
+}
+
 /** Ambiance de chaque arène (une arène sans la sienne reste silencieuse). */
 const AMBIENCES: Readonly<Record<string, SampleKey>> = {
   depot: "amb-depot",
@@ -433,7 +447,8 @@ function placePanner(p: PannerNode, at: Vec3): void {
 class LoopVoice {
   readonly gain: GainNode;
   readonly panner: PannerNode | null;
-  key: SampleKey | null = null;
+  /** Ce qui joue : un son du jeu (`SampleKey`), ou l'ambiance d'une carte (« map: » et son empreinte). */
+  key: string | null = null;
   private readonly ctx: AudioContext;
   private src: AudioBufferSourceNode | null = null;
   private srcGain: GainNode | null = null;
@@ -453,19 +468,20 @@ class LoopVoice {
 
   /**
    * Fait jouer ce son en boucle (s'il ne joue pas déjà), à partir d'un point au hasard, entre les
-   * marges de son fichier (`LOOP_PAD`).
+   * marges de son fichier (`LOOP_PAD` ; une boucle qui ne vient pas du jeu : de `loopStart` à sa fin,
+   * voir `mendForeignLoop`).
    */
-  play(key: SampleKey, buffer: AudioBuffer): void {
+  play(key: string, buffer: AudioBuffer, loopStart = LOOP_PAD, loopEnd = buffer.duration - LOOP_PAD): void {
     if (this.key === key && this.src) return;
     this.release();
     const src = this.ctx.createBufferSource();
     src.buffer = buffer;
     src.loop = true;
-    src.loopStart = LOOP_PAD;
-    src.loopEnd = buffer.duration - LOOP_PAD;
+    src.loopStart = loopStart;
+    src.loopEnd = loopEnd;
     const g = this.ctx.createGain();
     src.connect(g).connect(this.gain);
-    src.start(this.ctx.currentTime, LOOP_PAD + Math.random() * (buffer.duration - 2 * LOOP_PAD));
+    src.start(this.ctx.currentTime, loopStart + Math.random() * (loopEnd - loopStart));
     this.src = src;
     this.srcGain = g;
     this.key = key;
@@ -1559,7 +1575,7 @@ export class Sound {
       const fall = FLIGHT_FALL[p.weapon] ?? 0;
       const pitch = 1 + fall / 2 - fall * Math.min(1, p.age / FALL_WHISTLE);
       v.loop.place(p.pos);
-      v.loop.set(SAMPLES[v.loop.key].gain, doppler * pitch, 0.05);
+      v.loop.set(SAMPLES[v.loop.key as SampleKey].gain, doppler * pitch, 0.05);
     }
   }
 
@@ -1620,11 +1636,25 @@ export class Sound {
     }
   }
 
-  /** L'ambiance de l'arène en place, en boucle, sans spatialisation. */
+  /**
+   * L'ambiance de l'arène en place, en boucle, sans spatialisation. Une carte venue d'un paquet peut
+   * avoir la sienne (`MapAssets.ambience`) : décodée une fois (ses octets viennent de ses ressources,
+   * client/maps/assets.ts), elle remplace celle d'une arène du jeu, qui joue en attendant ou si elle
+   * ne se lit pas.
+   */
   private updateAmbience(): void {
     const ambience = this.ambience;
     const bank = this.samples;
     if (!ambience || !bank) return;
+    const own = this.sim.arena.assets?.ambience;
+    const mine = own ? this.mapAmbience(own) : null;
+    if (mine && own) {
+      const key = `map:${own.sha256}`;
+      if (key === ambience.key) return;
+      ambience.play(key, mine.buffer, mine.loopStart, mine.buffer.duration);
+      ambience.set(AMBIENCE_LEVEL * MAP_AMBIENCE_GAIN, 1, 1);
+      return;
+    }
     // Une carte communautaire prend l'ambiance d'une arène du jeu (`ArenaLayout.ambience`)
     const key = AMBIENCES[this.sim.arena.ambience ?? this.sim.arena.id] ?? null;
     if (key === ambience.key) return;
@@ -1635,6 +1665,34 @@ export class Sound {
     }
     ambience.play(key, buffer);
     ambience.set(AMBIENCE_LEVEL * SAMPLES[key].gain, 1, 1);
+  }
+
+  /** L'ambiance de la carte en place, décodée (une seule à la fois : ~0,4 Mo par seconde de son). */
+  private ownAmbience: OwnAmbience | null = null;
+
+  /** L'ambiance d'une carte, si elle est décodée ; sinon null (son décodage commence, s'il n'est pas en cours ou raté). */
+  private mapAmbience(asset: MapAsset): { buffer: AudioBuffer; loopStart: number } | null {
+    const ctx = this.ctx;
+    if (!ctx) return null;
+    const known = this.ownAmbience;
+    if (known?.hash === asset.sha256) return known.state === "ready" && known.buffer ? { buffer: known.buffer, loopStart: known.loopStart } : null;
+    const state: OwnAmbience = { hash: asset.sha256, state: "loading", buffer: null, loopStart: 0 };
+    this.ownAmbience = state;
+    void (async () => {
+      try {
+        const bytes = await mapAssets.bytes({ path: PACKAGE_FILES.ambience, asset, type: null });
+        if (!bytes) throw new Error("ressource absente ou fautive");
+        // (decodeAudioData détache le tampon qu'on lui donne : une copie)
+        const buffer = await ctx.decodeAudioData(bytes.slice().buffer);
+        state.loopStart = mendForeignLoop(buffer);
+        state.buffer = buffer;
+        state.state = "ready";
+      } catch (e) {
+        console.warn(`Ambiance de la carte illisible (${asset.sha256}) : celle d'une arène du jeu la remplace`, e);
+        state.state = "failed";
+      }
+    })();
+    return null;
   }
 
   /** Le tir part-il d'une tourelle du robot du joueur ? (Il s'entend alors pleinement, voir OWN_SHOT_RADIUS.) */

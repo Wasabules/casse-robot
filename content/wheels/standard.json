@@ -1,0 +1,15 @@
+{
+  "$schema": "../schemas/wheels.schema.json",
+  "$comment": "La roue de taille moyenne. Le moteur est dans la roue : chaque type a son couple, sa vitesse et la charge qu'il est fait pour porter.",
+  "cost": 6,
+  "radius": 0.55,
+  "width": 0.3,
+  "mass": 4,
+  "hp": 50,
+  "grip": 0.9,
+  "stallTorque": 300,
+  "freeSpeed": 12,
+  "ratedLoad": 25,
+  "suspension": { "travelUp": 0.14, "travelDown": 0.1, "frequency": 2.4, "dampingRatio": 0.6 },
+  "price": 0
+}

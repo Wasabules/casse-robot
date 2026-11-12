@@ -1,4 +1,6 @@
 import * as B from "../babylon";
+import type { MapAsset } from "../../shared/arena/layout";
+import { mapAssets } from "../maps/assets";
 import { blockDef, blockShape, BLOCK_TYPES, type BlockType } from "../../shared/catalog/blocks";
 import { propDef, type PropType } from "../../shared/catalog/props";
 import { shapePieces, type ShapeId } from "../../shared/catalog/shapes";
@@ -13,6 +15,7 @@ import { MELEE_MODELS, MELEE_PIECES } from "./models/melee";
 import { LANCE_SHAFT, MELEE_BLURS, MELEE_GLOWS } from "./models/meleeEnergy";
 import type { MeleeId } from "../../shared/catalog/melee";
 import { PropModels, type CharLevel } from "./propModels";
+import { hasBlockModel, PartModels } from "./partModels";
 import { BLOCK_MODELS, HEAD_MODELS, HEAD_ROUNDS, WHEEL_MODELS } from "./blockModels";
 import { ModelKit, type Rounds } from "./modelKit";
 import { sprocket, trackShoe } from "./models/tracks";
@@ -653,10 +656,14 @@ export class Assets {
   private stillBelt: B.StandardMaterial | null = null;
   private readonly roundSources = new Map<TurretBlockType, Rounds>();
   private readonly propModels: PropModels;
+  /** Les modèles glTF des blocs, des têtes de tourelle et des roues (render/partModels.ts). */
+  private readonly partModels: PartModels;
 
   constructor(scene: B.Scene) {
     this.scene = scene;
-    this.propModels = new PropModels(scene);
+    // (les modèles d'une carte venue d'un paquet : ses ressources, client/maps/assets.ts)
+    this.propModels = new PropModels(scene, (entry) => mapAssets.bytes(entry));
+    this.partModels = new PartModels(scene);
     this.kit = new ModelKit(scene);
 
     this.flame = B.MeshBuilder.CreateCylinder("src-flame", { height: 1, diameterTop: BLOCK_SIZE * 0.7, diameterBottom: 0, tessellation: 12 }, scene);
@@ -677,9 +684,10 @@ export class Assets {
   }
 
   /**
-   * Mesh source d'un type de bloc. Les blocs teintés ont une source par couleur.
-   * Chaque instance a sa propre couleur multiplicative (`instancedBuffers.color`), blanche
-   * par défaut : WorldView l'assombrit quand le bloc est abîmé.
+   * Mesh source d'un type de bloc. Les blocs teintés ont une source par couleur. Un bloc qui a un
+   * modèle glTF (public/models/blocks/, render/partModels.ts) le prend, dès qu'il est lu.
+   * Chaque instance d'un cube a sa propre couleur multiplicative (`instancedBuffers.color`),
+   * blanche par défaut : le garage assombrit les étages inférieurs.
    */
   blockSource(type: BlockType, color: string): B.Mesh {
     // Une aile, une gouverne seule : une case aux quatre côtés façonnés (débris, vignettes, pièce à poser)
@@ -687,38 +695,53 @@ export class Assets {
     const key = BLOCK_TYPES[type].tinted ? `${type}${color}` : type;
     let source = this.blockSources.get(key);
     if (!source) {
-      const model = BLOCK_MODELS[type];
-      if (model) {
-        // Un modèle 3D (render/blockModels.ts) : ses couleurs sont celles de ses sommets
-        source = model(this.kit, color, `src-${key}`);
-      } else {
-        const look = BLOCK_LOOKS[type](color);
-        const mat = panelMaterial(this.scene, `block-${key}`, panelTexture(this.scene, `t-${key}`, look), look.specular);
-        if (look.emissive) mat.emissiveColor = look.emissive;
-        const size = BLOCK_SIZE * 0.985;
-        const height = blockDef(type).shape === "plate" ? PLATE_THICKNESS : size;
-        const shape = blockShape(type);
-        if (shape) {
-          source = new B.Mesh(`src-${key}`, this.scene);
-          shapeVertexData(shape, size / 2).applyToMesh(source);
-        } else {
-          source = B.MeshBuilder.CreateBox(`src-${key}`, { width: size, height, depth: size }, this.scene);
-        }
-        source.material = mat;
-      }
+      source = this.partModels.block(type, color, `src-${key}`, () => this.drawnBlock(type, color, key));
       source.isVisible = false;
       source.receiveShadows = true;
-      // Couleur par instance (le garage assombrit les étages inférieurs) : pas pour un modèle 3D,
-      // dont les couleurs sont celles de ses sommets (Babylon ne sait pas mêler les deux sur des
-      // instances classiques, et le dessinait blanc). En jeu, les lots d'instances fines ont leur
-      // propre teinte d'usure, qui, elle, se mêle aux couleurs de sommets.
-      if (!model) {
-        source.registerInstancedBuffer(B.VertexBuffer.ColorKind, 4);
-        source.instancedBuffers.color = new B.Color4(1, 1, 1, 1);
-      }
       this.blockSources.set(key, source);
     }
     return source;
+  }
+
+  /** La source d'un bloc faite par le code : son modèle 3D (render/blockModels.ts), ou un cube texturé (ou façonné). */
+  private drawnBlock(type: BlockType, color: string, key: string): B.Mesh {
+    const model = BLOCK_MODELS[type];
+    // Un modèle 3D : ses couleurs sont celles de ses sommets
+    if (model) return model(this.kit, color, `src-${key}`);
+    const look = BLOCK_LOOKS[type](color);
+    const mat = panelMaterial(this.scene, `block-${key}`, panelTexture(this.scene, `t-${key}`, look), look.specular);
+    if (look.emissive) mat.emissiveColor = look.emissive;
+    const size = BLOCK_SIZE * 0.985;
+    const height = blockDef(type).shape === "plate" ? PLATE_THICKNESS : size;
+    const shape = blockShape(type);
+    let source: B.Mesh;
+    if (shape) {
+      source = new B.Mesh(`src-${key}`, this.scene);
+      shapeVertexData(shape, size / 2).applyToMesh(source);
+    } else {
+      source = B.MeshBuilder.CreateBox(`src-${key}`, { width: size, height, depth: size }, this.scene);
+    }
+    source.material = mat;
+    // Couleur par instance (le garage assombrit les étages inférieurs) : pas pour un modèle 3D,
+    // dont les couleurs sont celles de ses sommets (Babylon ne sait pas mêler les deux sur des
+    // instances classiques : sa couleur d'instance prend la place de celles des sommets, et le
+    // modèle est dessiné blanc), ni pour un cube qui attend son modèle glTF. En jeu, les lots
+    // d'instances fines ont leur propre teinte d'usure, qui, elle, se mêle aux couleurs de sommets.
+    if (!hasBlockModel(type)) {
+      source.registerInstancedBuffer(B.VertexBuffer.ColorKind, 4);
+      source.instancedBuffers.color = new B.Color4(1, 1, 1, 1);
+    }
+    return source;
+  }
+
+  /** Nombre de sources qui ont pris leur modèle glTF (un bloc, une tête, une roue) : WorldView refait les lots qui les copiaient. */
+  get modelGeneration(): number {
+    return this.partModels.generation;
+  }
+
+  /** Des modèles glTF sont-ils en cours de lecture dans cette scène ? (une vignette les attend) */
+  get modelsPending(): boolean {
+    return this.partModels.pending + this.propModels.pending > 0;
   }
 
   /**
@@ -764,14 +787,18 @@ export class Assets {
     return source;
   }
 
-  /** Mesh source d'un type de roue : son modèle 3D (render/blockModels.ts), sinon un cylindre et un moyeu. */
+  /**
+   * Mesh source d'un type de roue : son modèle glTF (public/models/wheels/, render/partModels.ts),
+   * dès qu'il est lu ; sinon son modèle 3D (render/blockModels.ts), ou un cylindre et un moyeu.
+   */
   wheelSource(type: WheelType): B.Mesh {
     let source = this.wheelSources.get(type);
     if (!source) {
-      const model = WHEEL_MODELS[type];
-      source = model
-        ? model(this.kit, wheelDef(type), `src-wheel-${type}`)
-        : createWheelSource(this.scene, type, wheelDef(type), WHEEL_LOOKS[type].hub, WHEEL_LOOKS[type].tire);
+      const name = `src-wheel-${type}`;
+      source = this.partModels.wheel(type, name, () => {
+        const model = WHEEL_MODELS[type];
+        return model ? model(this.kit, wheelDef(type), name) : createWheelSource(this.scene, type, wheelDef(type), WHEEL_LOOKS[type].hub, WHEEL_LOOKS[type].tire);
+      });
       this.wheelSources.set(type, source);
     }
     return source;
@@ -827,9 +854,16 @@ export class Assets {
     });
   }
 
+  /**
+   * Tête d'une tourelle (son axe de rotation à l'origine, le canon vers +z) : son modèle glTF
+   * (public/models/heads/, render/partModels.ts), dès qu'il est lu ; sinon son modèle 3D
+   * (render/blockModels.ts), ou le pavé et les tubes de `TURRET_LOOKS`. Ses munitions visibles
+   * (`addRounds`) et son recul (WorldView) ne dépendent pas de son modèle.
+   */
   turretHeadSource(type: TurretBlockType): B.Mesh {
     const model = HEAD_MODELS[type];
-    return this.model(`head-${type}`, () => (model ? model(this.kit, `src-head-${type}`) : createTurretHead(this.scene, type)));
+    const name = `src-head-${type}`;
+    return this.model(`head-${type}`, () => this.partModels.head(type, name, () => (model ? model(this.kit, name) : createTurretHead(this.scene, type))));
   }
 
   /**
@@ -851,9 +885,12 @@ export class Assets {
     });
   }
 
-  /** Ce bloc a-t-il un modèle 3D (render/blockModels.ts) plutôt qu'un cube ? Le garage le vise alors par une boîte invisible. */
+  /**
+   * Ce bloc a-t-il un modèle 3D (render/blockModels.ts, ou un modèle glTF) plutôt qu'un cube ? Le
+   * garage le vise alors par une boîte invisible.
+   */
   hasModel(type: BlockType): boolean {
-    return !!BLOCK_MODELS[type];
+    return !!BLOCK_MODELS[type] || hasBlockModel(type);
   }
 
   /** Boîte invisible de la taille d'une case : ce que vise le garage sur un bloc qui a un modèle 3D. */
@@ -869,16 +906,20 @@ export class Assets {
    * Mesh source d'un accessoire : une dalle a une source par taille (`half`, sa texture se répète
    * au mètre) ; les autres, une par type.
    */
-  /** Accessoire (voir `PropModels.source`) ; `char` : bois noirci par le feu. */
-  propSource(type: PropType, half: Vec3 | null = null, diamond = false, char: CharLevel = 0): B.Mesh {
+  /**
+   * Accessoire (voir `PropModels.source`) ; `char` : bois noirci par le feu ; `own` : le modèle que lui
+   * donne la carte en place (`MapAssets.models`, une carte venue d'un paquet), une autre source que celle du jeu.
+   */
+  propSource(type: PropType, half: Vec3 | null = null, diamond = false, char: CharLevel = 0, own: MapAsset | null = null): B.Mesh {
     const size = half && propDef(type).shape.kind === "slab" ? half : null;
-    const key = (size ? `prop-${type}-${size.x.toFixed(2)},${size.y.toFixed(2)},${size.z.toFixed(2)}${diamond ? "-d" : ""}` : `prop-${type}`) + (char ? `-c${char}` : "");
-    return this.model(key, () => this.propModels.source(type, size, diamond, char));
+    const key = (size ? `prop-${type}-${size.x.toFixed(2)},${size.y.toFixed(2)},${size.z.toFixed(2)}${diamond ? "-d" : ""}` : `prop-${type}`) + (char ? `-c${char}` : "")
+      + (own ? `@${own.sha256}` : "");
+    return this.model(key, () => this.propModels.source(type, size, diamond, char, own));
   }
 
-  /** Éclat d'un accessoire, cube de 1 m de sa matière ; celui d'un accessoire peint est l'accessoire en réduction. */
-  propShardSource(type: PropType): B.Mesh {
-    return this.model(`shard-${type}`, () => this.propModels.shard(type) ?? this.propSource(type));
+  /** Éclat d'un accessoire, cube de 1 m de sa matière ; celui d'un accessoire peint est l'accessoire en réduction (celui de la carte, s'il en a un). */
+  propShardSource(type: PropType, own: MapAsset | null = null): B.Mesh {
+    return this.model(`shard-${type}${own ? `@${own.sha256}` : ""}`, () => this.propModels.shard(type) ?? this.propSource(type, null, false, 0, own));
   }
 
   projectileSource(look: ProjectileSpec["look"]): B.Mesh {

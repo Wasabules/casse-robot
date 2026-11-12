@@ -1,0 +1,33 @@
+{
+  "$schema": "../schemas/melee.schema.json",
+  "$comment": "Flipper : un plateau en coin devant son bloc, qu'un vérin relève d'un coup sur ordre : ce qui est dessus part en l'air (et se fait mal en retombant). Peu de dégâts par lui-même ; une levée coûte cher aux batteries et le vérin met longtemps à se recharger. Le sol retient le robot qui soulève : un robot léger qui veut soulever un lourd s'enfonce, et c'est lui qui pique du nez. Au repos, sur un robot à chenilles (bloc à 0,36 m du sol), le bord du plateau effleure le sol.",
+  "look": "plate",
+  "motion": "flip",
+  "axis": "left",
+  "hub": [0, -0.1, 0.3],
+  "plate": {
+    "length": 1,
+    "half": 0.7,
+    "rest": -0.24,
+    "end": 1.15,
+    "strike": 0.14,
+    "lower": 0.5,
+    "reload": 3.2,
+    "energy": 4000,
+    "cost": 8
+  },
+  "hit": {
+    "damageType": "impact",
+    "damage": 30,
+    "bite": 1,
+    "fling": 0.9,
+    "push": { "tangent": 1, "radial": 0, "axial": 0, "lift": 0.5 },
+    "recoil": 1,
+    "spread": 0.25,
+    "wheels": 1,
+    "wear": 1,
+    "gap": 0,
+    "minSpeed": 0
+  },
+  "engage": 2
+}

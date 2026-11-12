@@ -1,9 +1,13 @@
-import { GLTF_EXTENSIONS } from "../../src/client/gltfExtensions";
+import { inspectGlb, type GlbBounds, type GlbProblem, type GltfJson } from "../../src/shared/media/glb";
+
+export type { GltfJson } from "../../src/shared/media/glb";
 
 /*
  * Des fichiers glTF binaires (.glb) sans dépendance : les écrire depuis le code (le modèle d'exemple,
  * tools/models/crate.ts ; des essais), et vérifier ceux que livrent les artistes (`npm run models`,
- * tests/models.test.ts) : l'en-tête, les morceaux, le JSON, la version, la boîte englobante.
+ * tests/models.test.ts) : l'en-tête, les morceaux, le JSON, la version, la boîte englobante. Les
+ * contrôles sont ceux du jeu (src/shared/media/glb.ts, qui vérifie aussi les modèles d'un paquet de
+ * carte) ; ici, leurs messages en français.
  * Le format : https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html (« GLB File Format »).
  */
 
@@ -166,118 +170,34 @@ export function writeGlb(model: GlbModel): Uint8Array {
   return out;
 }
 
-/** Ce qu'on lit d'un .glb : son JSON, et les problèmes trouvés (vide : il est lisible). */
+/** Ce qu'on lit d'un .glb : son JSON, et les problèmes trouvés (vide : il est lisible), dits en français. */
 export interface GlbReport {
   readonly json: GltfJson | null;
   readonly problems: readonly string[];
   /** La boîte englobante du modèle dans son repère (m), d'après les bornes de ses positions et ses nœuds ; null si inconnue. */
-  readonly bounds: { readonly min: readonly number[]; readonly max: readonly number[] } | null;
+  readonly bounds: GlbBounds | null;
 }
 
-/** Les parties du JSON d'un glTF que lit cet outil. */
-export interface GltfJson {
-  readonly asset?: { readonly version?: string; readonly generator?: string };
-  readonly scene?: number;
-  readonly scenes?: readonly { readonly nodes?: readonly number[] }[];
-  readonly nodes?: readonly GltfNode[];
-  readonly meshes?: readonly { readonly primitives?: readonly { readonly attributes?: Record<string, number>; readonly material?: number }[] }[];
-  readonly materials?: readonly { readonly name?: string }[];
-  readonly accessors?: readonly { readonly min?: readonly number[]; readonly max?: readonly number[] }[];
-  readonly buffers?: readonly { readonly byteLength?: number; readonly uri?: string }[];
-  readonly images?: readonly { readonly uri?: string }[];
-  readonly extensionsRequired?: readonly string[];
-}
-
-interface GltfNode {
-  readonly mesh?: number;
-  readonly children?: readonly number[];
-  readonly matrix?: readonly number[];
-  readonly translation?: readonly number[];
-  readonly rotation?: readonly number[];
-  readonly scale?: readonly number[];
-}
-
-/** Vérifie un .glb (de quoi le jeu a besoin pour le lire), et mesure sa boîte englobante. */
-export function readGlb(bytes: Uint8Array): GlbReport {
-  const problems: string[] = [];
-  const fail = (problem: string): GlbReport => ({ json: null, problems: [problem], bounds: null });
-  if (bytes.length < 20) return fail("trop court pour un fichier glTF binaire");
-  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  if (dv.getUint32(0, true) !== MAGIC) return fail("pas un fichier glTF binaire (.glb) : exporter en « glTF Binary »");
-  if (dv.getUint32(4, true) !== 2) return fail(`version ${dv.getUint32(4, true)} du conteneur (le jeu lit la version 2)`);
-  if (dv.getUint32(8, true) !== bytes.length) return fail(`longueur annoncée ${dv.getUint32(8, true)} octets, fichier de ${bytes.length}`);
-  const jsonLength = dv.getUint32(12, true);
-  if (dv.getUint32(16, true) !== JSON_CHUNK || 20 + jsonLength > bytes.length) return fail("premier morceau JSON absent ou tronqué");
-  let json: GltfJson;
-  try {
-    json = JSON.parse(new TextDecoder().decode(bytes.subarray(20, 20 + jsonLength))) as GltfJson;
-  } catch {
-    return fail("JSON illisible");
+/** Un problème d'un .glb, en français (les messages de l'outil, comme ceux du serveur). */
+export function glbProblemText(problem: GlbProblem): string {
+  switch (problem.code) {
+    case "short": return "trop court pour un fichier glTF binaire";
+    case "magic": return "pas un fichier glTF binaire (.glb) : exporter en « glTF Binary »";
+    case "container": return `version ${problem.version} du conteneur (le jeu lit la version 2)`;
+    case "length": return `longueur annoncée ${problem.declared} octets, fichier de ${problem.actual}`;
+    case "jsonChunk": return "premier morceau JSON absent ou tronqué";
+    case "json": return "JSON illisible";
+    case "version": return `version glTF « ${problem.version} » (le jeu lit la 2.0)`;
+    case "externalBuffer": return "tampon dans un fichier à part : tout doit être dans le .glb";
+    case "bufferSize": return `tampon de ${problem.buffer} octets, morceau binaire de ${problem.bin}`;
+    case "externalImage": return "image dans un fichier à part : les textures doivent être dans le .glb";
+    case "noMesh": return "aucun mesh";
+    case "extensions": return `extensions exigées que le jeu ne lit pas : ${problem.list.join(", ")}`;
   }
-  if (json.asset?.version !== "2.0") problems.push(`version glTF « ${json.asset?.version ?? "?"} » (le jeu lit la 2.0)`);
-  let binLength = 0;
-  const bin = 20 + jsonLength;
-  if (bin + 8 <= bytes.length && dv.getUint32(bin + 4, true) === BIN_CHUNK) binLength = dv.getUint32(bin, true);
-  const buffer = json.buffers?.[0];
-  if (buffer?.uri !== undefined) problems.push("tampon dans un fichier à part : tout doit être dans le .glb");
-  else if (buffer && (buffer.byteLength ?? 0) > binLength) problems.push(`tampon de ${buffer.byteLength} octets, morceau binaire de ${binLength}`);
-  if (json.images?.some((image) => image.uri !== undefined)) problems.push("image dans un fichier à part : les textures doivent être dans le .glb");
-  if (!json.meshes?.length) problems.push("aucun mesh");
-  const unsupported = (json.extensionsRequired ?? []).filter((e) => !KNOWN_EXTENSIONS.has(e));
-  if (unsupported.length) problems.push(`extensions exigées que le jeu ne lit pas : ${unsupported.join(", ")}`);
-  return { json, problems, bounds: modelBounds(json) };
 }
 
-/** Les extensions qu'un fichier peut exiger : celles qu'enregistre le lecteur du jeu (client/babylonGltf.ts). */
-const KNOWN_EXTENSIONS: ReadonlySet<string> = new Set(GLTF_EXTENSIONS);
-
-/** La boîte englobante d'une scène glTF : les bornes de chaque position (obligatoires), passées par les nœuds qui les portent. */
-function modelBounds(json: GltfJson): GlbReport["bounds"] {
-  const nodes = json.nodes ?? [];
-  const roots = json.scenes?.[json.scene ?? 0]?.nodes ?? nodes.map((_, i) => i);
-  const min = [Infinity, Infinity, Infinity];
-  const max = [-Infinity, -Infinity, -Infinity];
-  const visit = (index: number, parent: Mat4, depth: number): void => {
-    const node = nodes[index];
-    if (!node || depth > 64) return;
-    const matrix = multiply(parent, nodeMatrix(node));
-    for (const primitive of node.mesh !== undefined ? json.meshes?.[node.mesh]?.primitives ?? [] : []) {
-      const accessor = json.accessors?.[primitive.attributes?.POSITION ?? -1];
-      if (!accessor?.min || !accessor.max) continue;
-      for (let corner = 0; corner < 8; corner++) {
-        const p = [0, 1, 2].map((k) => ((corner >> k) & 1 ? accessor.max![k] : accessor.min![k]));
-        const q = [0, 1, 2].map((r) => matrix[r] * p[0] + matrix[4 + r] * p[1] + matrix[8 + r] * p[2] + matrix[12 + r]);
-        for (let k = 0; k < 3; k++) {
-          min[k] = Math.min(min[k], q[k]);
-          max[k] = Math.max(max[k], q[k]);
-        }
-      }
-    }
-    for (const c of node.children ?? []) visit(c, matrix, depth + 1);
-  };
-  for (const r of roots) visit(r, IDENTITY, 0);
-  return Number.isFinite(min[0]) ? { min, max } : null;
-}
-
-/** Une matrice 4 × 4 en colonnes, comme dans le glTF. */
-type Mat4 = readonly number[];
-const IDENTITY: Mat4 = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
-
-function multiply(a: Mat4, b: Mat4): Mat4 {
-  const out: number[] = [];
-  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) out.push(a[r] * b[c * 4] + a[4 + r] * b[c * 4 + 1] + a[8 + r] * b[c * 4 + 2] + a[12 + r] * b[c * 4 + 3]);
-  return out;
-}
-
-function nodeMatrix(node: GltfNode): Mat4 {
-  if (node.matrix?.length === 16) return node.matrix;
-  const [tx, ty, tz] = node.translation ?? [0, 0, 0];
-  const [x, y, z, w] = node.rotation ?? [0, 0, 0, 1];
-  const [sx, sy, sz] = node.scale ?? [1, 1, 1];
-  return [
-    (1 - 2 * (y * y + z * z)) * sx, 2 * (x * y + z * w) * sx, 2 * (x * z - y * w) * sx, 0,
-    2 * (x * y - z * w) * sy, (1 - 2 * (x * x + z * z)) * sy, 2 * (y * z + x * w) * sy, 0,
-    2 * (x * z + y * w) * sz, 2 * (y * z - x * w) * sz, (1 - 2 * (x * x + y * y)) * sz, 0,
-    tx, ty, tz, 1,
-  ];
+/** Vérifie un .glb (ce que le jeu demande pour le lire : src/shared/media/glb.ts), et mesure sa boîte englobante. */
+export function readGlb(bytes: Uint8Array): GlbReport {
+  const report = inspectGlb(bytes);
+  return { json: report.json, problems: report.problems.map(glbProblemText), bounds: report.bounds };
 }

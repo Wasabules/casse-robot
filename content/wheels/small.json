@@ -1,0 +1,15 @@
+{
+  "$schema": "../schemas/wheels.schema.json",
+  "$comment": "Petite roue légère et rapide, pour les engins légers (ou le train d'atterrissage d'un avion).",
+  "cost": 3,
+  "radius": 0.3,
+  "width": 0.2,
+  "mass": 1.2,
+  "hp": 30,
+  "grip": 0.9,
+  "stallTorque": 50,
+  "freeSpeed": 25,
+  "ratedLoad": 10,
+  "suspension": { "travelUp": 0.1, "travelDown": 0.08, "frequency": 2.6, "dampingRatio": 0.55 },
+  "price": 0
+}

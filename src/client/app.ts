@@ -1,7 +1,8 @@
 import { byId } from "./dom";
 import { SoundLog } from "./hud/soundLog";
-import { ARENA_IDS, ARENAS, isMapKey, unregisterArena, type ArenaKey } from "../shared/arena/layout";
-import { MAP_LIMITS, type MapFile, type MapIssue } from "../shared/map/format";
+import { ARENA_IDS, isMapKey, unregisterArena, type ArenaKey } from "../shared/arena/layout";
+import type { MapFile, MapIssue } from "../shared/map/format";
+import { assetEntries } from "../shared/map/pack";
 import { registerMap } from "../shared/map/load";
 import { checkMap } from "../shared/map/validate";
 import { profileFromDesign } from "../shared/design/custom";
@@ -39,17 +40,30 @@ import { ArenaPicker, lastArena, rememberArena, type ArenaOption } from "./menu/
 import { defaultServer, NetClient } from "./net/netClient";
 import {
   DEADZONE_RANGE, defaultSettings, FOV_RANGE, GRAPHICS_PRESETS, graphicsPreset, loadSettings, saveSettings, SENSITIVITY_RANGE,
-  type GraphicsPreset, type Settings,
+  TOUCH_OPACITY_RANGE, TOUCH_SIZE_RANGE,
+  type GraphicsPreset, type NumberSetting, type Settings,
   requestedRenderer,
 } from "./settings";
 import { arenaInfo, arenaName, botName, communityInfo, mapIssueText, modeInfo, modeName, partName, rewardLineText } from "./i18n/names";
-import { downloadMap, pickFile } from "./maps/files";
-import { mapName, MapLibrary, type MapEntry } from "./maps/library";
+import { downloadMap, downloadPackage, pickFile } from "./maps/files";
+import { mapName, MapLibrary, type ImportResult, type MapEntry } from "./maps/library";
+import { arenaFacts, loadArena, loadedArena } from "./maps/gameArenas";
 import { MapEditor, type EditorSource } from "./editor/editor";
 import { backendOf, type RenderBackend } from "./render/engine";
 
-/** Onglets des paramètres (leurs titres). */
-const SETTINGS_TABS = ["menu.settings.graphics", "menu.settings.controls", "menu.settings.sound", "menu.settings.profile"] as const satisfies readonly MessageKey[];
+/** Les ressources d'une carte venue d'un paquet, en une ligne (« Paquet : 2 modèles d'accessoires, son ambiance »). */
+function assetsLine(map: MapFile): string {
+  const entries = assetEntries(map.assets);
+  const models = entries.filter((e) => e.type).length;
+  const parts = [...(models ? [t("maps.assetModels", { n: models })] : []), ...(map.assets?.ambience ? [t("maps.assetAmbience")] : [])];
+  return t("maps.assets", { list: parts.join(", ") });
+}
+
+/** Onglets des paramètres, et leurs titres. */
+export type SettingsTab = "graphics" | "controls" | "touch" | "sound" | "profile";
+const SETTINGS_TABS = {
+  graphics: "menu.settings.graphics", controls: "menu.settings.controls", touch: "menu.settings.touch", sound: "menu.settings.sound", profile: "menu.settings.profile",
+} as const satisfies Record<SettingsTab, MessageKey>;
 /** Change un réglage : il est appliqué, enregistré, puis l'écran des paramètres est redessiné. */
 type Setter = <K extends keyof Settings>(key: K) => (value: Settings[K]) => void;
 
@@ -94,8 +108,8 @@ export class App {
   private trial: SavedRobot | null = null;
   /** Dernier robot ouvert au garage. */
   private lastRobot: SavedRobot | null = null;
-  /** Dernier onglet ouvert des paramètres. */
-  private settingsTab = 0;
+  /** Dernier onglet ouvert des paramètres (null : le premier). */
+  private settingsTab: SettingsTab | null = null;
   /** Réattribution en cours (la case qui attend sa touche), et de quoi cesser d'écouter. */
   private listening: { action: ActionId; slot: Slot; stop: () => void } | null = null;
   /** Dernier mot de l'écran des touches (un échange, un refus), sous la ligne de l'action réglée. */
@@ -301,6 +315,7 @@ export class App {
       title: "Casse-Robot", // i18n-ignore
       subtitle: t("menu.title.tagline"),
       hero: true,
+      tiles: true,
       entries: [
         { label: t("menu.title.play"), detail: t("menu.title.playDetail", { modes: modes.join(", ") }), primary: true, onSelect: () => this.showPlay() },
         { label: t("menu.multi.title"), detail: t("menu.title.multiDetail"), onSelect: () => this.showMultiplayer() },
@@ -332,6 +347,7 @@ export class App {
     }));
     this.menu.show({
       id: "play",
+      tiles: true,
       title: t("menu.title.play"),
       subtitle: t("menu.play.subtitle"),
       entries: [...modes, { label: t("common.back"), onSelect: back }],
@@ -352,20 +368,17 @@ export class App {
       if (GAME_MODES[mode].pilot) this.pickRobot(`${label} · ${arenaName(arena)}`, (p) => this.play(mode, p, arena), () => this.pickArena(mode));
       else this.play(mode, null, arena);
     };
-    // Les arènes du jeu, puis les cartes communautaires (leurs faits lus dans la carte : son arène ne se construit que pour son plan)
+    // Les arènes du jeu, puis les cartes communautaires (leurs faits lus dans la carte : son arène ne se
+    // construit que pour son plan). Une grande arène du jeu : son fichier se charge pour sa carte de la
+    // grille (son plan, ses faits), toutes en même temps ; les plans se dessinent l'un après l'autre
     const arenas: ArenaOption[] = [
-      ...ARENA_IDS.map((id): ArenaOption => {
-        const layout = ARENAS[id];
-        return { key: id, name: arenaName(id), info: arenaInfo(id), half: layout.bounds.half, zones: layout.zones.length, night: !!layout.sky?.night, layout: () => layout };
-      }),
+      ...ARENA_IDS.map((id): ArenaOption => ({ key: id, name: arenaName(id), info: arenaInfo(id), facts: () => arenaFacts(id), layout: () => loadedArena(id) })),
       ...this.maps.list().map((e): ArenaOption => ({
         key: e.key,
         name: mapName(e.map),
         info: communityInfo(e.map.meta),
         community: e.map.meta,
-        half: e.map.bounds.half,
-        zones: e.map.zones.length,
-        night: !!e.map.sky?.night,
+        facts: () => ({ half: e.map.bounds.half, zones: e.map.zones.length, night: !!e.map.sky?.night }),
         layout: () => this.maps.arena(e.key),
       })),
     ];
@@ -421,17 +434,22 @@ export class App {
     });
   }
 
-  /** Une carte : qui l'a faite, sa licence ; l'exporter, la supprimer. */
-  private showMapEntry(entry: MapEntry, outer: () => void): void {
+  /** Une carte : qui l'a faite, sa licence, ses ressources (un paquet) ; l'exporter, la supprimer. `note` : ce qui vient de se passer. */
+  private showMapEntry(entry: MapEntry, outer: () => void, note?: string): void {
     const back = (): void => this.showMaps(outer);
     const meta = entry.map.meta;
     const name = mapName(entry.map);
+    const packaged = !!entry.map.assets;
+    const exported = async (): Promise<void> => {
+      if (!packaged) downloadMap(entry.map);
+      else if (!(await downloadPackage(entry.map, this.maps.assets))) this.showMapEntry(entry, outer, t("maps.exportMissing"));
+    };
     this.menu.show({
       id: `map-${entry.key}`,
       title: name,
-      subtitle: [t("maps.by", { author: meta.author }), t("maps.license", { license: meta.license }), t(`maps.origin.${entry.origin}`)].join(" · "),
+      subtitle: note ?? [t("maps.by", { author: meta.author }), t("maps.license", { license: meta.license }), t(`maps.origin.${entry.origin}`), ...(packaged ? [assetsLine(entry.map)] : [])].join(" · "),
       entries: [
-        { label: t("maps.export"), detail: t("maps.exportDetail"), primary: true, onSelect: () => downloadMap(entry.map) },
+        { label: t("maps.export"), detail: t(packaged ? "maps.exportPackageDetail" : "maps.exportDetail"), primary: true, onSelect: () => void exported() },
         { label: t("editor.mapsEdit"), detail: t("editor.mapsEditDetail"), onSelect: () => void this.openEditor({ kind: "entry", entry }) },
         {
           label: t("maps.delete"),
@@ -446,22 +464,20 @@ export class App {
     });
   }
 
-  /** Importe une carte (un fichier .casse-map.json) : vérifiée, puis gardée dans ce navigateur ; refusée, on dit pourquoi. */
+  /**
+   * Importe une carte (un fichier .casse-map.json, ou un paquet .casse-map.zip avec ses modèles et son
+   * ambiance) : vérifiée, puis gardée dans ce navigateur ; refusée, on dit pourquoi.
+   */
   private async importMap(back: () => void): Promise<void> {
-    const file = await pickFile(".json,application/json");
+    const file = await pickFile(".json,.zip,application/json,application/zip");
     if (!file) return;
-    if (file.size > MAP_LIMITS.bytes) {
-      this.showMapIssues(file.name, [{ code: "tooLarge", size: Math.ceil(file.size / 1024), max: MAP_LIMITS.bytes / 1024 }], () => this.showMaps(back));
-      return;
-    }
-    let text: string;
+    let result: ImportResult;
     try {
-      text = await file.text();
+      result = await this.maps.importFile(file);
     } catch {
       this.showMaps(back, t("maps.unreadable"));
       return;
     }
-    const result = await this.maps.importText(text, file.name);
     if (!result.ok) {
       this.showMapIssues(file.name, result.issues, () => this.showMaps(back));
       return;
@@ -555,10 +571,21 @@ export class App {
     this.menu.hide();
     // L'essai d'un robot du garage garde la musique du garage
     const theme: MusicTheme = mode === "trial" ? "garage" : "battle";
-    const where = arenaName(arena ?? this.game.arenaId);
+    const target = arena ?? this.game.arenaId;
+    const where = arenaName(target);
     this.loading.show([modeName(mode), where, pilot && botName(pilot)].filter(Boolean).join(" · "));
-    this.loading.progress(0.05, t("menu.loading.match"));
+    this.loading.progress(0.03, t("menu.loading.arena"));
     void (async () => {
+      // Une grande arène du jeu : son fichier d'abord (téléchargé une fois : client/maps/gameArenas.ts)
+      try {
+        await loadArena(target);
+      } catch (e) {
+        console.warn(`Arène ${target} : fichier impossible à charger`, e);
+        if (ticket === this.loadTicket) this.arenaUnavailable(where);
+        return;
+      }
+      if (ticket !== this.loadTicket) return;
+      this.loading.progress(0.05, t("menu.loading.match"));
       // L'écran de chargement s'affiche avant la construction (un travail d'un bloc)
       await nextPaint();
       if (ticket !== this.loadTicket) return;
@@ -611,6 +638,24 @@ export class App {
     if (this.state === "loading") this.loading.hide();
   }
 
+  /** Le fichier d'une arène du jeu n'a pas pu se charger (le réseau) : on le dit, par-dessus l'écran titre. */
+  private arenaUnavailable(name: string): void {
+    this.showTitle();
+    const back = (): void => this.showTitle();
+    this.menu.show({
+      id: "arenaUnavailable",
+      title: t("menu.arena.unavailable"),
+      subtitle: t("menu.arena.unavailableDetail", { name }),
+      entries: [{ label: t("common.back"), primary: true, onSelect: back }],
+      back,
+    });
+  }
+
+  /** La touche qui reprend la partie, sous « Reprendre » (au doigt, il n'y en a pas : le bouton de pause). */
+  private get escapeHint(): string | undefined {
+    return this.touchHud.active ? undefined : codeLabel("Escape");
+  }
+
   private pause(): void {
     this.enter("paused");
     this.game.frozen = true;
@@ -619,10 +664,11 @@ export class App {
       // En réseau, la partie continue sur le serveur : la pause ne fait que relâcher les commandes
       this.menu.show({
         id: "pause",
+        tiles: true,
         title: t("menu.pause.title"),
         subtitle: t("menu.pause.online"),
         entries: [
-          { label: t("menu.pause.resume"), detail: codeLabel("Escape"), primary: true, onSelect: () => this.resume() },
+          { label: t("menu.pause.resume"), detail: this.escapeHint, primary: true, onSelect: () => this.resume() },
           { label: t("menu.settings.title"), onSelect: () => this.showSettings(() => this.pause()) },
           ...this.fullscreenEntry(() => this.state === "paused" && this.pause()),
           { label: t("menu.pause.quit"), onSelect: () => this.showTitle() },
@@ -634,10 +680,11 @@ export class App {
     const pilot = this.game.playerProfile;
     this.menu.show({
       id: "pause",
+      tiles: true,
       title: t("menu.pause.title"),
       subtitle: pilot ? `${modeName(mode)} · ${botName(pilot)}` : modeName(mode),
       entries: [
-        { label: t("menu.pause.resume"), detail: codeLabel("Escape"), primary: true, onSelect: () => this.resume() },
+        { label: t("menu.pause.resume"), detail: this.escapeHint, primary: true, onSelect: () => this.resume() },
         ...(this.trial ? [{ label: t("menu.pause.garage"), onSelect: () => this.openGarage(this.trial) }] : []),
         ...(this.editorTest ? [{ label: t("editor.back"), onSelect: () => this.returnToEditor() }] : []),
         { label: t("menu.pause.restart"), detail: t("menu.pause.restartDetail"), onSelect: () => this.play(mode, pilot) },
@@ -684,6 +731,7 @@ export class App {
     if (this.game.online) {
       this.menu.show({
         id: "result",
+        tiles: true,
         title,
         subtitle: t("menu.result.nextMatch", { score: scoreLine }),
         entries: [
@@ -698,6 +746,7 @@ export class App {
     const pilot = this.game.playerProfile;
     this.menu.show({
       id: "result",
+      tiles: true,
       title,
       subtitle: scoreLine,
       keys,
@@ -804,6 +853,17 @@ export class App {
     this.play("arena", null, arena, BATTLE_ROSTER);
   }
 
+  /** Le choix de l'arène d'un mode, sans passer par les menus (outils de tools/browser/). */
+  showArenas(mode: GameModeId = "battle"): void {
+    this.enter("title");
+    this.pickArena(mode);
+  }
+
+  /** Rejoint le serveur de jeu (celui des réglages, sinon celui par défaut) avec ce robot de départ, sans passer par les menus. */
+  joinServer(preset?: string): void {
+    this.connect(PRESET_BOTS.find((p) => p.id === preset) ?? PRESET_BOTS[0]);
+  }
+
   /** Ouvre le garage sur un robot de départ. */
   showGarage(): void {
     this.openGarage(null);
@@ -818,6 +878,28 @@ export class App {
   useGraphicsPreset(id: GraphicsPreset): void {
     Object.assign(this.settings, GRAPHICS_PRESETS[id]);
     this.commitSettings();
+  }
+
+  /** Une partie pilotée avec ce robot de départ (le premier sinon), dans cette arène, sans passer par les menus. */
+  pilotMatch(preset?: string, arena?: ArenaKey, mode: GameModeId = "battle"): void {
+    this.play(mode, PRESET_BOTS.find((p) => p.id === preset) ?? PRESET_BOTS[0], arena);
+  }
+
+  /** Les paramètres, à cet onglet (par-dessus l'écran titre), sans passer par les menus. */
+  openSettings(tab?: SettingsTab): void {
+    this.showSettings(() => this.renderTitle(), tab);
+  }
+
+  /** L'écran des touches, sans passer par les menus (il revient aux paramètres, onglet Contrôles). */
+  openBindings(): void {
+    this.showBindings(() => this.openSettings("controls"));
+  }
+
+  /** Change des réglages comme depuis les paramètres (appliqués, enregistrés) ; rend les réglages. */
+  patchSettings(patch: Partial<Settings> = {}): Settings {
+    Object.assign(this.settings, patch);
+    this.commitSettings();
+    return { ...this.settings };
   }
 
   // --- Éditeur de cartes ---
@@ -998,46 +1080,95 @@ export class App {
 
   // --- Paramètres ---
 
+  /**
+   * Les onglets des paramètres : au doigt, le jeu au doigt d'abord, et le clavier, la souris et la
+   * manette en dernier (ils restent là : une tablette avec un clavier, une manette branchée) ; sans
+   * écran tactile, pas d'onglet Tactile.
+   */
+  private settingsTabs(): SettingsTab[] {
+    return this.touchHud.active ? ["touch", "graphics", "sound", "profile", "controls"] : ["graphics", "controls", "sound", "profile"];
+  }
+
   /** Paramètres, par onglets ; chaque changement est appliqué et enregistré tout de suite. */
-  private showSettings(back: () => void, tab = this.settingsTab): void {
-    // Changer d'onglet, revenir : la réattribution en cours est abandonnée
-    if (tab !== this.settingsTab) this.stopListening();
-    this.settingsTab = tab;
-    const redraw = (): void => this.showSettings(back, tab);
+  private showSettings(back: () => void, tab?: SettingsTab): void {
+    const tabs = this.settingsTabs();
+    const shown = tab ?? (this.settingsTab && tabs.includes(this.settingsTab) ? this.settingsTab : tabs[0]);
+    this.settingsTab = shown;
+    const redraw = (): void => this.showSettings(back, shown);
     const set: Setter = (key) => (value) => {
       this.settings[key] = value;
       this.commitSettings();
       redraw();
     };
-    const rows = [
-      () => this.graphicsRows(set, redraw),
-      () => this.controlRows(set, () => this.showKeys(() => this.showSettings(back, 1)), redraw),
-      () => this.soundRows(set, redraw),
-      () => this.profileRows(set),
-    ][tab]();
-    const leave = (): void => {
-      this.stopListening();
-      back();
-    };
+    const again = (): void => this.showSettings(back, "controls");
+    const rows = {
+      graphics: () => this.graphicsRows(set, redraw),
+      controls: () => this.controlRows(set, () => this.showKeys(again), () => this.showBindings(again)),
+      touch: () => this.touchRows(set),
+      sound: () => this.soundRows(set, redraw),
+      profile: () => this.profileRows(set),
+    }[shown]();
     this.redrawSettings = redraw;
     this.menu.show({
       id: "settings",
       title: t("menu.settings.title"),
-      tabs: { labels: SETTINGS_TABS.map((key) => t(key)), active: tab, onSelect: (i) => this.showSettings(back, i) },
+      tabs: { labels: tabs.map((id) => t(SETTINGS_TABS[id])), active: tabs.indexOf(shown), onSelect: (i) => this.showSettings(back, tabs[i]) },
       rows,
+      onClose: () => {
+        if (this.redrawSettings === redraw) this.redrawSettings = null;
+      },
+      entries: [
+        { label: t("common.back"), primary: true, onSelect: back },
+        {
+          label: t("menu.settings.defaults"),
+          detail: t("menu.settings.defaultsDetail"),
+          onSelect: () => {
+            const { name, server, language } = this.settings;
+            this.keyNote = null;
+            Object.assign(this.settings, defaultSettings(), { name, server, language });
+            this.commitSettings();
+            redraw();
+          },
+        },
+      ],
+      back,
+    });
+  }
+
+  /**
+   * Les touches de chaque action, au clavier, à la souris et à la manette : un écran à part, ouvert
+   * depuis l'onglet Contrôles (il encombrait l'onglet). Clic sur une case, puis la touche ; ↺ remet
+   * celles par défaut d'une action. Le quitter (Retour, Échap, B) abandonne la réattribution en cours.
+   */
+  private showBindings(back: () => void): void {
+    const redraw = (): void => this.showBindings(back);
+    const k = (id: ActionId): string => this.game.controls.keyName(id, "keys");
+    const leave = (): void => {
+      this.stopListening();
+      this.keyNote = null;
+      back();
+    };
+    this.redrawSettings = redraw;
+    this.menu.show({
+      id: "bindings",
+      title: t("menu.bind.title"),
+      subtitle: t("menu.ctl.chooseDetail", { cancel: codeLabel("Escape"), clear: codeLabel("Mouse2"), example: k("garageUndo") }),
+      rows: ACTION_CATEGORIES.flatMap((category): SettingRow[] => [
+        { kind: "heading", label: categoryLabel(category), columns: [t("menu.ctl.colKey"), t("menu.ctl.colOther"), t("menu.ctl.colPad")] },
+        ...ACTION_IDS.filter((id) => actionDef(id).category === category).map((id) => this.bindingRow(id, redraw)),
+      ]),
       onClose: () => {
         if (this.redrawSettings === redraw) this.redrawSettings = null;
       },
       entries: [
         { label: t("common.back"), primary: true, onSelect: leave },
         {
-          label: t("menu.settings.defaults"),
-          detail: t("menu.settings.defaultsDetail"),
+          label: t("menu.ctl.allDefault"),
+          detail: t("menu.bind.allDefaultDetail"),
           onSelect: () => {
-            const { name, server, language } = this.settings;
             this.stopListening();
+            this.settings.bindings = DEFAULT_BINDINGS;
             this.keyNote = null;
-            Object.assign(this.settings, defaultSettings(), { name, server, language });
             this.commitSettings();
             redraw();
           },
@@ -1131,7 +1262,7 @@ export class App {
     ];
   }
 
-  private controlRows(set: Setter, showKeys: () => void, redraw: () => void): SettingRow[] {
+  private controlRows(set: Setter, showKeys: () => void, showBindings: () => void): SettingRow[] {
     const s = this.settings;
     const c = this.game.controls;
     const k = (id: ActionId): string => c.keyName(id, "keys");
@@ -1174,24 +1305,75 @@ export class App {
       ),
       ...this.padRows(set),
       { kind: "heading", label: t("menu.ctl.keys") },
-      {
-        kind: "button", label: t("menu.ctl.choose"),
-        detail: t("menu.ctl.chooseDetail", { cancel: codeLabel("Escape"), clear: codeLabel("Mouse2"), example: k("garageUndo") }),
-        action: t("menu.ctl.allDefault"),
-        onSelect: () => {
-          this.stopListening();
-          this.settings.bindings = DEFAULT_BINDINGS;
-          this.keyNote = null;
-          this.commitSettings();
-          redraw();
-        },
-      },
+      { kind: "button", label: t("menu.ctl.choose"), detail: t("menu.ctl.openDetail"), action: t("menu.ctl.open"), onSelect: showBindings },
       { kind: "button", label: t("menu.ctl.all"), detail: t("menu.ctl.allDetail"), action: t("menu.ctl.see"), onSelect: showKeys },
-      ...ACTION_CATEGORIES.flatMap((category): SettingRow[] => [
-        { kind: "heading", label: categoryLabel(category), columns: [t("menu.ctl.colKey"), t("menu.ctl.colOther"), t("menu.ctl.colPad")] },
-        ...ACTION_IDS.filter((id) => actionDef(id).category === category).map((id) => this.bindingRow(id, redraw)),
-      ]),
     ];
+  }
+
+  /**
+   * Le jeu au doigt (onglet Tactile, le premier au doigt) : la visée (en glissant le doigt ou au
+   * manche de visée, ses sensibilités, l'axe vertical, le viseur), les commandes à l'écran (taille,
+   * opacité, gaucher) et la direction du robot.
+   */
+  private touchRows(set: Setter): SettingRow[] {
+    const s = this.settings;
+    const stick = s.touchAim === "stick";
+    const times = (v: number): string => measure(v, "times", 2);
+    const rows: SettingRow[] = [
+      { kind: "heading", label: t("menu.touch.aimHeading") },
+      choiceRow(
+        t("menu.touch.aim"),
+        [{ value: "swipe", label: t("menu.touch.aimSwipe") }, { value: "stick", label: t("menu.touch.aimStick") }],
+        s.touchAim,
+        set("touchAim"),
+        t(stick ? "menu.touch.aimStickDetail" : "menu.touch.aimSwipeDetail"),
+      ),
+      {
+        kind: "slider", label: t("menu.touch.sensitivity"), detail: t("menu.touch.sensitivityDetail"),
+        value: s.touchSensitivity, min: SENSITIVITY_RANGE.min, max: SENSITIVITY_RANGE.max, step: 0.05, format: times,
+        onChange: (v, done) => this.slide("touchSensitivity", v, done),
+      },
+    ];
+    if (stick) {
+      rows.push({
+        kind: "slider", label: t("menu.touch.stickSensitivity"), detail: t("menu.touch.stickSensitivityDetail"),
+        value: s.touchStickSensitivity, min: SENSITIVITY_RANGE.min, max: SENSITIVITY_RANGE.max, step: 0.05, format: times,
+        onChange: (v, done) => this.slide("touchStickSensitivity", v, done),
+      });
+    }
+    rows.push(
+      { kind: "toggle", label: t("menu.touch.invertY"), detail: t("menu.touch.invertYDetail"), value: s.touchInvertY, onChange: set("touchInvertY") },
+      choiceRow(
+        t("menu.touch.scope"),
+        [{ value: "toggle", label: t("menu.ctl.scopeToggle") }, { value: "hold", label: t("menu.ctl.scopeHold") }],
+        s.touchScopeToggle ? "toggle" : "hold",
+        (v) => set("touchScopeToggle")(v === "toggle"),
+        t(s.touchScopeToggle ? "menu.touch.scopeToggleDetail" : "menu.touch.scopeHoldDetail"),
+      ),
+      { kind: "heading", label: t("menu.touch.layoutHeading") },
+      {
+        kind: "slider", label: t("menu.touch.size"), detail: t("menu.touch.sizeDetail"),
+        value: Math.round(s.touchSize * 100), min: TOUCH_SIZE_RANGE.min * 100, max: TOUCH_SIZE_RANGE.max * 100, step: 5,
+        format: (v) => pct(v / 100),
+        onChange: (v, done) => this.slide("touchSize", v / 100, done),
+      },
+      {
+        kind: "slider", label: t("menu.touch.opacity"), detail: t("menu.touch.opacityDetail"),
+        value: Math.round(s.touchOpacity * 100), min: TOUCH_OPACITY_RANGE.min * 100, max: TOUCH_OPACITY_RANGE.max * 100, step: 5,
+        format: (v) => pct(v / 100),
+        onChange: (v, done) => this.slide("touchOpacity", v / 100, done),
+      },
+      { kind: "toggle", label: t("menu.touch.leftHanded"), detail: t("menu.touch.leftHandedDetail"), value: s.touchLeftHanded, onChange: set("touchLeftHanded") },
+      { kind: "heading", label: t("menu.ctl.driving") },
+      choiceRow(
+        t("menu.ctl.ground"),
+        [{ value: "camera", label: t("menu.ctl.groundCamera") }, { value: "tank", label: t("menu.touch.groundTank") }],
+        s.drive,
+        set("drive"),
+        t(s.drive === "camera" ? "menu.touch.groundCameraDetail" : "menu.touch.groundTankDetail"),
+      ),
+    );
+    return rows;
   }
 
   /** Réglages de la manette : son état, le regard au stick droit, la zone morte. */
@@ -1443,7 +1625,7 @@ export class App {
   private musicChanged(now: MusicNow, change: MusicChange, manual: boolean, track: Track | null): void {
     const toast = manual || (change === "start" && now.theme !== null);
     this.nowPlaying.update(now, change, toast, track);
-    if (this.settingsTab === 2) this.redrawSettings?.();
+    if (this.settingsTab === "sound" && this.menu.screen === "settings") this.redrawSettings?.();
   }
 
   /** Les boutons du lecteur : morceau suivant (1) ou précédent (-1). */
@@ -1476,7 +1658,7 @@ export class App {
   }
 
   /** Curseur : le réglage s'applique pendant le glissement ; au lâcher, il est enregistré. */
-  private slide(key: "fov" | "sensitivity" | "volume" | "music" | "padSensitivity" | "padDeadzone", value: number, done: boolean, redraw?: () => void): void {
+  private slide(key: NumberSetting, value: number, done: boolean, redraw?: () => void): void {
     this.settings[key] = value;
     this.applySettings();
     if (!done) return;
@@ -1511,6 +1693,10 @@ export class App {
     this.garage.refreshKeys();
     game.controls.padLook = { sensitivity: s.padSensitivity, invertX: s.padInvertX, invertY: s.padInvertY };
     game.controls.pad.deadzone = s.padDeadzone;
+    game.controls.setTouch({
+      sensitivity: s.touchSensitivity, stickSensitivity: s.touchStickSensitivity, invertY: s.touchInvertY,
+      aim: s.touchAim, scopeToggle: s.touchScopeToggle, leftHanded: s.touchLeftHanded, size: s.touchSize, opacity: s.touchOpacity,
+    });
     game.refreshKeyHelp();
     game.relativeDrive = s.drive === "camera";
     game.manualFlight = s.flight === "manual";

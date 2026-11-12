@@ -1,0 +1,42 @@
+{
+  "$schema": "../schemas/weapons.schema.json",
+  "$comment": "Missile anti-aérien : il chasse seul un robot en vol (tête chercheuse) et éclate à 2,5 m de lui (fusée de proximité).",
+  "cooldown": 2.5,
+  "automatic": false,
+  "spread": 0,
+  "recoil": 10,
+  "range": 70,
+  "engage": 35,
+  "handling": { "hip": 1, "move": 0, "turn": 0 },
+  "ammo": { "capacity": 4, "reload": 5 },
+  "projectile": {
+    "look": "missile",
+    "speed": 45,
+    "gravity": 0.2,
+    "life": 5,
+    "damage": 60,
+    "damageType": "explosive",
+    "penetrating": false,
+    "impulse": 15,
+    "hull": { "radius": 0.4, "hp": 30 },
+    "explosion": {
+      "look": "flak",
+      "radius": 2.2,
+      "damage": 90,
+      "blastRadius": 4,
+      "power": 4,
+      "lift": 0.2,
+      "ignite": 0.1
+    },
+    "guidance": {
+      "mode": "homing",
+      "turnRate": 4.5,
+      "airOnly": true,
+      "launch": 0.2,
+      "maxAccel": 110,
+      "bleed": 0.2,
+      "recover": 2
+    },
+    "proximity": 2.5
+  }
+}

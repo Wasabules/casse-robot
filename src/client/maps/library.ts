@@ -1,21 +1,27 @@
 import { arenaById, unregisterArena, type ArenaLayout, type MapKey } from "../../shared/arena/layout";
-import type { MapFile, MapIssue } from "../../shared/map/format";
+import { MAP_LIMITS, PACKAGE_LIMITS, type MapFile, type MapIssue } from "../../shared/map/format";
 import { mapKey } from "../../shared/map/key";
 import { registerMap } from "../../shared/map/load";
+import { isArchive, readMapArchive } from "../../shared/map/pack";
 import { checkMap, checkMapText } from "../../shared/map/validate";
 import { compareText } from "../i18n/format";
 import { authored } from "../i18n/names";
-import { deleteMap, mapDb, readMaps, writeMap, type MapStore } from "./db";
+import { mapAssets, type MapAssetStore } from "./assets";
+import { deleteMap, mapDb, readDraftMaps, readMaps, writeMap, type MapStore } from "./db";
+import { inflate, inflateRaw } from "./files";
 
 /*
  * Les cartes communautaires que connaît ce navigateur : celles livrées avec le jeu (le dossier
  * `maps/` du dépôt, compilé avec la page), celles qu'on a importées ou faites (IndexedDB), et celles
  * que des serveurs ont envoyées (IndexedDB aussi, d'après leur identifiant). Chacune est revérifiée
  * en la chargeant (`checkMap` : le jeu a pu changer depuis). Une carte devient une arène jouable à
- * la demande (`arena`), et `Simulation.loadArena` la trouve ensuite par son identifiant.
+ * la demande (`arena`), et `Simulation.loadArena` la trouve ensuite par son identifiant. Une carte
+ * venue d'un paquet (`importPackage`) a ses ressources à part (modèles, ambiance : `assets`,
+ * client/maps/assets.ts), d'après leur empreinte ; supprimer la carte oublie celles que plus rien
+ * n'utilise.
  *
  * C'est aussi ce dont l'éditeur de cartes se sert pour enregistrer (`save`), supprimer (`remove`),
- * importer (`importText`) et lister (`list`) les cartes.
+ * importer (`importText`, `importFile`) et lister (`list`) les cartes.
  */
 
 /** D'où vient une carte : livrée avec le jeu, importée ou faite ici, reçue d'un serveur. */
@@ -43,6 +49,8 @@ export class MapLibrary {
   private loading: Promise<void> | null = null;
   /** Le navigateur garde-t-il les cartes (IndexedDB) ? Faux en navigation privée, par exemple. */
   persistent = true;
+  /** Les ressources des cartes venues d'un paquet (client/maps/assets.ts). */
+  readonly assets: MapAssetStore = mapAssets;
 
   /** Charge les cartes (une fois ; on peut l'attendre plusieurs fois). */
   load(): Promise<void> {
@@ -124,7 +132,7 @@ export class MapLibrary {
     return entry;
   }
 
-  /** Retire une carte de ce navigateur (pas une carte livrée avec le jeu). */
+  /** Retire une carte de ce navigateur (pas une carte livrée avec le jeu), et les ressources que plus rien n'utilise. */
   async remove(key: MapKey): Promise<void> {
     const entry = this.entries.get(key);
     if (!entry || entry.origin === "bundled") return;
@@ -132,6 +140,8 @@ export class MapLibrary {
     await deleteMap(entry.origin === "library" ? "library" : "cache", key);
     // Une arène qu'on ne joue pas en ce moment peut être oubliée
     if (arenaById(key)) unregisterArena(key);
+    // (les brouillons de l'éditeur gardent les leurs)
+    if (entry.map.assets) await this.assets.prune([...[...this.entries.values()].map((e) => e.map), ...(await readDraftMaps())]);
   }
 
   /** Importe une carte d'après le texte de son fichier : vérifiée, puis gardée. */
@@ -141,5 +151,30 @@ export class MapLibrary {
     const fresh = !this.entries.has(check.key) || this.entries.get(check.key)?.origin === "server";
     const entry = await this.save(check.map, "library", file);
     return { ok: true, entry, fresh };
+  }
+
+  /**
+   * Importe un paquet (`.casse-map.zip`, map/pack.ts) : l'archive, ses ressources et sa carte vérifiées,
+   * puis la carte gardée avec ses ressources.
+   */
+  async importPackage(bytes: Uint8Array, file?: string): Promise<ImportResult> {
+    const read = await readMapArchive(bytes, inflate, inflateRaw);
+    if (!read.ok) return read;
+    const check = checkMap(read.map);
+    if (!check.map || !check.key || check.issues.length) return { ok: false, issues: check.issues.length ? check.issues : [{ code: "json" }] };
+    await this.assets.keep(read.assets);
+    const fresh = !this.entries.has(check.key) || this.entries.get(check.key)?.origin === "server";
+    const entry = await this.save(check.map, "library", file);
+    return { ok: true, entry, fresh };
+  }
+
+  /** Importe un fichier choisi par le joueur : un paquet (une archive zip, d'après ses premiers octets) ou un fichier de carte. */
+  async importFile(file: File): Promise<ImportResult> {
+    const limit = Math.max(MAP_LIMITS.bytes, PACKAGE_LIMITS.archive);
+    if (file.size > limit) return { ok: false, issues: [{ code: "tooLarge", size: Math.ceil(file.size / 1024), max: limit / 1024 }] };
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (isArchive(bytes)) return this.importPackage(bytes, file.name);
+    if (bytes.length > MAP_LIMITS.bytes) return { ok: false, issues: [{ code: "tooLarge", size: Math.ceil(bytes.length / 1024), max: MAP_LIMITS.bytes / 1024 }] };
+    return this.importText(new TextDecoder().decode(bytes), file.name);
   }
 }

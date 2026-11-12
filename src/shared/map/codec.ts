@@ -101,6 +101,8 @@ export function terrainCodes(t: MapTerrain): Uint16Array | null {
  * jamais une fois décodé : tous ceux qui le lisent peuvent le partager.
  */
 const DECODED = new WeakMap<MapTerrain, Terrain | null>();
+/** Et dans l'autre sens : le relief de carte d'où vient chaque relief décodé (l'export le réécrit tel quel). */
+const SOURCES = new WeakMap<Terrain, MapTerrain>();
 
 /** Relief d'une carte → relief du jeu (arena/terrain.ts) ; null si ses données sont illisibles. */
 export function decodeTerrain(t: MapTerrain): Terrain | null {
@@ -113,7 +115,27 @@ export function decodeTerrain(t: MapTerrain): Terrain | null {
     const scale = (t.max - t.min) / 65535;
     for (let i = 0; i < codes.length; i++) heights[i] = t.min + codes[i] * scale;
     terrain = { size: t.cells * t.step, cells: t.cells, heights };
+    SOURCES.set(terrain, t);
   }
   DECODED.set(t, terrain);
   return terrain;
+}
+
+/**
+ * Le relief de carte d'où vient ce relief, s'il a été décodé (`decodeTerrain`, `quantizeTerrain`) :
+ * le réencoder ne redonnerait pas toujours les mêmes codes (`min` et `max` s'arrondissent au cm d'après
+ * des hauteurs en Float32), lui les redonne au bit près.
+ */
+export function terrainSource(t: Terrain): MapTerrain | undefined {
+  return SOURCES.get(t);
+}
+
+/**
+ * Un relief ramené à la précision du format, 16 bits entre sa hauteur la plus basse et la plus haute
+ * (la même quantification que l'encodage : `encodeTerrain`, puis `decodeTerrain`). Les arènes du jeu
+ * arrondissent ainsi le relief que leur code calcule (arena/valley.ts…) : l'arène du code et celle de
+ * son fichier (content/arenas/, `npm run map:export`) sont les mêmes, au bit près, relief compris.
+ */
+export function quantizeTerrain(t: Terrain): Terrain {
+  return decodeTerrain(encodeTerrain(t.heights, t.cells, t.size / t.cells))!;
 }

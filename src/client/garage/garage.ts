@@ -210,6 +210,8 @@ export class Garage {
   private readonly arrowMat: B.StandardMaterial;
   private ghostParts: B.Mesh[] = [];
   private ghostType: BlockType | null = null;
+  /** Le nombre de sources qui avaient pris leur modèle glTF quand l'aperçu a été fait (voir `buildGhost`). */
+  private ghostModels = 0;
   /** Dernière position du pointeur sur le canvas (pour remettre l'aperçu à jour après une rotation au clavier). */
   private pointer: { x: number; y: number } | null = null;
   private readonly panel = byId("garage");
@@ -1014,12 +1016,16 @@ export class Garage {
     for (const m of this.ghostParts) m.isVisible = on;
   }
 
-  /** Construit l'aperçu d'un type de bloc (une fois par type choisi). */
+  /**
+   * Construit l'aperçu d'un type de bloc (une fois par type choisi ; de nouveau quand un modèle glTF
+   * est arrivé entre-temps : l'aperçu copie la géométrie de ses sources).
+   */
   private buildGhost(type: BlockType): void {
-    if (this.ghostType === type) return;
+    if (this.ghostType === type && this.ghostModels === this.assets.modelGeneration) return;
     for (const m of this.ghostParts) m.dispose();
     this.ghostParts = [];
     this.ghostType = type;
+    this.ghostModels = this.assets.modelGeneration;
     const part = (source: B.Mesh, name: string, material: B.Material = this.ghostMat): B.Mesh => {
       const m = new B.Mesh(name, this.scene);
       source.geometry?.copy(`${name}-geo`).applyToMesh(m);

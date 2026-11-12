@@ -1,0 +1,12 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Rotor d'hélicoptère orientable (`gimbal`) : un seul suffit à voler, avec un réacteur de côté en rotor de queue.",
+  "cost": 30,
+  "mass": 4,
+  "hp": 90,
+  "tinted": false,
+  "bond": 100,
+  "resist": { "fire": 1.2 },
+  "thruster": { "maxThrust": 540, "spoolTime": 0.25, "torqueRatio": 0.06, "power": 4, "gimbal": 0.3, "look": "rotor" },
+  "price": 250
+}

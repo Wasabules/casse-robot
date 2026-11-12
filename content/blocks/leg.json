@@ -1,0 +1,20 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Jambe : elle agrippe le sol et enjambe les obstacles ; le rendu l'anime (cinématique inverse, pas alternés).",
+  "cost": 12,
+  "mass": 3,
+  "hp": 120,
+  "tinted": false,
+  "bond": 150,
+  "support": {
+    "kind": "leg",
+    "height": 1.3,
+    "reach": 1.9,
+    "ratedLoad": 15,
+    "frequency": 2.4,
+    "dampingRatio": 0.8,
+    "traction": 1,
+    "power": 0
+  },
+  "price": 250
+}

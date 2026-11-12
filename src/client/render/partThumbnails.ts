@@ -13,6 +13,8 @@ const SIZE = 112;
 const PER_FRAME = 4;
 /** Au-delà de ce nombre d'images à attendre ses matériaux, on prend la vignette telle quelle. */
 const MAX_WAIT = 40;
+/** Et à attendre un modèle glTF en cours de lecture (le premier fait aussi charger le lecteur) : la vignette le montre. */
+const MAX_MODEL_WAIT = 300;
 
 /** Vignettes déjà faites, gardées d'une ouverture du garage à l'autre (clé : pièce et couleur). */
 const CACHE = new Map<string, string>();
@@ -37,7 +39,7 @@ export class PartThumbnails {
   private camera: B.ArcRotateCamera | null = null;
   private assets: Assets | null = null;
   private readonly queue: Job[] = [];
-  private current: { job: Job; meshes: B.AbstractMesh[]; waited: number } | null = null;
+  private current: { job: Job; meshes: B.AbstractMesh[]; waited: number; reading: number } | null = null;
   private frame = 0;
 
   /** Vignette de la pièce : tout de suite si elle est faite, sinon `done` la recevra (et null est rendu). */
@@ -82,10 +84,11 @@ export class PartThumbnails {
           job.done(known);
           continue;
         }
-        this.current = { job, meshes: this.build(job), waited: 0 };
+        this.current = { job, meshes: this.build(job), waited: 0, reading: 0 };
       }
       const cur = this.current;
-      // Les matériaux se compilent en arrière-plan : on attend qu'ils soient prêts
+      // Les matériaux se compilent en arrière-plan, un modèle glTF se lit : on attend qu'ils soient prêts
+      if (this.assets!.modelsPending && cur.reading++ < MAX_MODEL_WAIT) break;
       if (!this.scene!.isReady() && cur.waited++ < MAX_WAIT) break;
       this.scene!.render();
       const url = this.engine!.getRenderingCanvas()!.toDataURL("image/png");

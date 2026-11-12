@@ -1,0 +1,17 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Moteur de propulsion (turbine) : plus lourd et plus lent à réagir, sans couple de réaction.",
+  "cost": 10,
+  "mass": 2,
+  "hp": 80,
+  "tinted": false,
+  "bond": 100,
+  "thruster": {
+    "maxThrust": 140,
+    "spoolTime": 0.5,
+    "torqueRatio": 0,
+    "power": 1.5,
+    "exhaust": { "nozzle": 0.25, "reach": 1.1, "dps": 18, "radius": 0.13, "flare": 0.12 }
+  },
+  "price": 150
+}

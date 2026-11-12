@@ -1,0 +1,12 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Flipper (arme de contact) : le vérin et l'articulation d'un plateau en coin, devant le bloc, qui soulève ce qui est dessus. Bloc lourd et solide, comme les autres armes de contact mécaniques.",
+  "cost": 40,
+  "mass": 16,
+  "hp": 240,
+  "tinted": false,
+  "bond": 250,
+  "resist": { "cut": 0.7, "kinetic": 0.85, "impact": 0.8 },
+  "melee": "flipper",
+  "price": 400
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "../schemas/wheels.schema.json",
+  "$comment": "Roulette : une petite roue folle, sans moteur, qui pivote librement et suit le mouvement. Elle porte (roue de queue d'un avion, appui d'un robot à deux roues motrices) sans gêner les virages ; seule, elle ne fait pas avancer. Long débattement vers le bas : elle garde le contact même sous un robot que ses roues motrices (réglées pour une charge plus lourde) tiennent plus haut que prévu.",
+  "cost": 2,
+  "radius": 0.22,
+  "width": 0.14,
+  "mass": 0.8,
+  "hp": 30,
+  "grip": 0.9,
+  "stallTorque": 0,
+  "freeSpeed": 30,
+  "ratedLoad": 15,
+  "suspension": { "travelUp": 0.1, "travelDown": 0.22, "frequency": 2.2, "dampingRatio": 0.6 },
+  "caster": { "trail": 0.08 },
+  "price": 0
+}

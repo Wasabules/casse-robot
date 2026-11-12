@@ -1,0 +1,20 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Aile mobile : aileron, profondeur ou direction selon sa place sur l'avion (voir robot/aero.ts). Fine et légère, elle craint le feu, les explosions et les lames. Profil d'aile : une plaque d'une case (0,25 m²). 29° au plus (`maxDeflection`) : à 20°, les ailerons d'un avion ne le faisaient rouler qu'à 17°/s.",
+  "cost": 3,
+  "mass": 0.4,
+  "hp": 30,
+  "tinted": false,
+  "bond": 30,
+  "resist": { "fire": 1.5, "explosive": 1.2, "energy": 1.2, "cut": 1.5 },
+  "shape": "plate",
+  "aero": {
+    "area": 0.25,
+    "liftSlope": 4,
+    "stallAngle": 0.26,
+    "dragMin": 0.02,
+    "inducedDrag": 0.08,
+    "maxDeflection": 0.5
+  },
+  "price": 0
+}

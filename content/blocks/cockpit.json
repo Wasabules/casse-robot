@@ -1,0 +1,10 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Le poste de pilotage : détruit, le robot est hors de combat (800 points : c'est la règle de structure qui sort un robot en ruine du combat, voir combat/damage.ts).",
+  "cost": 0,
+  "mass": 1,
+  "hp": 800,
+  "tinted": false,
+  "bond": 200,
+  "price": 0
+}

@@ -72,7 +72,12 @@ async function check(name, open, ready, { settle = 2, minColors = MIN_COLORS, af
     if (ready) await page.waitFor(ready, 120_000, `${name} : prêt`);
     const before = await page.evaluate(FRAME);
     await sleep(settle * 1000);
-    const frames = (await page.evaluate(FRAME)) - before;
+    let frames = (await page.evaluate(FRAME)) - before;
+    // (une machine lente, l'intégration continue sans carte graphique : au moins deux images, en attendant encore un peu)
+    for (let waited = 0; drawn && frames < 2 && waited < 30_000; waited += 1000) {
+      await sleep(1000);
+      frames = (await page.evaluate(FRAME)) - before;
+    }
     // (un écran figé exprès, le périphérique perdu : ni images ni pixels à relever)
     const pixels = drawn ? pixelStats(await page.canvasImage()) : null;
     await page.screenshot(join(SHOTS, `${String(step).padStart(2, "0")}-${name}.png`));
@@ -110,6 +115,15 @@ try {
     await check("accueil", null, null, { settle: 3 });
     await check("bataille-jour", `window.__casse.screens.benchmark("depot")`, MATCH_STARTED, { settle: 3 });
     await check("bataille-nuit", `window.__casse.screens.benchmark("cityNight")`, `window.__casse.game.world.arena.id === "cityNight" && (${MATCH_STARTED})`, { settle: 3 });
+    // Le choix de l'arène : le fichier de chaque grande arène se télécharge (un morceau à part), sans erreur ni
+    // requête en échec, et le plan de l'arène sélectionnée se dessine. Le canvas n'est pas jugé : sans carte
+    // graphique, pendant que les plans se calculent, la démonstration derrière n'a guère d'images
+    await check(
+      "choix-arène",
+      `(window.__casse.screens.title(), window.__casse.screens.arenas("battle"), 1)`,
+      `window.__casse.arenas.ready().length === 10 && !!document.querySelector(".ap-view.ready")`,
+      { settle: 1, pixels: false },
+    );
     // La carte graphique réinitialisée (pilote qui plante, téléphone qui reprend la mémoire) : le jeu doit
     // repartir. En WebGL, le contexte perdu puis rendu : tout revient de soi-même. En WebGPU, le
     // périphérique détruit : le bandeau propose aussitôt de recharger la page, et le jeu rechargé repart

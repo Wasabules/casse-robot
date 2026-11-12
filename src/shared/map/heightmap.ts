@@ -27,8 +27,12 @@ export interface HeightImage {
   readonly bits: number;
 }
 
-/** Décompression zlib (le format des données d'un PNG). */
-export type Inflate = (data: Uint8Array) => Uint8Array | Promise<Uint8Array>;
+/**
+ * Décompression zlib (le format des données d'un PNG). `max` : la taille au plus qu'on attend (celle
+ * de l'image) ; une décompression qui la respecte s'arrête au-delà (une image hostile ne remplit pas
+ * la mémoire), en levant ou en rendant plus que `max` octets (refusés ensuite).
+ */
+export type Inflate = (data: Uint8Array, max?: number) => Uint8Array | Promise<Uint8Array>;
 
 /** Pourquoi une image ne fait pas un relief : le client le dit dans la langue du joueur (`heightmap.<code>`). */
 export type HeightmapErrorCode = "notPng" | "unsupported" | "tooLarge" | "corrupt" | "rawSize";
@@ -88,15 +92,15 @@ export async function decodePng(bytes: Uint8Array, inflate: Inflate): Promise<He
     packed.set(c, o);
     o += c.length;
   }
-  let raw: Uint8Array;
-  try {
-    raw = await inflate(packed);
-  } catch {
-    throw failure("corrupt", new Error("Données PNG illisibles"));
-  }
   const channels = CHANNELS[color];
   const bpp = Math.max(1, (channels * depth) / 8);
   const stride = (width * channels * depth) / 8;
+  let raw: Uint8Array;
+  try {
+    raw = await inflate(packed, height * (stride + 1));
+  } catch {
+    throw failure("corrupt", new Error("Données PNG illisibles"));
+  }
   if (raw.length < height * (stride + 1)) throw failure("corrupt", new Error("Données PNG trop courtes"));
   // Défiltrage, ligne par ligne (filtres Aucun, Sub, Up, Average, Paeth)
   const pixels = new Uint8Array(height * stride);

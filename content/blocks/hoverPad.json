@@ -1,0 +1,20 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Patin anti-gravité : il plane au-dessus du sol (ou de l'eau profonde), glisse et puise dans les batteries.",
+  "cost": 12,
+  "mass": 1.5,
+  "hp": 70,
+  "tinted": false,
+  "bond": 60,
+  "support": {
+    "kind": "hover",
+    "height": 1.1,
+    "reach": 2.4,
+    "ratedLoad": 20,
+    "frequency": 1.6,
+    "dampingRatio": 0.6,
+    "traction": 0.35,
+    "power": 0.6
+  },
+  "price": 200
+}

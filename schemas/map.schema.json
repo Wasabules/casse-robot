@@ -203,6 +203,85 @@
         "blue",
         "red"
       ]
+    },
+    "assets": {
+      "description": "The resources of a map package (models/props/<prop type>.glb, sounds/ambience.ogg): the SHA-256 and size of each file, which the map's identifier covers. The files travel beside the map (the package, the browser's library, the server that sent it). Reading a package writes this field from its files (in a package's map.json, it's ignored); a map without resources doesn't have it.",
+      "type": "object",
+      "properties": {
+        "models": {
+          "description": "glTF binary models that replace, on this map only, the game's model of an existing prop type (at most 16777216 bytes in all).",
+          "type": "object",
+          "maxProperties": 21,
+          "propertyNames": {
+            "type": "string",
+            "enum": [
+              "crate",
+              "barrel",
+              "gas",
+              "brick",
+              "concrete",
+              "plank",
+              "sheet",
+              "roof",
+              "pine",
+              "oak",
+              "palm",
+              "kapok",
+              "cactus",
+              "watertank",
+              "tank",
+              "facade",
+              "tenement",
+              "car",
+              "wreck",
+              "lamppost",
+              "floodlight"
+            ]
+          },
+          "additionalProperties": {
+            "description": "A model (models/props/<prop type>.glb).",
+            "type": "object",
+            "properties": {
+              "sha256": {
+                "description": "The SHA-256 of the file, 64 lowercase hexadecimal digits.",
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "bytes": {
+                "description": "Its size (bytes).",
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4194304
+              }
+            },
+            "required": [
+              "sha256",
+              "bytes"
+            ]
+          }
+        },
+        "ambience": {
+          "description": "The ambient sound (sounds/ambience.ogg): an Ogg Opus loop, mono or stereo, 2 to 60 s; it replaces `ambience`.",
+          "type": "object",
+          "properties": {
+            "sha256": {
+              "description": "The SHA-256 of the file, 64 lowercase hexadecimal digits.",
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "bytes": {
+              "description": "Its size (bytes).",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2097152
+            }
+          },
+          "required": [
+            "sha256",
+            "bytes"
+          ]
+        }
+      }
     }
   },
   "required": [

@@ -61,8 +61,9 @@ describe("la Cité de nuit", () => {
     const night = ARENAS.cityNight;
     expect(night.sky?.night).toBe(true);
     expect(day.sky?.night).toBeFalsy();
-    expect(night.boxes).toBe(day.boxes);
-    expect(night.zones).toBe(day.zones);
+    // (lues chacune de son fichier : les mêmes, pas le même objet)
+    expect(night.boxes).toEqual(day.boxes);
+    expect(night.zones).toEqual(day.zones);
     expect(night.bounds).toEqual(day.bounds);
     // Les accessoires de la Cité aux mêmes rangs (les appuis des toits renvoient à leurs rangs), puis les lampes
     expect(night.props.slice(0, day.props.length)).toEqual(day.props);

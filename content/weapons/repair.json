@@ -1,0 +1,23 @@
+{
+  "$schema": "../schemas/weapons.schema.json",
+  "$comment": "Rayon réparateur : un faisceau continu qui remet en état les blocs d'un allié autour du point touché ; sur un ennemi, il draine sa vie (`drain`, dont la part `steal` répare le tireur). Il chauffe et puise dans les batteries ; environ 5 s de réparation continue.",
+  "cooldown": 0.1,
+  "automatic": true,
+  "spread": 0.002,
+  "recoil": 0,
+  "range": 24,
+  "power": 0.12,
+  "handling": { "hip": 1.5, "move": 0.002, "turn": 0.006 },
+  "heat": { "perShot": 0.025, "cooling": 0.2 },
+  "projectile": {
+    "look": "repair",
+    "speed": 400,
+    "gravity": 0,
+    "life": 0.1,
+    "damage": 0,
+    "damageType": "energy",
+    "penetrating": false,
+    "impulse": 0,
+    "repair": { "amount": 7, "radius": 1.2, "drain": 6, "steal": 0.8 }
+  }
+}

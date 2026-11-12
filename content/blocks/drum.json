@@ -1,0 +1,12 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Tambour : le moteur d'un cylindre à dents, large et bas, tenu devant le bloc par deux bras. Bloc lourd et solide, comme les autres armes de contact mécaniques.",
+  "cost": 42,
+  "mass": 14,
+  "hp": 260,
+  "tinted": false,
+  "bond": 250,
+  "resist": { "cut": 0.6, "kinetic": 0.8, "impact": 0.75 },
+  "melee": "drum",
+  "price": 400
+}

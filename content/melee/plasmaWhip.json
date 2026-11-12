@@ -1,0 +1,34 @@
+{
+  "$schema": "../schemas/melee.schema.json",
+  "$comment": "Fouet plasma : un filament qui claque à plat devant le robot, de sa droite à sa gauche (à la gâchette) ; il brûle ce qu'il touche (dégâts de feu) et l'allume : le pendant au contact du lance-flammes. Pas de masse au bout : il ne pousse ni ne recule. Il s'éteint dans l'eau.",
+  "look": "whip",
+  "motion": "swing",
+  "axis": "up",
+  "hub": [0, 0.34, 0.1],
+  "quench": true,
+  "swing": {
+    "reach": 2.1,
+    "radius": 0.22,
+    "rest": 1.45,
+    "end": -1.45,
+    "strike": 0.2,
+    "recover": 0.55,
+    "energy": 1200,
+    "cost": 1.6
+  },
+  "hit": {
+    "damageType": "fire",
+    "damage": 150,
+    "bite": 1,
+    "fling": 0,
+    "push": { "tangent": 1, "radial": 0.2, "axial": 0, "lift": 0.2 },
+    "recoil": 0,
+    "spread": 0.35,
+    "wheels": 1,
+    "wear": 1,
+    "gap": 0,
+    "minSpeed": 0,
+    "ignite": 0.6
+  },
+  "engage": 2.2
+}

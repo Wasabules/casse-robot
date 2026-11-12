@@ -1,0 +1,24 @@
+{
+  "$schema": "../schemas/weapons.schema.json",
+  "$comment": "Laser : un rayon continu, parfaitement précis, qui chauffe vite et puise un peu dans les batteries (`power`, kJ par tir). Ses dégâts (`energy`) passent le blindage lourd comme un autre : c'est l'arme contre les robots cuirassés. Environ 3 s de tir continu.",
+  "cooldown": 0.1,
+  "automatic": true,
+  "spread": 0.001,
+  "recoil": 0.4,
+  "range": 60,
+  "engage": 30,
+  "power": 0.15,
+  "handling": { "hip": 2, "move": 0.0015, "turn": 0.006 },
+  "heat": { "perShot": 0.05, "cooling": 0.3 },
+  "projectile": {
+    "look": "beam",
+    "speed": 500,
+    "gravity": 0,
+    "life": 0.14,
+    "damage": 16,
+    "damageType": "energy",
+    "penetrating": false,
+    "impulse": 0.4,
+    "ignite": 0.01
+  }
+}

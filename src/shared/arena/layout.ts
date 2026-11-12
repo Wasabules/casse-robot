@@ -1,24 +1,17 @@
 import type { PropType } from "../catalog/props";
-import { axisAngle, NO_ROTATION, vec3, type Quat, type Vec3 } from "../math/vec";
-import { barrier, box, enclosure, incline, pillar, ramp, spots, zone } from "./builders";
-import { CANYON } from "./canyon";
-import { CITY, CITY_NIGHT } from "./city";
+import { NO_ROTATION, vec3, type Quat, type Vec3 } from "../math/vec";
 import type { GroundStyle, LavaShape, NavGridSpec, Vent, Waterfall } from "./features";
-import { ISLAND } from "./island";
-import { PORT } from "./port";
 import { terrainHeight, type Terrain } from "./terrain";
-import { VALLEY } from "./valley";
 import { dcos, dsin } from "../math/det";
 
 /*
  * Arènes, en données pures : la physique (arena.ts) et le rendu (client/render/arenaView.ts) les
- * lisent toutes les deux. Les petites arènes ont la même enceinte ; elles diffèrent par leur décor,
- * leurs accessoires et leurs zones à capturer. La Vallée (valley.ts) est une grande carte, avec
- * du relief, des bâtiments et des arbres ; le Canyon (canyon.ts) aussi, coupé par ses falaises ;
- * l'Île volcanique (island.ts), sa lave et sa mer ; la Cité (city.ts), une ville en ruines, avec ses
- * rues, ses immeubles, une voie rapide surélevée et une gare en tranchée ; le Port (port.ts), ses
- * quais au bord de la mer, son cargo et ses portiques. Les lignes de départ des
- * équipes (sim/wave.ts, au nord et au sud) restent dégagées.
+ * lisent toutes les deux. Les arènes du jeu sont faites par leur code (arena/sources.ts : les petites
+ * arènes, qui ont la même enceinte et diffèrent par leur décor, leurs accessoires et leurs zones ; la
+ * Vallée, valley.ts, le Canyon, l'Île volcanique, la Cité, le Port), écrites en fichiers de carte
+ * (content/arenas/, `npm run map:export`), et jouées d'après ces fichiers : ce module en garde les
+ * identifiants (`ARENA_IDS`) et les arènes construites (`ARENAS`, `arenaById`), comme les cartes
+ * communautaires connues. Les lignes de départ des équipes (sim/wave.ts, au nord et au sud) restent dégagées.
  */
 
 /** Dimensions d'une arène (m). */
@@ -98,9 +91,6 @@ export function spawnLocal(bounds: ArenaBounds, team: SpawnTeam, x: number, z: n
   return { along: dx * c - dz * s, across: dx * s + dz * c };
 }
 
-/** Les petites arènes : murs d'enceinte à ±36 m, lignes de départ à une soixantaine de mètres l'une de l'autre. */
-const SMALL: ArenaBounds = { half: 36, roam: 29, spawnLine: 29, spawnSpread: 24, circuit: 35 };
-
 /** Demi-côté du sol plat, sous le relief (m). */
 export const GROUND_HALF = 220;
 
@@ -176,7 +166,14 @@ export interface CaptureZone {
   radius: number;
 }
 
-export type ArenaId = "depot" | "fort" | "trenches" | "yard" | "valley" | "canyon" | "island" | "city" | "cityNight" | "port";
+/**
+ * Les arènes du jeu, dans l'ordre des menus et de la rotation du serveur. Chacune est faite par son
+ * code (arena/sources.ts), exportée en fichier de carte (`npm run map:export` :
+ * content/arenas/<id>.casse-map.json), et c'est ce fichier que le jeu, le serveur et les essais lisent
+ * (map/gameArenas.ts).
+ */
+export const ARENA_IDS = ["depot", "fort", "trenches", "yard", "valley", "canyon", "island", "city", "cityNight", "port"] as const;
+export type ArenaId = (typeof ARENA_IDS)[number];
 
 /**
  * Identifiant d'une carte communautaire (shared/map/) : « map- » suivi du hachage de son contenu
@@ -204,6 +201,24 @@ export interface CommunityMeta {
   readonly descriptions?: Readonly<Record<string, string>>;
   /** Licence de la carte (un identifiant SPDX de préférence : « CC-BY-4.0 », « CC0-1.0 »). */
   readonly license: string;
+}
+
+/** Une ressource d'un paquet de carte : l'empreinte SHA-256 de son fichier (64 chiffres hexadécimaux), et sa taille (octets). */
+export interface MapAsset {
+  readonly sha256: string;
+  readonly bytes: number;
+}
+
+/**
+ * Les ressources d'une carte communautaire venue d'un paquet (map/pack.ts) : ce qui ne change rien à
+ * la simulation, seulement à ce qu'on voit et entend. Le client va chercher chaque fichier d'après son
+ * empreinte (dans la bibliothèque du navigateur, ou chez le serveur qui l'a envoyée : client/maps/assets.ts).
+ */
+export interface MapAssets {
+  /** Des modèles glTF (.glb) qui remplacent, sur cette carte seulement, ceux du jeu (par type d'accessoire existant). */
+  readonly models?: { readonly [T in PropType]?: MapAsset };
+  /** L'ambiance sonore : un Ogg Opus en boucle, à la place de celle d'une arène du jeu (`ambience`). */
+  readonly ambience?: MapAsset;
 }
 
 /**
@@ -267,6 +282,8 @@ export interface ArenaLayout {
   readonly community?: CommunityMeta;
   /** L'ambiance sonore : celle de cette arène du jeu (sans elle, celle de l'arène elle-même). */
   readonly ambience?: ArenaId;
+  /** Les ressources d'une carte venue d'un paquet : ses modèles d'accessoires et son ambiance (le client seul s'en sert). */
+  readonly assets?: MapAssets;
   readonly bounds: ArenaBounds;
   readonly boxes: readonly StaticBox[];
   readonly props: readonly PropSpot[];
@@ -375,129 +392,52 @@ export function flightLevel(arena: ArenaLayout, pos: Vec3, target: Vec3, alt: nu
   return Math.max(groundLevel(arena, pos.x, pos.z), groundLevel(arena, pos.x + dx * k, pos.z + dz * k)) + alt;
 }
 
-/**
- * Dépôt : quatre piliers, deux rampes ; des caisses en piles, des barils explosifs près des piliers
- * et des rampes (pour des réactions en chaîne), et des bouteilles de gaz vers le centre.
- */
-const DEPOT: ArenaLayout = {
-  id: "depot",
-  bounds: SMALL,
-  boxes: [
-    ...enclosure(SMALL.half),
-    ramp(vec3(0, 0.55, 20), vec3(3, 0.25, 4.5), axisAngle(vec3(1, 0, 0), -0.2)),
-    ramp(vec3(-22, 0.55, -8), vec3(4.5, 0.25, 3), axisAngle(vec3(0, 0, 1), 0.2)),
-    ...[[12, 12], [-12, 14], [14, -14], [-10, -18]].map(([x, z]) => pillar(x, z)),
-  ],
-  props: [
-    ...spots("crate", [
-      [-6, 0.5, 6], [-6, 0.5, 7.05], [-6, 1.5, 6.5],
-      [7, 0.5, -4], [8.05, 0.5, -4], [7.5, 1.5, -4],
-      [20, 0.5, 20], [21.05, 0.5, 20], [-20, 0.5, 22],
-    ]),
-    ...spots("barrel", [
-      [9.6, 0.5, 12], [10.4, 0.5, 13.2], [12, 0.5, 9.6], [-9.6, 0.5, 14], [13, 0.5, -11.8],
-      [-8, 0.5, -16], [-7.2, 0.5, -17], [1.5, 0.5, 9], [-14, 0.5, 1.5], [16, 0.5, 3],
-    ]),
-    ...spots("gas", [[4, 0.55, -6], [-5, 0.55, 4], [6, 0.55, 5], [-3, 0.55, -11]]),
-  ],
-  zones: [zone("A", -20, 0, 4, 5), zone("B", 0, 0, 0, 6), zone("C", 20, 0, -4, 5)],
-};
-
-/** Hauteur de la plateforme de la Forteresse (m). */
-const FORT_HEIGHT = 1.2;
-
-/**
- * Forteresse : une plateforme au centre, où l'on monte par quatre rampes ; des murets pour
- * s'abriter, dans le sens de la marche (nord-sud) pour ne pas barrer le chemin des zones, et des
- * piliers sur les flancs.
- */
-const FORT: ArenaLayout = {
-  id: "fort",
-  bounds: SMALL,
-  boxes: [
-    ...enclosure(SMALL.half),
-    box("platform", 0, FORT_HEIGHT / 2, 0, 5, FORT_HEIGHT / 2, 5),
-    incline(0, 8, "z", -1, 6, 6, FORT_HEIGHT),
-    incline(0, -8, "z", 1, 6, 6, FORT_HEIGHT),
-    incline(8, 0, "x", -1, 6, 6, FORT_HEIGHT),
-    incline(-8, 0, "x", 1, 6, 6, FORT_HEIGHT),
-    ...[[-13, 13], [13, 13], [-13, -13], [13, -13]].map(([x, z]) => barrier(x, z, "z", 5)),
-    ...[[-29, 7], [29, 7], [-29, -7], [29, -7], [-6, 20], [6, -20]].map(([x, z]) => pillar(x, z)),
-  ],
-  props: [
-    ...spots("crate", [[-11.9, 0.5, 12], [-11.9, 0.5, 13.05], [11.9, 0.5, -12], [11.9, 0.5, -13.05], [-4, 0.5, 20], [4, 0.5, -20]]),
-    ...spots("barrel", [
-      [-14.1, 0.5, 15], [14.1, 0.5, 15], [-14.1, 0.5, -15], [14.1, 0.5, -15],
-      [7, 0.5, 7], [-7, 0.5, -7], [7, 0.5, -7], [-7, 0.5, 7],
-    ]),
-    ...spots("gas", [[3, FORT_HEIGHT + 0.55, 3], [-3, FORT_HEIGHT + 0.55, -3]]),
-  ],
-  zones: [zone("A", -22, 0, 0, 5), zone("B", 0, FORT_HEIGHT, 0, 4), zone("C", 22, 0, 0, 5)],
-};
-
-/**
- * Tranchées : deux lignes de murets coupent l'arène en trois couloirs, avec des passages entre
- * eux ; de part et d'autre de la zone centrale, deux murets bas ; sur les flancs, des piliers.
- */
-const TRENCHES: ArenaLayout = {
-  id: "trenches",
-  bounds: SMALL,
-  boxes: [
-    ...enclosure(SMALL.half),
-    ...[-10, 10].flatMap((x) => [-14, 0, 14].map((z) => barrier(x, z, "z", 6))),
-    barrier(-6.5, 0, "z", 5, 1.2),
-    barrier(6.5, 0, "z", 5, 1.2),
-    ...[[-22, 12], [22, 12], [-22, -12], [22, -12]].map(([x, z]) => pillar(x, z)),
-  ],
-  props: [
-    ...spots("crate", [[-9, 0.5, 0], [9, 0.5, 0], [-9, 1.5, 0], [-24, 0.5, 18], [24, 0.5, -18]]),
-    ...spots("barrel", [
-      [-11.3, 0.5, -14], [11.3, 0.5, -14], [-11.3, 0.5, 14], [11.3, 0.5, 14],
-      [-20.4, 0.5, 12.6], [20.4, 0.5, -12.6], [-5.6, 0.5, 3.2], [5.6, 0.5, -3.2],
-    ]),
-    ...spots("gas", [[-4, 0.55, 14], [4, 0.55, -14]]),
-  ],
-  zones: [zone("A", -22, 0, 0, 5), zone("B", 0, 0, 0, 5), zone("C", 22, 0, 0, 5)],
-};
-
-/** Hauteur des terrasses du Chantier (m). */
-const YARD_HEIGHT = 1.5;
-
-/**
- * Chantier : deux terrasses sur les flancs, où l'on monte par trois rampes chacune (depuis le nord,
- * le sud et le centre) ; au centre, deux conteneurs couchés encadrent la zone B ; des piliers entre
- * les terrasses et les lignes de départ. On s'y bat en hauteur, ou à couvert.
- */
-const YARD: ArenaLayout = {
-  id: "yard",
-  bounds: SMALL,
-  boxes: [
-    ...enclosure(SMALL.half),
-    ...[-1, 1].flatMap((s) => [
-      box("platform", s * 24, YARD_HEIGHT / 2, 0, 6, YARD_HEIGHT / 2, 9),
-      incline(s * 24, 12, "z", -1, 6, 6, YARD_HEIGHT),
-      incline(s * 24, -12, "z", 1, 6, 6, YARD_HEIGHT),
-      incline(s * 15, 0, "x", s as 1 | -1, 6, 6, YARD_HEIGHT),
-    ]),
-    barrier(0, 7, "x", 7, 2.4),
-    barrier(0, -7, "x", 7, 2.4),
-    ...[[-10, 20], [10, 20], [-10, -20], [10, -20]].map(([x, z]) => pillar(x, z)),
-  ],
-  props: [
-    ...spots("crate", [[-16, 0.5, 13], [16, 0.5, -13], [-16, 0.5, -13], [16, 0.5, 13], [-24, YARD_HEIGHT + 0.5, 6], [24, YARD_HEIGHT + 0.5, -6]]),
-    ...spots("barrel", [[-4.5, 0.5, 8.2], [4.5, 0.5, -8.2], [-11.2, 0.5, 20], [11.2, 0.5, -20], [-26, YARD_HEIGHT + 0.5, -6], [26, YARD_HEIGHT + 0.5, 6]]),
-    ...spots("gas", [[5, 0.55, 8.4], [-5, 0.55, -8.4]]),
-  ],
-  zones: [zone("A", -24, YARD_HEIGHT, 0, 4), zone("B", 0, 0, 0, 5), zone("C", 24, YARD_HEIGHT, 0, 4)],
-};
-
-export const ARENAS: Readonly<Record<ArenaId, ArenaLayout>> = {
-  depot: DEPOT, fort: FORT, trenches: TRENCHES, yard: YARD, valley: VALLEY, canyon: CANYON, island: ISLAND, city: CITY, cityNight: CITY_NIGHT, port: PORT,
-};
-export const ARENA_IDS = Object.keys(ARENAS) as ArenaId[];
 export const DEFAULT_ARENA: ArenaId = "depot";
 
-export const isArenaId = (id: unknown): id is ArenaId => typeof id === "string" && Object.hasOwn(ARENAS, id);
+const GAME_IDS: ReadonlySet<string> = new Set(ARENA_IDS);
+export const isArenaId = (id: unknown): id is ArenaId => typeof id === "string" && GAME_IDS.has(id);
+
+/**
+ * Les arènes du jeu déjà construites, par identifiant : d'après leurs fichiers, que fournit qui fait
+ * tourner le code partagé (le client, le Worker de la partie solo, le serveur, les essais : voir
+ * map/gameArenas.ts). Une arène se construit à sa première demande, une fois : toutes les lectures
+ * partagent le même objet (la grille de passage de l'IA, calculée une fois par arène, lui est attachée).
+ */
+const GAME = new Map<ArenaId, ArenaLayout>();
+/** D'où viennent les arènes du jeu : une arène construite d'après son fichier, ou undefined s'il n'est pas (encore) là. */
+let gameSource: ((id: ArenaId) => ArenaLayout | undefined) | null = null;
+
+/** Branche la source des arènes du jeu (map/gameArenas.ts : leurs fichiers de carte). */
+export function setGameArenaSource(source: (id: ArenaId) => ArenaLayout | undefined): void {
+  gameSource = source;
+}
+
+/** L'arène du jeu de cet identifiant, construite à la première demande ; undefined si son fichier n'est pas (encore) là. */
+export function knownGameArena(id: ArenaId): ArenaLayout | undefined {
+  let arena = GAME.get(id);
+  if (!arena) {
+    arena = gameSource?.(id);
+    if (arena) GAME.set(id, arena);
+  }
+  return arena;
+}
+
+/** L'arène du jeu de cet identifiant ; une erreur si son fichier n'a pas été fourni (le client le charge d'abord : client/maps/gameArenas.ts). */
+export function gameArena(id: ArenaId): ArenaLayout {
+  const arena = knownGameArena(id);
+  if (!arena) throw new Error(`Arène du jeu pas encore chargée : ${id} (son fichier, content/arenas/${id}.casse-map.json, n'a pas été fourni)`);
+  return arena;
+}
+
+/**
+ * Les arènes du jeu, par identifiant, construites à la première lecture (`gameArena`) : `ARENAS.valley`
+ * se lit comme un objet, mais l'arène vient de son fichier. Le Dépôt, l'arène par défaut, doit être
+ * là avant la première `Simulation` (le client l'a dans son paquet, avec les autres petites arènes).
+ */
+export const ARENAS: Readonly<Record<ArenaId, ArenaLayout>> = Object.defineProperties(
+  {},
+  Object.fromEntries(ARENA_IDS.map((id) => [id, { enumerable: true, get: () => gameArena(id) }])),
+) as Record<ArenaId, ArenaLayout>;
 
 /**
  * Cartes communautaires connues de ce processus (shared/map/ : `arenaFromMap`), par identifiant :
@@ -517,9 +457,9 @@ export function unregisterArena(key: MapKey): void {
   COMMUNITY.delete(key);
 }
 
-/** L'arène de cet identifiant : une arène du jeu, ou une carte communautaire connue ; sinon undefined. */
+/** L'arène de cet identifiant : une arène du jeu (son fichier fourni), ou une carte communautaire connue ; sinon undefined. */
 export function arenaById(id: ArenaKey | string): ArenaLayout | undefined {
-  if (isArenaId(id)) return ARENAS[id];
+  if (isArenaId(id)) return knownGameArena(id);
   return isMapKey(id) ? COMMUNITY.get(id) : undefined;
 }
 

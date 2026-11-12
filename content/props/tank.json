@@ -1,0 +1,20 @@
+{
+  "$schema": "../schemas/props.schema.json",
+  "$comment": "Une citerne pleine de carburant : elle résiste aux balles, pas aux obus ; les flammes l'allument, et elle fait sauter ses voisines.",
+  "shape": { "kind": "cylinder", "radius": 1.4, "halfHeight": 1.7 },
+  "mass": 2500,
+  "friction": 0.6,
+  "hp": 200,
+  "anchored": true,
+  "resist": { "kinetic": 0.4, "pierce": 1, "energy": 0.8, "explosive": 1, "impact": 0.3, "fire": 1.5 },
+  "explosion": {
+    "look": "barrel",
+    "radius": 7,
+    "damage": 400,
+    "blastRadius": 10,
+    "power": 40,
+    "lift": 1,
+    "ignite": 0.7
+  },
+  "fuse": 0.8
+}

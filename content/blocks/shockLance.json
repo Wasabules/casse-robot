@@ -1,0 +1,12 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Lance électrique (arme de contact d'énergie) : le fourreau d'une pointe qui sort devant le bloc et paralyse ce qu'elle touche.",
+  "cost": 34,
+  "mass": 5,
+  "hp": 150,
+  "tinted": false,
+  "bond": 200,
+  "resist": { "energy": 0.5, "cut": 0.8 },
+  "melee": "shockLance",
+  "price": 450
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Lame laser (arme de contact d'énergie) : l'émetteur d'un arc qui balaie à plat au-dessus du bloc. Rien de lourd ne tourne.",
+  "cost": 40,
+  "mass": 5,
+  "hp": 150,
+  "tinted": false,
+  "bond": 200,
+  "resist": { "energy": 0.6, "cut": 0.8, "fire": 0.7 },
+  "melee": "laserBlade",
+  "price": 500
+}

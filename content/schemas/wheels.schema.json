@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Wasabules/casse-robot/main/content/schemas/wheels.schema.json",
+  "title": "Casse-Robot wheel type",
+  "description": "A wheel type: the motor is in the wheel (torque falls linearly from `stallTorque` at rest to 0 at `freeSpeed`). One file per wheel type: content/wheels/<type>.json, named after the type's identifier (a robot design's `wheels[].type`), read by the game as it is (src/shared/catalog/wheels.ts), with its unlock price. Adding a type also takes its look and its name in each language in the client (docs/architecture.md, \"Architecture rules\"). Generated from the game's code (npm run schemas). Units: meters, kilograms, seconds, radians, newtons.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "description": "The schema of this file's family (content/schemas/<family>.schema.json), relative to the file, for the editor of whoever edits it. The game ignores it, like every field whose name starts with `$`.",
+      "type": "string"
+    },
+    "$comment": {
+      "description": "A note for whoever edits this file (why the values are what they are). The game ignores it.",
+      "type": "string"
+    },
+    "price": {
+      "description": "Unlock price (credits); 0: available from the start.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "cost": {
+      "description": "Build cost.",
+      "type": "number",
+      "minimum": 0
+    },
+    "radius": {
+      "description": "Radius (m).",
+      "type": "number",
+      "minimum": 0
+    },
+    "width": {
+      "description": "Width (m).",
+      "type": "number",
+      "minimum": 0
+    },
+    "mass": {
+      "description": "Mass of the wheel and its motor (kg).",
+      "type": "number",
+      "minimum": 0
+    },
+    "hp": {
+      "description": "Hit points: at 0 the wheel is torn off.",
+      "type": "number",
+      "minimum": 0
+    },
+    "grip": {
+      "description": "Grip (the tire's friction coefficient).",
+      "type": "number",
+      "minimum": 0
+    },
+    "stallTorque": {
+      "description": "Maximum torque at rest (N·m); 0: no motor (a caster).",
+      "type": "number",
+      "minimum": 0
+    },
+    "freeSpeed": {
+      "description": "Free-running speed of the motor (rad/s).",
+      "type": "number",
+      "minimum": 0
+    },
+    "ratedLoad": {
+      "description": "Rated load per wheel (kg): the suspension is tuned for it, and sags beyond.",
+      "type": "number",
+      "minimum": 0
+    },
+    "suspension": {
+      "$ref": "#/$defs/suspension"
+    },
+    "steering": {
+      "description": "A steered wheel: it pivots around a vertical axis through its center.",
+      "type": "object",
+      "properties": {
+        "maxAngle": {
+          "description": "Maximum steering angle on each side (rad).",
+          "type": "number",
+          "minimum": 0
+        },
+        "rate": {
+          "description": "Steering speed (rad/s).",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "maxAngle",
+        "rate"
+      ]
+    },
+    "caster": {
+      "description": "A caster: a free wheel that swivels to follow the motion.",
+      "type": "object",
+      "properties": {
+        "trail": {
+          "description": "Trail (m): how far the pivot is ahead of the wheel.",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "trail"
+      ]
+    },
+    "track": {
+      "description": "A track roller: the neighboring rollers of a side form a track.",
+      "type": "boolean"
+    },
+    "drop": {
+      "description": "The hub hangs this far below its block's center (m): ground clearance.",
+      "type": "number",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "price",
+    "cost",
+    "radius",
+    "width",
+    "mass",
+    "hp",
+    "grip",
+    "stallTorque",
+    "freeSpeed",
+    "ratedLoad",
+    "suspension"
+  ],
+  "$defs": {
+    "suspension": {
+      "description": "A suspension: a vertical spring and damper between the chassis and the wheel.",
+      "type": "object",
+      "properties": {
+        "travelUp": {
+          "description": "Travel in compression (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "travelDown": {
+          "description": "Travel in extension (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "frequency": {
+          "description": "Natural frequency under the rated load (Hz): it sets the spring's stiffness.",
+          "type": "number",
+          "minimum": 0
+        },
+        "dampingRatio": {
+          "description": "Damping ratio (1: critical, no bounce).",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "travelUp",
+        "travelDown",
+        "frequency",
+        "dampingRatio"
+      ]
+    }
+  }
+}

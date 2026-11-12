@@ -1,0 +1,33 @@
+{
+  "$schema": "../schemas/weapons.schema.json",
+  "$comment": "Ogive pilotée : un seul coup par vie (`ammo.reload` null : jamais rechargée), une énorme explosion. Le pilote en prend les commandes, la caméra au nez : il la dirige à la souris et la fait exploser d'un clic (elle explose aussi au contact, ou au bout de 14 s) ; pendant ce temps, son robot s'arrête et ses armes se taisent. Pas de portée préférée : l'IA ne se place pas pour elle, ni ne se met à couvert pour la recharger.",
+  "cooldown": 2,
+  "automatic": false,
+  "spread": 0,
+  "recoil": 40,
+  "range": 120,
+  "minRange": 20,
+  "handling": { "hip": 1, "move": 0, "turn": 0 },
+  "ammo": { "capacity": 1, "reload": null },
+  "projectile": {
+    "look": "warhead",
+    "speed": 24,
+    "gravity": 0,
+    "life": 14,
+    "damage": 250,
+    "damageType": "explosive",
+    "penetrating": false,
+    "impulse": 60,
+    "hull": { "radius": 0.6, "hp": 150 },
+    "explosion": {
+      "look": "warhead",
+      "radius": 5,
+      "damage": 550,
+      "blastRadius": 9,
+      "power": 25,
+      "lift": 1.5,
+      "ignite": 0.5
+    },
+    "guidance": { "mode": "piloted", "turnRate": 1.3, "launch": 0.4 }
+  }
+}

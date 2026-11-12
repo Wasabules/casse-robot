@@ -1,0 +1,12 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Mâchoire broyeuse (arme de contact) : le vérin et les deux mâchoires dentées qui saisissent devant le bloc. Bloc lourd et solide, comme les autres armes de contact mécaniques.",
+  "cost": 45,
+  "mass": 18,
+  "hp": 300,
+  "tinted": false,
+  "bond": 250,
+  "resist": { "cut": 0.7, "kinetic": 0.85, "impact": 0.8 },
+  "melee": "jaw",
+  "price": 450
+}

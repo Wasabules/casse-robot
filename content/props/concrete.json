@@ -1,0 +1,11 @@
+{
+  "$schema": "../schemas/props.schema.json",
+  "$comment": "Du béton : il faut des obus ou des explosions pour l'abattre.",
+  "shape": { "kind": "slab" },
+  "mass": 2400,
+  "friction": 0.8,
+  "hp": 110,
+  "shatters": true,
+  "anchored": true,
+  "resist": { "kinetic": 0.15, "pierce": 0.4, "energy": 0.35, "explosive": 0.9, "impact": 0.4, "fire": 0, "cut": 0.25 }
+}

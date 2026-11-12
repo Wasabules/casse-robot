@@ -1,0 +1,20 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Hélice d'avion : un grand disque de trois pales devant son bloc (face vers laquelle elle pousse). Forte au décollage, elle perd de la poussée en prenant de la vitesse (plus rien à 45 m/s). Ses pales tranchent ce qu'elles touchent, et s'y brisent (arme de contact menée par le moteur : content/melee/propeller.json).",
+  "cost": 16,
+  "mass": 3,
+  "hp": 80,
+  "tinted": false,
+  "bond": 100,
+  "resist": { "fire": 1.2 },
+  "thruster": {
+    "maxThrust": 260,
+    "spoolTime": 0.6,
+    "torqueRatio": 0,
+    "power": 1.5,
+    "look": "propeller",
+    "topSpeed": 45
+  },
+  "melee": "propeller",
+  "price": 150
+}

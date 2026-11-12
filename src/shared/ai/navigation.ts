@@ -1,7 +1,11 @@
 import { groundLevel, type ArenaLayout, type NavGraph, type StaticBox } from "../arena/layout";
-import { LINK_REACH, neighbours, walkable } from "../arena/navGraph";
+import { LINK_MARGIN, LINK_REACH, neighbours, walkable } from "../arena/navGraph";
 import { approachPath, bridgeDecks, cellAt, cellCenter, clearLine, findPath, nearestOpenCell, navGrid, type NavGrid } from "../arena/navgrid";
+import { blockDef } from "../catalog/blocks";
 import { weaponDef } from "../catalog/weapons";
+import { wheelDef } from "../catalog/wheels";
+import { BLOCK_SIZE } from "../config";
+import { wheelLocalPos, type RobotDesign } from "../design/robotDesign";
 import { areEnemies } from "../combat/projectiles";
 import { add, flatDistance, qrot, scale, sub, vec3, type Quat, type Vec3 } from "../math/vec";
 import type { AiMode, Bot, Prop } from "../sim/entities";
@@ -441,7 +445,11 @@ export function navigate(sim: Simulation, bot: Bot, pos: Vec3, target: Vec3): Ve
     // (en ville, il garde le coin qu'il visait, à moins qu'un autre ne soit nettement meilleur :
     // sinon, d'un pas à l'autre, il hésite entre deux coins presque équivalents)
     const kept = hugging && aimed.get(bot);
-    const cost = flatDistance(pos, c) + onward - (kept && flatDistance(kept, c) < 0.5 ? CORNER_KEEP : 0);
+    // Là où le relief coupe les routes, un coin qu'il ne rejoint pas en ligne droite praticable (en
+    // haut d'un talus : le coin d'un rocher du lit pris sur le remblai d'un sentier) ne vient qu'en
+    // dernier recours
+    const steep = nav && sim.arena.terrain && !walkable(sim.arena.terrain, pos.x, pos.z, c.x, c.z) ? UNREACHABLE_CORNER : 0;
+    const cost = flatDistance(pos, c) + onward + steep - (kept && flatDistance(kept, c) < 0.5 ? CORNER_KEEP : 0);
     if (cost < bestCost) {
       bestCost = cost;
       best = c;
@@ -454,6 +462,8 @@ export function navigate(sim: Simulation, bot: Bot, pos: Vec3, target: Vec3): Ve
 /** En ville, le coin que vise chaque robot (il le garde tant qu'aucun autre n'est plus court de CORNER_KEEP m). */
 const aimed = new WeakMap<Bot, Vec3>();
 const CORNER_KEEP = 3;
+/** Ce qu'ajoute au détour un coin qu'il ne rejoint pas sur un sol praticable (m) : on ne le prend que faute d'autre. */
+const UNREACHABLE_CORNER = 1000;
 
 /**
  * Un pont sur le trajet : une destination sur son tablier se prend par le bout le plus commode
@@ -673,8 +683,31 @@ const WAYPOINT_REACHED = 3.5;
 const SKIP_EVERY = 0.4;
 /** Destination injoignable : on va vers les GOAL_FALLBACK points du réseau les plus proches d'elle. */
 const GOAL_FALLBACK = 3;
-/** Marge de côté d'une ligne droite qu'il prend hors du réseau (m), selon sa taille : ses roues restent sur le sentier. */
-const sideMargin = (bot: Bot): number => Math.min(1.2, bot.radius * 0.5);
+/** Demi-largeur de ce qui porte chaque plan de robot (m), calculée une fois. */
+const halfWidths = new WeakMap<RobotDesign, number>();
+/**
+ * Demi-largeur de ce qui porte le robot (m) : le bord extérieur de ses roues, de ses chenilles, de
+ * ses appuis (patins, pattes) ; sans rien de cela, la moitié de son rayon.
+ */
+function halfWidth(bot: Bot): number {
+  const design = bot.profile.design;
+  let w = halfWidths.get(design);
+  if (w === undefined) {
+    w = 0;
+    for (const m of design.wheels) w = Math.max(w, Math.abs(wheelLocalPos(m).x) + wheelDef(m.type).width / 2);
+    for (const b of design.blocks) if (blockDef(b.type).support) w = Math.max(w, (Math.abs(b.x) + 0.5) * BLOCK_SIZE);
+    if (w === 0) w = bot.radius * 0.5;
+    halfWidths.set(design, w);
+  }
+  return w;
+}
+/**
+ * Marge de côté d'une ligne droite qu'il prend hors du réseau (m) : sa demi-largeur (ses roues
+ * restent sur le sentier), au plus celle des liaisons du réseau, qu'il suit de toute façon. Elle
+ * était la moitié de son rayon, au plus 1,2 m : un Char (1,7 m de demi-largeur) coupait vers un
+ * sentier le long de son remblai et s'y calait, une chenille dessus.
+ */
+const sideMargin = (bot: Bot): number => Math.min(LINK_MARGIN, halfWidth(bot));
 
 /**
  * Point vers lequel rouler pour aller de `pos` à `goal` par le réseau de passage : la destination
@@ -711,12 +744,17 @@ function planRoute(terrain: NonNullable<Simulation["arena"]["terrain"]>, nav: Na
   if (!next) adjacency.set(nav, (next = neighbours(nav.points, nav.links)));
   const n = nav.points.length;
   const span = (i: number, p: Vec3): number => Math.hypot(nav.points[i][0] - p.x, nav.points[i][1] - p.z);
-  // Départs : les points du réseau qu'il voit en ligne droite ; arrivées : ceux d'où l'on voit la destination
+  // Départs : les points du réseau qu'il voit en ligne droite, toute sa largeur sur un sol praticable
+  // (à défaut, son centre seulement : il est peut-être déjà mal placé, au bord d'un talus) ;
+  // arrivées : ceux d'où l'on voit la destination
   const dist = new Float64Array(n).fill(Infinity);
   const from = new Int32Array(n).fill(-1);
-  for (let i = 0; i < n; i++) {
-    const d = span(i, pos);
-    if (d <= LINK_REACH && walkable(terrain, pos.x, pos.z, nav.points[i][0], nav.points[i][1])) dist[i] = d;
+  for (const side of [margin, 0]) {
+    for (let i = 0; i < n; i++) {
+      const d = span(i, pos);
+      if (d <= LINK_REACH && walkable(terrain, pos.x, pos.z, nav.points[i][0], nav.points[i][1], side)) dist[i] = d;
+    }
+    if (dist.some((d) => d < Infinity)) break;
   }
   const exit = new Map<number, number>();
   for (let i = 0; i < n; i++) {

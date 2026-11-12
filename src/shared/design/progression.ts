@@ -1,4 +1,6 @@
+import { BLOCK_PRICES } from "../catalog/blocks";
 import type { BlockType } from "../catalog/blocks";
+import { WHEEL_PRICES } from "../catalog/wheels";
 import type { WheelType } from "../catalog/wheels";
 import type { RobotDesign } from "./robotDesign";
 
@@ -9,38 +11,13 @@ import type { RobotDesign } from "./robotDesign";
  */
 
 /**
- * Prix de déblocage de chaque type de bloc (crédits ; 0 : disponible dès le départ). Chaque
- * nouveau type de bloc doit avoir le sien : TypeScript refuse un type oublié.
+ * Prix de déblocage de chaque type de bloc : chaque fichier de bloc donne le sien
+ * (content/blocks/<type>.json), les blocs de forme ont les leurs (catalog/blocks.ts).
  */
-export const BLOCK_PRICES: Readonly<Record<BlockType, number>> = {
-  frame: 0, armorLight: 0, armor: 0, cockpit: 0, battery: 0, wing: 0, flap: 0, gunTurret: 0,
-  armorHeavy: 150, armorReactive: 200,
-  // Formes : celles des blindages léger et normal sont libres, celles du lourd se débloquent
-  wedgeLight: 0, wedge: 0, cornerLight: 0, corner: 0, innerCornerLight: 0, innerCorner: 0, roundLight: 0, round: 0,
-  roundCornerLight: 0, roundCorner: 0, slopeLowLight: 0, slopeLow: 0, slopeHighLight: 0, slopeHigh: 0, slabLight: 0, slab: 0,
-  wedgeHeavy: 100, cornerHeavy: 100,
-  thruster: 100, engine: 150, rotor: 250, hoverPad: 200, leg: 250,
-  sniperTurret: 200, cannonTurret: 250, missileLauncher: 300, flakLauncher: 250, mineLayer: 150,
-  flamerTurret: 150, empTurret: 350, smokeLauncher: 100, laserTurret: 350, railTurret: 500,
-  shotgunTurret: 150, rocketPod: 300, plasmaTurret: 350, lockonLauncher: 400, warheadLauncher: 600, bombBay: 350,
-  empMineLayer: 300, fireMineLayer: 250, smokeMineLayer: 150, bounceMineLayer: 250, aaMineLayer: 350, remoteMineLayer: 300,
-  sensorMineLayer: 200, stickyMineLayer: 300, repairTurret: 400, flareLauncher: 200, naniteLauncher: 450, barrierProjector: 500,
-  headlight: 60, beacon: 60, navLight: 30, strobe: 50, antiCollision: 50, rotatingLight: 70, policeBar: 80,
-  propeller: 150, jet: 400,
-  // Armes de contact
-  spinner: 450, hammer: 400, flipper: 400, flail: 350, jaw: 450,
-  // Armes de contact d'énergie
-  laserBlade: 500, plasmaWhip: 450, shockLance: 450, crusherField: 500,
-  verticalSpinner: 450, drum: 400, shellSpinner: 600,
-  // Armes de contact qui mordent
-  saw: 420, drill: 480,
-  repairModule: 250, radar: 150, jammer: 200, shield: 450,
-};
+export { BLOCK_PRICES } from "../catalog/blocks";
 
-/** Une roue directrice coûte plus que la fixe de sa taille ; la roulette est disponible d'emblée. */
-export const WHEEL_PRICES: Readonly<Record<WheelType, number>> = {
-  standard: 0, steered: 60, small: 0, smallSteered: 40, heavy: 150, heavySteered: 230, caster: 0, track: 200,
-};
+/** Prix de déblocage de chaque type de roue : chaque fichier de roue donne le sien (content/wheels/<type>.json). */
+export { WHEEL_PRICES } from "../catalog/wheels";
 
 /**
  * Pièces débloquées d'une version précédente : la roue directrice n'était qu'une option d'une roue ;

@@ -1,0 +1,12 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Générateur de bouclier : il protège ce qui l'entoure, tant que les batteries tiennent.",
+  "cost": 30,
+  "mass": 3,
+  "hp": 90,
+  "tinted": false,
+  "bond": 80,
+  "resist": { "energy": 0.5 },
+  "shield": { "radius": 2.5, "absorb": 0.6, "cost": 0.06 },
+  "price": 450
+}

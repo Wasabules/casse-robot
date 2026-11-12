@@ -1,0 +1,807 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Wasabules/casse-robot/main/content/schemas/melee.schema.json",
+  "title": "Casse-Robot melee weapon",
+  "description": "A melee weapon: a mass that spins or an arm that strikes, carried by a block (nothing is fired). One file per melee weapon: content/melee/<id>.json, named after the weapon's identifier (a block type's `melee`), read by the game as it is (src/shared/catalog/melee.ts). Adding a melee weapon also takes its block, its models, its sight, its sounds and its name in each language in the client (docs/architecture.md, \"Architecture rules\"). Generated from the game's code (npm run schemas). Units: meters, kilograms, seconds, radians, newtons.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "description": "The schema of this file's family (content/schemas/<family>.schema.json), relative to the file, for the editor of whoever edits it. The game ignores it, like every field whose name starts with `$`.",
+      "type": "string"
+    },
+    "$comment": {
+      "description": "A note for whoever edits this file (why the values are what they are). The game ignores it.",
+      "type": "string"
+    },
+    "look": {
+      "description": "Its look (drawing, sound, effects in the client).",
+      "enum": [
+        "bar",
+        "hammer",
+        "saber",
+        "whip",
+        "lance",
+        "field",
+        "disc",
+        "drum",
+        "shell",
+        "propeller",
+        "saw",
+        "drill",
+        "plate",
+        "flail",
+        "jaw"
+      ]
+    },
+    "motion": {
+      "description": "Its motion: a rotor, a rotor driven by its block's engine, a triggered arm, a point that thrusts, a field around the hull, a plate that lifts, a ball on a chain, a jaw that grips.",
+      "enum": [
+        "spin",
+        "driven",
+        "swing",
+        "thrust",
+        "field",
+        "flip",
+        "flail",
+        "grip"
+      ]
+    },
+    "axis": {
+      "description": "Axis of the rotor or of the arm's pivot, in the block's frame (up +y, left +x, forward +z).",
+      "enum": [
+        "up",
+        "left",
+        "forward"
+      ]
+    },
+    "hub": {
+      "description": "The hub (center of the rotor, or the arm's pivot), in the block's frame (m).",
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "number"
+      }
+    },
+    "blade": {
+      "$ref": "#/$defs/blade"
+    },
+    "spin": {
+      "$ref": "#/$defs/spin"
+    },
+    "drive": {
+      "description": "A rotor driven by an engine: its speed follows the thrust.",
+      "type": "object",
+      "properties": {
+        "idle": {
+          "description": "Speed at idle (share of full speed).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "stop": {
+          "description": "Below this share of the maximum thrust (engine off), it stops.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "idle",
+        "stop"
+      ]
+    },
+    "bite": {
+      "description": "A rotor that bites continuously instead of striking (saw, drill).",
+      "type": "object",
+      "properties": {
+        "power": {
+          "description": "Cutting power at full speed (kW).",
+          "type": "number",
+          "minimum": 0
+        },
+        "feed": {
+          "description": "Where the bite goes into the target: the edge of a disc, or the point of a bit.",
+          "enum": [
+            "radial",
+            "axial"
+          ]
+        },
+        "grab": {
+          "description": "Factor of the cutting force that drags the target along the blade (0: nothing; 1: physical).",
+          "type": "number",
+          "minimum": 0
+        },
+        "gear": {
+          "description": "Reduction between the rotor and the tool (1: direct drive).",
+          "type": "number",
+          "minimum": 0
+        },
+        "depth": {
+          "description": "Depth (m) to which the damage left by a pierced block goes on to the next.",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "power",
+        "feed",
+        "grab",
+        "gear",
+        "depth"
+      ]
+    },
+    "swing": {
+      "description": "A triggered arm: its head goes from `rest` to `end` around the axis (angles: 0 straight ahead, π/2 toward the block's top), then comes back.",
+      "type": "object",
+      "properties": {
+        "reach": {
+          "description": "Distance from the pivot to the head (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "radius": {
+          "description": "Radius of the head (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "rest": {
+          "description": "Angle at rest (rad).",
+          "type": "number"
+        },
+        "end": {
+          "description": "Angle at the end of the strike (rad).",
+          "type": "number"
+        },
+        "strike": {
+          "description": "Duration of the strike (s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "recover": {
+          "description": "Duration of the return (s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "energy": {
+          "description": "Energy of the head at the end of its course (J).",
+          "type": "number",
+          "minimum": 0
+        },
+        "cost": {
+          "description": "Energy a strike takes from the batteries (kJ).",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "reach",
+        "radius",
+        "rest",
+        "end",
+        "strike",
+        "recover",
+        "energy",
+        "cost"
+      ]
+    },
+    "plate": {
+      "description": "A flipper's plate: a ram lifts it from `rest` to `end` and throws what is on it.",
+      "type": "object",
+      "properties": {
+        "length": {
+          "description": "Length from its pivot (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "half": {
+          "description": "Half width along the pivot (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "rest": {
+          "description": "Angle at rest (rad; negative: wedged toward the ground).",
+          "type": "number"
+        },
+        "end": {
+          "description": "Angle at the end of the lift (rad).",
+          "type": "number"
+        },
+        "strike": {
+          "description": "Duration of the lift (s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "lower": {
+          "description": "Time to come down (s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "reload": {
+          "description": "The ram is ready again this long after the lift (s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "energy": {
+          "description": "Work of the ram over its whole course (J).",
+          "type": "number",
+          "minimum": 0
+        },
+        "cost": {
+          "description": "Energy a lift takes from the batteries (kJ).",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "length",
+        "half",
+        "rest",
+        "end",
+        "strike",
+        "lower",
+        "reload",
+        "energy",
+        "cost"
+      ]
+    },
+    "flail": {
+      "description": "A flail: a ball on a chain hung from a crank that the motor turns.",
+      "type": "object",
+      "properties": {
+        "crank": {
+          "description": "Radius of the crank (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "inertia": {
+          "description": "Inertia of the crank and hub (kg·m²): its gyroscope.",
+          "type": "number",
+          "minimum": 0
+        },
+        "speed": {
+          "description": "Speed of the crank at full (rad/s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "spinUp": {
+          "description": "Time to launch the ball (s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "chain": {
+          "description": "Length of the chain (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "links": {
+          "description": "Links drawn.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "mass": {
+          "description": "Mass of the ball (kg).",
+          "type": "number",
+          "minimum": 0
+        },
+        "radius": {
+          "description": "Radius of the ball (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "restitution": {
+          "description": "Bounce of the ball (0: soft; 1: elastic).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "friction": {
+          "description": "Share of its speed along what it hits that it keeps.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "drag": {
+          "description": "Air drag on the ball (share of its speed lost per second).",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "crank",
+        "inertia",
+        "speed",
+        "spinUp",
+        "chain",
+        "links",
+        "mass",
+        "radius",
+        "restitution",
+        "friction",
+        "drag"
+      ]
+    },
+    "jaw": {
+      "description": "A crusher jaw: two jaws that close on what is in their mouth, crush it and drag it.",
+      "type": "object",
+      "properties": {
+        "length": {
+          "description": "Length of the jaws from their pivot (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "half": {
+          "description": "Half width along the pivot (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "open": {
+          "description": "Half opening, open (rad).",
+          "type": "number",
+          "minimum": 0
+        },
+        "shut": {
+          "description": "Half opening, closed on nothing (rad).",
+          "type": "number",
+          "minimum": 0
+        },
+        "close": {
+          "description": "Time to close (s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "reopen": {
+          "description": "Time to reopen (s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "cooldown": {
+          "description": "Pause before a new bite (s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "mouth": {
+          "description": "The mouth: between these distances from the pivot (m), what is there can be gripped.",
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "number"
+          }
+        },
+        "strength": {
+          "description": "Force the grip holds (N); beyond, it slips.",
+          "type": "number",
+          "minimum": 0
+        },
+        "slip": {
+          "description": "After this much slipping (s), it lets go.",
+          "type": "number",
+          "minimum": 0
+        },
+        "tear": {
+          "description": "Gap (m) between the two points of the grip beyond which it tears off.",
+          "type": "number",
+          "minimum": 0
+        },
+        "crush": {
+          "description": "Damage per second of the crushing.",
+          "type": "number",
+          "minimum": 0
+        },
+        "bite": {
+          "description": "Damage of the bite that grips.",
+          "type": "number",
+          "minimum": 0
+        },
+        "power": {
+          "description": "Power of the ram while it squeezes (kW).",
+          "type": "number",
+          "minimum": 0
+        },
+        "hold": {
+          "description": "Longest grip (s).",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "length",
+        "half",
+        "open",
+        "shut",
+        "close",
+        "reopen",
+        "cooldown",
+        "mouth",
+        "strength",
+        "slip",
+        "tear",
+        "crush",
+        "bite",
+        "power",
+        "hold"
+      ]
+    },
+    "thrust": {
+      "description": "A point that thrusts out along the block's front, then retracts.",
+      "type": "object",
+      "properties": {
+        "retracted": {
+          "description": "Distance of the point from the hub, retracted (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "reach": {
+          "description": "Distance of the point from the hub, out (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "radius": {
+          "description": "Radius of the point (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "strike": {
+          "description": "Time to thrust (s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "recover": {
+          "description": "Time to retract (s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "energy": {
+          "description": "Energy of the hit (J).",
+          "type": "number",
+          "minimum": 0
+        },
+        "cost": {
+          "description": "Energy a thrust takes from the batteries (kJ).",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "retracted",
+        "reach",
+        "radius",
+        "strike",
+        "recover",
+        "energy",
+        "cost"
+      ]
+    },
+    "field": {
+      "description": "A field around the hull of its part: it strikes what comes into a margin around the blocks.",
+      "type": "object",
+      "properties": {
+        "margin": {
+          "description": "Margin around the blocks covered (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "radius": {
+          "description": "It covers the blocks within this radius of the projector (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "contacts": {
+          "description": "Contacts struck per hit, at most.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "drain": {
+          "description": "Share of its energy an enemy rotor rubbing against it loses per hit.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "repel": {
+          "description": "Impulse that pushes back an enemy melee weapon, per hit (N·s).",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "margin",
+        "radius",
+        "contacts",
+        "drain",
+        "repel"
+      ]
+    },
+    "quench": {
+      "description": "An energy weapon that goes out without power or under water.",
+      "type": "boolean"
+    },
+    "hit": {
+      "$ref": "#/$defs/meleeHit"
+    },
+    "engage": {
+      "description": "Distance at which the AI engages with it (m, between the robots' centers).",
+      "type": "number",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "look",
+    "motion",
+    "axis",
+    "hub",
+    "hit",
+    "engage"
+  ],
+  "$defs": {
+    "damageType": {
+      "description": "A kind of damage: kinetic (bullets), pierce (armor-piercing), explosive, impact (collisions, hammers), fire, energy (lasers: heavy armor doesn't stop it better), cut (blades).",
+      "enum": [
+        "kinetic",
+        "pierce",
+        "explosive",
+        "impact",
+        "fire",
+        "energy",
+        "cut"
+      ]
+    },
+    "blade": {
+      "description": "The volume a rotor's blade sweeps: a thick ring around its axis.",
+      "type": "object",
+      "properties": {
+        "inner": {
+          "description": "Inner radius (m); 0 for a bar or a disc.",
+          "type": "number",
+          "minimum": 0
+        },
+        "outer": {
+          "description": "Outer radius (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "half": {
+          "description": "Half thickness along the axis (m). Longer than `outer`: a drill bit, its hub in the middle of its length.",
+          "type": "number",
+          "minimum": 0
+        },
+        "arms": {
+          "description": "The blade's arms (a bar: two; a propeller: three): its hitbox turns with them.",
+          "type": "object",
+          "properties": {
+            "count": {
+              "description": "Arms.",
+              "type": "integer",
+              "minimum": 0
+            },
+            "width": {
+              "description": "Width of each arm (m).",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "count",
+            "width"
+          ]
+        },
+        "web": {
+          "description": "The web joining a ring to its hub (a shell spinner's spokes): a disc of radius `outer`, that doesn't strike.",
+          "type": "object",
+          "properties": {
+            "at": {
+              "description": "Center along the axis from the hub (m).",
+              "type": "number"
+            },
+            "half": {
+              "description": "Half thickness (m).",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "at",
+            "half"
+          ]
+        }
+      },
+      "required": [
+        "inner",
+        "outer",
+        "half"
+      ]
+    },
+    "spin": {
+      "description": "A rotor: its inertia and full speed give its stored energy (½·I·ω²) and its angular momentum.",
+      "type": "object",
+      "properties": {
+        "inertia": {
+          "description": "Moment of inertia (kg·m²).",
+          "type": "number",
+          "minimum": 0
+        },
+        "speed": {
+          "description": "Full speed (rad/s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "spinUp": {
+          "description": "Time from rest to full speed at full motor power (s): the motor's power follows from it.",
+          "type": "number",
+          "minimum": 0
+        },
+        "spinDown": {
+          "description": "Free spin: the speed loses two thirds (1/e) in this time (s); holding full speed costs these losses.",
+          "type": "number",
+          "minimum": 0
+        },
+        "gyro": {
+          "description": "Factor of the gyroscopic effect on the robot (1: physical; 0: none).",
+          "type": "number",
+          "minimum": 0
+        },
+        "unbalance": {
+          "description": "Imbalance: offset (m) of the spinning mass of a rotor at 0 hit points.",
+          "type": "number",
+          "minimum": 0
+        },
+        "mass": {
+          "description": "Spinning mass (kg), for the imbalance (included in the block's mass).",
+          "type": "number",
+          "minimum": 0
+        },
+        "direction": {
+          "description": "Direction of rotation around the axis (1: counter-clockwise seen from the end of the axis).",
+          "enum": [
+            1,
+            -1
+          ]
+        },
+        "reaction": {
+          "description": "Share of its motor's reaction the robot receives (1: physical; 0: nothing really spins, an energy blade).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "inertia",
+        "speed",
+        "spinUp",
+        "spinDown",
+        "gyro",
+        "unbalance",
+        "mass"
+      ]
+    },
+    "meleeHit": {
+      "description": "What a hit does.",
+      "type": "object",
+      "properties": {
+        "damageType": {
+          "$ref": "#/$defs/damageType"
+        },
+        "damage": {
+          "description": "Damage per kJ of the hit (before resistance).",
+          "type": "number",
+          "minimum": 0
+        },
+        "bite": {
+          "description": "Share of a rotor's stored energy a clean hit takes.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "fling": {
+          "description": "Share of the hit's energy that throws the target (the rest tears it).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "push": {
+          "description": "Direction of the impulse at the point hit.",
+          "type": "object",
+          "properties": {
+            "tangent": {
+              "description": "Along the blade's motion.",
+              "type": "number"
+            },
+            "radial": {
+              "description": "Outward from the hub.",
+              "type": "number"
+            },
+            "axial": {
+              "description": "Along the axis.",
+              "type": "number"
+            },
+            "lift": {
+              "description": "Toward the world's up.",
+              "type": "number"
+            }
+          },
+          "required": [
+            "tangent",
+            "radial",
+            "axial",
+            "lift"
+          ]
+        },
+        "recoil": {
+          "description": "Share of the impulse sent back to its own robot, at the hub.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "spread": {
+          "description": "Share of the damage the neighboring blocks receive.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "wheels": {
+          "description": "Damage factor on wheels and track rollers.",
+          "type": "number",
+          "minimum": 0
+        },
+        "wear": {
+          "description": "Wear: hit points the weapon loses per kJ of hit, divided by the resistance of what it hits.",
+          "type": "number",
+          "minimum": 0
+        },
+        "gap": {
+          "description": "Minimum time between two hits (s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "minSpeed": {
+          "description": "Speed below which a rotor no longer bites (share of full speed); for a flail, the speed of the ball (m/s) below which it only pushes.",
+          "type": "number",
+          "minimum": 0
+        },
+        "ground": {
+          "description": "Share of a clean hit a rotor's hit on the ground takes (0.4 when absent).",
+          "type": "number",
+          "minimum": 0
+        },
+        "ignite": {
+          "description": "Chance to set fire to the block hit.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "stun": {
+          "description": "A local stun of the organs around the point hit.",
+          "type": "object",
+          "properties": {
+            "radius": {
+              "description": "Radius (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "duration": {
+              "description": "Duration (s).",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "radius",
+            "duration"
+          ]
+        }
+      },
+      "required": [
+        "damageType",
+        "damage",
+        "bite",
+        "fling",
+        "push",
+        "recoil",
+        "spread",
+        "wear",
+        "gap",
+        "minSpeed"
+      ]
+    }
+  }
+}

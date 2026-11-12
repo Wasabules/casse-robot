@@ -1,0 +1,32 @@
+{
+  "$schema": "../schemas/melee.schema.json",
+  "$comment": "Marteau pneumatique : un bras sur le dessus du robot, armé vers l'arrière, qui s'abat devant lui sur ordre (gâchette) ; gros dégâts sur le dessus de la cible ; chaque coup soulève l'avant de son robot. Le vérin se recharge sur les batteries. `hit.recoil` 0,8 : la réaction au pivot soulève l'avant du robot ; entière, le Pilon se cabrait de 19° et risquait de se retourner.",
+  "look": "hammer",
+  "motion": "swing",
+  "axis": "left",
+  "hub": [0, 0.2, 0.1],
+  "swing": {
+    "reach": 1.3,
+    "radius": 0.18,
+    "rest": 1.9,
+    "end": -1,
+    "strike": 0.22,
+    "recover": 0.85,
+    "energy": 1500,
+    "cost": 2
+  },
+  "hit": {
+    "damageType": "impact",
+    "damage": 220,
+    "bite": 1,
+    "fling": 0.4,
+    "push": { "tangent": 1, "radial": 0.15, "axial": 0, "lift": 0 },
+    "recoil": 0.8,
+    "spread": 0.4,
+    "wheels": 1,
+    "wear": 3,
+    "gap": 0,
+    "minSpeed": 0
+  },
+  "engage": 2
+}

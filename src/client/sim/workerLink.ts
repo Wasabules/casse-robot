@@ -28,6 +28,8 @@ export class WorkerLink {
   private closed = false;
   /** Nouveaux mondes demandés (une partie, une vague) : la réplique les a tous quand elle en a reçu autant. */
   private worlds = 0;
+  /** Les arènes dont le Worker a déjà reçu le fichier (une grande arène du jeu, une carte communautaire) : il les garde. */
+  private readonly given = new Set<string>();
 
   constructor() {
     this.replica.delay = LOCAL_DELAY;
@@ -45,6 +47,11 @@ export class WorkerLink {
   command(cmd: SessionCommand): void {
     if (this.closed) return;
     if (cmd.t === "start" || cmd.t === "spawn") this.worlds++;
+    // Le fichier d'une arène part une fois (celui du Canyon pèse ~590 Ko)
+    if (cmd.t === "start" && cmd.map) {
+      if (this.given.has(cmd.arena)) cmd = { ...cmd, map: undefined };
+      else this.given.add(cmd.arena);
+    }
     this.worker.postMessage(cmd);
   }
 

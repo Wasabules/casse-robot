@@ -1,0 +1,11 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Lance-leurres : sur ordre, ou quand l'IA voit un missile arriver, il éjecte une salve de leurres qui détournent les missiles ennemis.",
+  "cost": 12,
+  "mass": 1,
+  "hp": 50,
+  "tinted": false,
+  "bond": 60,
+  "flares": { "charges": 2, "reload": 12 },
+  "price": 200
+}

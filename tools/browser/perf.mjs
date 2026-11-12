@@ -11,6 +11,8 @@
 //   npm run perf -- --compare=avant.json          … et compare un nouveau résultat à lui
 //   npm run perf -- --no-build                    sans reconstruire la page
 //   npm run perf -- --renderer=webgpu             sous WebGPU (WebGL par défaut)
+//   npm run perf -- --eval="__casse.game.setGlow(false)"   du code dans la page, une fois la bataille lancée
+//   npm run perf -- --cpuprofile=profil.cpuprofile   le profil du processeur (fil de la page), ses fonctions les plus coûteuses
 //
 // La machine doit être au repos : un autre calcul fausse tout (la mesure se fait par fenêtres de
 // quelques secondes, et en donne l'écart). La carte graphique utilisée est donnée en tête du bilan.
@@ -18,7 +20,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { build, launchChrome, MATCH_STARTED, openGame, parseArgs, ROOT, SEED_RANDOM, serve, sleep } from "./chrome.mjs";
 
-const options = parseArgs({ arena: "depot", size: "1920x1080", seconds: 30, window: 5, warmup: 8, preset: "medium", renderOnly: false, noBuild: false, json: "", compare: "", software: false, renderer: "webgl", query: "" });
+const options = parseArgs({ arena: "depot", size: "1920x1080", seconds: 30, window: 5, warmup: 8, preset: "medium", renderOnly: false, noBuild: false, json: "", compare: "", software: false, renderer: "webgl", query: "", eval: "", cpuprofile: "" });
 if (options.renderer !== "webgl" && options.renderer !== "webgpu") throw new Error(`--renderer : webgl ou webgpu, pas ${options.renderer}`);
 const [width, height] = options.size.split("x").map(Number);
 
@@ -78,6 +80,27 @@ const INSTRUMENT = `(async () => {
   const dbg = gl.getExtension("WEBGL_debug_renderer_info");
   return { gpu: "WebGL 2 · " + (dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)), timer: !!tq, render: [engine.getRenderWidth(), engine.getRenderHeight()] };
 })()`;
+
+/**
+ * Les fonctions qui prennent le plus de temps propre (sans leurs appelées) dans un profil du
+ * processeur (`Profiler.stop`), et la part de chacune : on y voit ce qui coûte dans une image.
+ */
+function printProfile(profile) {
+  const self = new Map();
+  const byId = new Map(profile.nodes.map((n) => [n.id, n]));
+  let total = 0;
+  profile.samples.forEach((id, i) => {
+    const dt = profile.timeDeltas[i] ?? 0;
+    const f = byId.get(id).callFrame;
+    const file = f.url ? f.url.split("/").pop() : "";
+    const key = `${f.functionName || "(anonyme)"} ${file}:${f.lineNumber + 1}`;
+    self.set(key, (self.get(key) ?? 0) + dt);
+    total += dt;
+  });
+  const top = [...self.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30);
+  console.log(`\nProfil du processeur (fil de la page, ${fmt(total / 1000, 0)} ms échantillonnées) : temps propre`);
+  for (const [key, us] of top) console.log(`  ${fmt((100 * us) / total, 1).padStart(5)} %  ${key}`);
+}
 
 /** Remet les relevés à zéro (début d'une fenêtre). */
 const RESET = `(() => {
@@ -206,17 +229,30 @@ try {
   // (la graine du hasard de la partie dans le Worker : la bataille se rejoue presque pareil)
   await page.evaluate(`(window.__casse.game.seed = 7, window.__casse.screens.benchmark(${JSON.stringify(options.arena)}))`);
   await page.waitFor(MATCH_STARTED, 120_000, "début de la bataille");
+  // (un réglage de plus pour la mesure, une fois la bataille lancée : `--eval="__casse.game.setGlow(false)"`)
+  if (options.eval) await page.evaluate(`(() => { ${options.eval}; return 1; })()`);
   await page.evaluate(`(() => { const g = window.__casse.game; g.setFollow(0); g.rig.setZoom(16); return 1; })()`);
   const info = await page.evaluate(INSTRUMENT);
   console.log(`» Bataille en cours (${info.render.join(" × ")}) ; ${options.warmup} s pour s'engager`);
   await sleep(options.warmup * 1000);
   if (options.renderOnly) await page.evaluate(`window.__casse.game.hold()`);
   const windows = [];
+  // (le profil du processeur du fil de la page, si demandé : où passe le temps de chaque image)
+  if (options.cpuprofile) {
+    await page.send("Profiler.enable");
+    await page.send("Profiler.setSamplingInterval", { interval: 250 });
+    await page.send("Profiler.start");
+  }
   for (let i = 0; i < Math.max(1, Math.round(options.seconds / options.window)); i++) {
     await page.evaluate(RESET);
     await sleep(options.window * 1000);
     windows.push(await page.evaluate(COLLECT));
     process.stdout.write(`  fenêtre ${i + 1} : ${fmt(windows.at(-1).intervals.length / (sum(windows.at(-1).intervals) / 1000))} img/s\n`);
+  }
+  if (options.cpuprofile) {
+    const { profile } = await page.send("Profiler.stop");
+    writeFileSync(options.cpuprofile, JSON.stringify(profile));
+    printProfile(profile);
   }
   const errors = page.errors;
   const commit = spawnSync("git", ["rev-parse", "--short", "HEAD"], { cwd: ROOT, encoding: "utf8" }).stdout.trim();

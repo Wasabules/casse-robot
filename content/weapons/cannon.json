@@ -1,0 +1,31 @@
+{
+  "$schema": "../schemas/weapons.schema.json",
+  "$comment": "Canon : un obus lent que le joueur tire en cloche (il en choisit la hausse), qui explose à l'impact.",
+  "cooldown": 1.4,
+  "automatic": false,
+  "spread": 0.002,
+  "recoil": 80,
+  "range": 70,
+  "engage": 32,
+  "handling": { "hip": 2, "move": 0.004, "turn": 0.02 },
+  "ammo": { "capacity": 10, "reload": 3 },
+  "projectile": {
+    "look": "shell",
+    "speed": 60,
+    "gravity": 1,
+    "life": 4,
+    "damage": 40,
+    "damageType": "kinetic",
+    "penetrating": false,
+    "impulse": 30,
+    "explosion": {
+      "look": "shell",
+      "radius": 1.2,
+      "damage": 120,
+      "blastRadius": 2.4,
+      "power": 3.2,
+      "lift": 0.35,
+      "ignite": 0.08
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "$schema": "../schemas/melee.schema.json",
+  "$comment": "Champ broyeur : un projecteur de bouclier détourné. Armé (seul, quand un ennemi approche), il frappe d'énergie ce qui entre dans une marge de 0,35 m autour des blocs de son morceau (à moins de 2,6 m de lui) et le repousse ; une arme de contact ennemie qui s'y frotte est frappée la première, et son régime chute. Défensif et passif : pas de touche. Chaque coup puise dans sa charge, que les batteries refont (0,5 kW pour la tenir, 1 kW pour la refaire).",
+  "look": "field",
+  "motion": "field",
+  "axis": "up",
+  "hub": [0, 0.3, 0],
+  "spin": {
+    "inertia": 24,
+    "speed": 10,
+    "spinUp": 1.5,
+    "spinDown": 6,
+    "gyro": 0,
+    "unbalance": 0,
+    "mass": 0,
+    "reaction": 0
+  },
+  "field": { "margin": 0.35, "radius": 2.6, "contacts": 4, "drain": 0.35, "repel": 160 },
+  "hit": {
+    "damageType": "energy",
+    "damage": 150,
+    "bite": 0.1,
+    "fling": 0.35,
+    "push": { "tangent": 0, "radial": 1, "axial": 0, "lift": 0.15 },
+    "recoil": 0,
+    "spread": 0,
+    "wheels": 1,
+    "wear": 0,
+    "gap": 0.2,
+    "minSpeed": 0.3
+  },
+  "engage": 1.5
+}

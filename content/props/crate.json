@@ -1,0 +1,11 @@
+{
+  "$schema": "../schemas/props.schema.json",
+  "$comment": "Du bois : elle résiste aux balles, mais un robot lourd lancé ou une chute la fracasse, et elle brûle.",
+  "shape": { "kind": "box", "half": 0.5 },
+  "mass": 12,
+  "friction": 0.7,
+  "hp": 120,
+  "shatters": true,
+  "burns": { "time": 9, "reach": 0.2 },
+  "resist": { "impact": 3.5, "fire": 2, "cut": 1.5 }
+}

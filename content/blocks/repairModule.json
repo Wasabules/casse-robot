@@ -1,0 +1,11 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Module de réparation : relié au cockpit, il répare les blocs et les roues abîmés autour de lui, après un moment sans être touché, et fait repousser ses blocs perdus.",
+  "cost": 20,
+  "mass": 2,
+  "hp": 70,
+  "tinted": false,
+  "bond": 60,
+  "repair": { "rate": 20, "radius": 3, "delay": 3 },
+  "price": 250
+}

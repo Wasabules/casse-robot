@@ -1,8 +1,9 @@
-import type { PropType } from "../catalog/props";
-import { axisAngle, qmul, qrot, vec3, type Quat, type Vec3 } from "../math/vec";
+import { axisAngle, qmul, vec3, type Quat } from "../math/vec";
 import { barrier, box, zone } from "./builders";
+import { house, PropList, seeded } from "./buildings";
 import type { ArenaLayout, CaptureZone, PropSpot, StaticBox, TerrainPath } from "./layout";
 import { makeTerrain, noise2, smoothstep } from "./terrain";
+import { quantizeTerrain } from "../map/codec";
 import { dcos, dsin } from "../math/det";
 
 /*
@@ -85,141 +86,12 @@ function valleyHeight(x: number, z: number): number {
   return Math.max(0.15, h);
 }
 
-const TERRAIN = makeTerrain(440, 220, valleyHeight);
+const TERRAIN = quantizeTerrain(makeTerrain(440, 220, valleyHeight));
 
 /** Hauteur du relief (celle du champ de hauteurs, qui interpole entre ses sommets). */
 const ground = (x: number, z: number): number => valleyHeight(x, z);
 
-/** Tirage fixe (générateur congruentiel) : la carte est une donnée, la même à chaque partie. */
-export function seeded(seed: number): () => number {
-  let s = seed >>> 0;
-  return () => {
-    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
-}
-
 const yaw = (a: number): Quat => axisAngle(vec3(0, 1, 0), a);
-const pitch = (a: number): Quat => axisAngle(vec3(1, 0, 0), a);
-
-/** Accessoires de la carte, et le numéro de chaque bâtiment (voir `PropSpot.building`). */
-export class PropList {
-  readonly spots: PropSpot[] = [];
-  private buildings = 0;
-
-  add(spot: PropSpot): number {
-    this.spots.push(spot);
-    return this.spots.length - 1;
-  }
-
-  newBuilding(): number {
-    return this.buildings++;
-  }
-}
-
-export interface HouseSpec {
-  x: number;
-  z: number;
-  /** Longueur le long du faîtage, profondeur (m). */
-  w: number;
-  d: number;
-  /** Hauteur des murs (m). */
-  h: number;
-  /** Sol du bâtiment (m). */
-  ground: number;
-  wall: PropType;
-  roof: PropType;
-  /** Toit à deux pans (45°, pignons fermés) ou plat. */
-  roofKind: "gable" | "flat";
-  /** Faîtage le long de x, ou de z. */
-  ridge: "x" | "z";
-  /** Grande ouverture (m de large) au milieu du long pan de devant (côté -z du bâtiment, avant rotation). */
-  door?: number;
-  /** Tourne le bâtiment d'un demi-tour (l'ouverture passe derrière). */
-  flip?: boolean;
-  /** L'ouverture traverse le bâtiment : la même dans le long pan de derrière (un hangar qu'on traverse). */
-  through?: boolean;
-}
-
-/** Épaisseur d'un mur, d'un toit (m) ; largeur maximale d'un pan (m) : un mur tombe par morceaux. */
-const WALL = 0.3;
-const ROOF = 0.2;
-const PANEL = 3.6;
-const EAVES = 0.5;
-
-/**
- * Un bâtiment en pans de mur ancrés : deux longs pans (le long du faîtage), deux pignons, et un
- * toit en bandes, chacune posée sur les pans qu'elle couvre (elle tombe quand ils ont tous
- * disparu). Un toit à deux pans (45°) a des pignons en losange, dont la moitié basse se cache dans
- * le mur.
- */
-export function house(P: PropList, s: HouseSpec): void {
-  const building = P.newBuilding();
-  const turn = qmul(yaw(s.ridge === "x" ? 0 : Math.PI / 2), yaw(s.flip ? Math.PI : 0));
-  const place = (local: Vec3): Vec3 => {
-    const p = qrot(turn, local);
-    return vec3(s.x + p.x, p.y, s.z + p.z);
-  };
-  const add = (type: PropType, local: Vec3, half: Vec3, rot: Quat | null, rests?: number[], diamond?: boolean): number =>
-    P.add({ type, pos: place(local), half, rot: rot ? qmul(turn, rot) : turn, rests, building, diamond });
-
-  const g = s.ground;
-  const n = Math.ceil(s.w / PANEL);
-  const pw = s.w / n;
-  const long: number[][] = [[], []]; // pans de devant (v < 0) et de derrière, par bande
-  [-1, 1].forEach((side, k) => {
-    for (let i = 0; i < n; i++) {
-      const u = -s.w / 2 + pw * (i + 0.5);
-      if ((side < 0 || s.through) && s.door && Math.abs(u) < s.door / 2) continue;
-      long[k][i] = add(s.wall, vec3(u, g + s.h / 2, side * (s.d / 2 - WALL / 2)), vec3(pw / 2, s.h / 2, WALL / 2), null);
-    }
-  });
-  const inner = s.d - 2 * WALL;
-  const m = Math.ceil(inner / PANEL);
-  const ends: number[][] = [[], []];
-  [-1, 1].forEach((side, k) => {
-    for (let j = 0; j < m; j++) {
-      const v = -inner / 2 + (inner / m) * (j + 0.5);
-      ends[k].push(add(s.wall, vec3(side * (s.w / 2 - WALL / 2), g + s.h / 2, v), vec3(WALL / 2, s.h / 2, inner / (2 * m)), null));
-    }
-  });
-  // Ce que porte la bande i : ses pans de devant et de derrière, et le pignon au bout
-  const under = (i: number): number[] => {
-    const rests = [long[0][i], long[1][i]].filter((r) => r !== undefined);
-    if (i === 0) rests.push(...ends[0]);
-    if (i === n - 1) rests.push(...ends[1]);
-    return rests;
-  };
-  const overhang = (i: number): number => (i === 0 || i === n - 1 ? EAVES / 2 : 0);
-  const shift = (i: number): number => (i === 0 ? -EAVES / 2 : i === n - 1 ? EAVES / 2 : 0);
-
-  if (s.roofKind === "flat") {
-    for (let i = 0; i < n; i++) {
-      const u = -s.w / 2 + pw * (i + 0.5) + (n === 1 ? 0 : shift(i));
-      const hu = pw / 2 + (n === 1 ? EAVES : overhang(i));
-      add(s.roof, vec3(u, g + s.h + ROOF / 2, 0), vec3(hu, ROOF / 2, s.d / 2 + EAVES), null, under(i));
-    }
-    return;
-  }
-  // Toit à deux pans : chaque pan descend du faîtage jusqu'au-delà du mur
-  const slope = (s.d / 2) * Math.SQRT2 + EAVES;
-  const ridgeY = g + s.h + s.d / 2;
-  for (const side of [-1, 1]) {
-    for (let i = 0; i < n; i++) {
-      const u = -s.w / 2 + pw * (i + 0.5) + (n === 1 ? 0 : shift(i));
-      const hu = pw / 2 + (n === 1 ? EAVES / 2 : overhang(i));
-      // Du faîtage, on descend vers (0, -1, side)/√2 ; la normale est (0, 1, side)/√2
-      const along = slope / 2 - 0.12;
-      const c = vec3(u, ridgeY - along * Math.SQRT1_2 + (ROOF / 2) * Math.SQRT1_2, side * along * Math.SQRT1_2 + side * (ROOF / 2) * Math.SQRT1_2);
-      add(s.roof, c, vec3(hu, ROOF / 2, slope / 2), pitch((side * Math.PI) / 4), under(i));
-    }
-  }
-  // Pignons : un losange (carré tourné de 45°) dont la pointe haute monte sous le faîtage
-  const diagonal = s.d - 2 * WALL;
-  [-1, 1].forEach((side, k) => {
-    add(s.wall, vec3(side * (s.w / 2 - WALL / 2), g + s.h, 0), vec3(WALL / 2, diagonal / (2 * Math.SQRT2), diagonal / (2 * Math.SQRT2)), pitch(Math.PI / 4), [...ends[k]], true);
-  });
-}
 
 /** Un arbre posé sur le relief. */
 function tree(P: PropList, type: "pine" | "oak", x: number, z: number, scale: number): void {

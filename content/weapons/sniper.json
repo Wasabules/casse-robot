@@ -1,0 +1,23 @@
+{
+  "$schema": "../schemas/weapons.schema.json",
+  "$comment": "Fusil de précision : un tir perçant à longue portée, qui ne tire qu'au viseur (`scopeOnly`) ; il faut s'arrêter pour viser.",
+  "cooldown": 2.2,
+  "automatic": false,
+  "spread": 0.0005,
+  "recoil": 40,
+  "range": 90,
+  "engage": 55,
+  "scopeOnly": true,
+  "handling": { "hip": 1, "move": 0.025, "turn": 0.09 },
+  "ammo": { "capacity": 6, "reload": 4 },
+  "projectile": {
+    "look": "bullet",
+    "speed": 600,
+    "gravity": 1,
+    "life": 0.6,
+    "damage": 220,
+    "damageType": "pierce",
+    "penetrating": true,
+    "impulse": 25
+  }
+}

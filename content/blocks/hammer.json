@@ -1,0 +1,12 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Marteau pneumatique (arme de contact) : le vérin et le pivot d'un bras qui s'abat devant le bloc. Bloc lourd et solide, comme les autres armes de contact mécaniques.",
+  "cost": 38,
+  "mass": 10,
+  "hp": 200,
+  "tinted": false,
+  "bond": 250,
+  "resist": { "cut": 0.7, "kinetic": 0.85, "impact": 0.8 },
+  "melee": "hammer",
+  "price": 400
+}

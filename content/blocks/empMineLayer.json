@@ -1,0 +1,22 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Poseur de mines : une tourelle fixe tournée vers l'arrière (`fixed`), qui sème ses mines derrière le robot.",
+  "cost": 18,
+  "mass": 5,
+  "hp": 80,
+  "tinted": false,
+  "bond": 150,
+  "turret": {
+    "weapon": "empMine",
+    "yawRate": 0,
+    "pitchRate": 0,
+    "minPitch": 0,
+    "maxPitch": 0,
+    "height": 0,
+    "barrel": 0.45,
+    "fixed": "back",
+    "head": [0.36, 0.16, 0.2],
+    "caliber": 0.24
+  },
+  "price": 300
+}

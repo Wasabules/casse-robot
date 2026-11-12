@@ -1,0 +1,25 @@
+{
+  "$schema": "../schemas/melee.schema.json",
+  "$comment": "Scie circulaire : un disque d'acier denté de 0,9 m, à plat, au bout d'un bras devant son bloc ; petit et rapide (1 430 tr/min). Il ne frappe pas : il mord en continu (`bite`), perce un bloc puis le suivant, et sa prise tire son robot latéralement le long de la cible.",
+  "look": "saw",
+  "motion": "spin",
+  "axis": "up",
+  "hub": [0, 0.02, 0.72],
+  "blade": { "inner": 0, "outer": 0.45, "half": 0.03 },
+  "spin": { "inertia": 0.3, "speed": 150, "spinUp": 1.2, "spinDown": 10, "gyro": 1, "unbalance": 0.012, "mass": 3 },
+  "bite": { "power": 5, "feed": "radial", "grab": 10, "gear": 1, "depth": 0.8 },
+  "hit": {
+    "damageType": "cut",
+    "damage": 90,
+    "bite": 0,
+    "fling": 0,
+    "push": { "tangent": 1, "radial": 0, "axial": 0, "lift": 0 },
+    "recoil": 0,
+    "spread": 0.15,
+    "wheels": 1.3,
+    "wear": 0.8,
+    "gap": 0,
+    "minSpeed": 0.2
+  },
+  "engage": 1.5
+}

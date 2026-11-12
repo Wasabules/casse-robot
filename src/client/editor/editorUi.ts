@@ -1,13 +1,14 @@
-import { ARENA_IDS, ARENAS, type ArenaId, type BoxLook, type PathSurface, type StaticKind } from "../../shared/arena/layout";
-import type { PropType } from "../../shared/catalog/props";
+import { ARENA_GROUNDS } from "../../shared/arena/grounds";
+import { ARENA_IDS, type ArenaId, type BoxLook, type PathSurface, type StaticKind } from "../../shared/arena/layout";
+import { PROP_TYPES, type PropType } from "../../shared/catalog/props";
 import { boundAt, mapBounds } from "../../shared/map/build";
 import {
-  BOX_LOOKS, BRUSH_KINDS, BRUSH_LIMITS, fieldApplies, fieldValue, FORMS, formOf, getElement, MAP_LIMITS, PALETTE, PALETTE_TABS, terrainSideFor, TRACE_KINDS, TREE_TYPES,
+  assetEntries, BOX_LOOKS, BRUSH_KINDS, BRUSH_LIMITS, fieldApplies, fieldValue, FORMS, formOf, getElement, MAP_LIMITS, PALETTE, PALETTE_TABS, terrainSideFor, TRACE_KINDS, TREE_TYPES,
   type ChoiceNames, type ElementRef, type FieldSpec, type MapFile, type NamedPaletteId, type PaletteEntry,
 } from "../../shared/map";
-import { fold } from "../i18n/format";
+import { compareText, fold } from "../i18n/format";
 import { LOCALE_IDS, LOCALES, measure, t } from "../i18n/i18n";
-import { arenaName, mapIssueText } from "../i18n/names";
+import { arenaName, mapIssueText, propName } from "../i18n/names";
 import { editorKeys } from "../keys";
 import { mapName } from "../maps/library";
 import type { MapEditor } from "./editor";
@@ -123,7 +124,7 @@ export function paletteName(e: PaletteEntry): string {
 }
 
 /** Les arènes du jeu qui ont leur palette du sol (et la Vallée, par défaut). */
-const GROUND_PRESETS: readonly ArenaId[] = ARENA_IDS.filter((id) => id === "valley" || !!ARENAS[id].ground);
+const GROUND_PRESETS: readonly ArenaId[] = ARENA_IDS.filter((id) => id === "valley" || !!ARENA_GROUNDS[id]);
 
 export class EditorUi {
   readonly root: HTMLElement;
@@ -548,10 +549,35 @@ export class EditorUi {
       h("h3", {}, t("editor.top.save")),
       h("div", { class: "ed-buttons ed-column" },
         button(`${t("editor.top.save")} (${e.keys("editorSave")})`, () => void e.save(), { class: "ed-btn primary" }),
-        button(t("editor.file.export"), () => e.exportMap()),
+        // (une carte qui a des ressources s'exporte en paquet)
+        button(t(e.map.assets ? "editor.file.exportPackage" : "editor.file.export"), () => void e.exportMap()),
         button(t("editor.file.exportTerrain"), () => void e.exportTerrain(), { disabled: !e.map.terrain })),
+      ...this.renderAssets(),
     ];
   }
+
+  /** Les ressources de la carte (un paquet) : la liste (chacune se retire), et en ajouter une. */
+  private renderAssets(): Child[] {
+    const e = this.editor;
+    const types = (Object.keys(PROP_TYPES) as PropType[]).map((type) => ({ value: type, label: propName(type) })).sort((a, b) => compareText(a.label, b.label));
+    let chosen: PropType = this.assetType;
+    return [
+      h("h3", {}, t("editor.file.assets")),
+      h("p", { class: "ed-hint" }, t("editor.file.assetsHint")),
+      h("ul", { class: "ed-list" }, ...assetEntries(e.map.assets).map((entry) => h("li", {},
+        h("span", {}, entry.path, h("small", {}, measure(entry.asset.bytes / 1024, "kB"))),
+        button(t("editor.file.assetRemove"), () => e.removeAsset(entry.type))))),
+      row(t("editor.file.assetType"), select<PropType>(chosen, types, (v) => {
+        if (v) chosen = this.assetType = v;
+      })),
+      h("div", { class: "ed-buttons ed-column" },
+        button(t("editor.file.assetModel"), () => void e.addAsset(chosen)),
+        button(t("editor.file.assetAmbience"), () => void e.addAsset(null))),
+    ];
+  }
+
+  /** Le type d'accessoire choisi pour un modèle à ajouter (gardé d'un dessin du panneau à l'autre). */
+  private assetType: PropType = "crate";
 
   // --- Propriétés de la sélection ---
 

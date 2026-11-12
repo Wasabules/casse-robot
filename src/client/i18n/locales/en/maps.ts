@@ -1,5 +1,7 @@
 import type { MapCounted, MapIssueCode } from "../../../../shared/map/format";
 import type { HeightmapErrorCode } from "../../../../shared/map/heightmap";
+import type { GlbProblemCode } from "../../../../shared/media/glb";
+import type { OpusProblem } from "../../../../shared/media/ogg";
 import type { Message, ZoneOf } from "../../i18n";
 import type { maps as fr } from "../fr/maps";
 import { section } from "../section";
@@ -7,17 +9,22 @@ import { section } from "../section";
 export const maps = {
   "maps.by": "by {author}",
   "maps.title": "Community maps",
-  "maps.subtitle": "Maps that ship with the game, and the ones you imported (.casse-map.json files).",
+  "maps.subtitle": "Maps that ship with the game, and the ones you imported (.casse-map.json files, .casse-map.zip packages).",
   "maps.manage": "Community maps…",
   "maps.manageDetail": "Import, export or delete maps.",
   "maps.import": "Import a map…",
-  "maps.importDetail": "A .casse-map.json file: it's checked, then kept in this browser.",
+  "maps.importDetail": "A .casse-map.json file, or a .casse-map.zip package (the map, its models, its ambience): it's checked, then kept in this browser.",
   "maps.imported": "Map imported: {name}.",
   "maps.already": "This map is already here: {name}.",
   "maps.unreadable": "Unreadable file.",
   "maps.invalidTitle": "Map rejected",
   "maps.export": "Export the file",
   "maps.exportDetail": "Saves the map as .casse-map.json, to share it or submit it to the game.",
+  "maps.exportPackageDetail": "Saves the map and its resources (models, ambience) as a .casse-map.zip package, to share it.",
+  "maps.exportMissing": "This browser doesn't have the map's resources: it can't make a package of it.",
+  "maps.assetModels": { one: "{n} prop model", other: "{n} prop models" },
+  "maps.assetAmbience": "its own ambience",
+  "maps.assets": "Package: {list}",
   "maps.delete": "Delete",
   "maps.deleteDetail": "Removes it from this browser.",
   "maps.deleted": "Map deleted: {name}.",
@@ -48,7 +55,33 @@ export const maps = {
     spawnHazard: "Danger right next to the {team} spawn line (lava, a barrel, a tank).",
     spawnOutside: "The {team} spawn line leaves the play area.",
     spawnClose: "The two spawn lines are too close to each other: {distance} m (at least {min} m).",
+    archive: "Unreadable package: a damaged or encrypted zip archive, or one the game can't read.",
+    packagePath: "Package rejected: a file with an unsafe name ({path}).",
+    packageMap: "No map.json in the package: this isn't a map package.",
+    assetSize: "File too large in the package: {path}, {size} KB (at most {max} KB).",
+    assetName: "Unexpected file in the package: {path} (models go in models/props/<prop type>.glb, the ambience in sounds/ambience.ogg).",
+    assetModel: "Unreadable model: {path} ({why}).",
+    assetSound: "Ambience rejected: {path} ({why}).",
   } as const satisfies Record<MapIssueCode, Message>),
+  ...section("glbProblem", {
+    short: "too short for a binary glTF file",
+    magic: "not a binary glTF file: export as .glb",
+    container: "container version {version}, the game reads version 2",
+    length: "declared length of {declared} bytes for a file of {actual}",
+    jsonChunk: "JSON chunk missing or truncated",
+    json: "unreadable JSON",
+    version: "glTF version {version}, the game reads 2.0",
+    externalBuffer: "buffer in a separate file: everything must be in the .glb",
+    bufferSize: "a {buffer}-byte buffer for a {bin}-byte binary chunk",
+    externalImage: "image in a separate file: textures must be in the .glb",
+    noMesh: "no mesh",
+    extensions: "extensions the game doesn't read: {list}",
+  } as const satisfies Record<GlbProblemCode, Message>),
+  ...section("opusProblem", {
+    format: "not a readable Ogg Opus file",
+    channels: "{channels} channels, at most two",
+    duration: "{seconds} s, it must last {min} to {max}",
+  } as const satisfies Record<OpusProblem["code"], Message>),
   ...section("mapCounted", {
     boxes: "scenery boxes",
     props: "props",
@@ -65,6 +98,7 @@ export const maps = {
     languages: "languages",
     navPoints: "nav graph points",
     navLinks: "nav graph links",
+    files: "files in the package",
   } as const satisfies Record<MapCounted, Message>),
   ...section("heightmap", {
     notPng: "This isn't a PNG image.",

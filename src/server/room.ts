@@ -1,4 +1,4 @@
-import { ARENA_IDS, isMapKey, type ArenaKey, type MapKey } from "../shared/arena/layout";
+import { ARENA_IDS, isMapKey, type ArenaId, type ArenaKey, type MapKey } from "../shared/arena/layout";
 import type { MapFile } from "../shared/map/format";
 import { registerMap } from "../shared/map/load";
 import { isArmId } from "../shared/catalog/melee";
@@ -65,6 +65,11 @@ export interface Player {
 
 /** Ce qu'on peut donner à une salle en plus de la progression des joueurs. */
 export interface RoomOptions {
+  /**
+   * Les arènes du jeu de la rotation (toutes par défaut) : celles dont le fichier a été fourni
+   * (map/gameArenas.ts ; server/main.ts les lit dans content/arenas/).
+   */
+  readonly arenas?: readonly ArenaId[];
   /** Cartes communautaires (déjà vérifiées : `checkMap`), qui entrent dans la rotation après les arènes du jeu. */
   readonly maps?: readonly MapFile[];
   /** Seulement les cartes communautaires dans la rotation (s'il y en a). */
@@ -95,7 +100,7 @@ export class Room {
       if (isMapKey(arena.id)) this.maps.set(arena.id, map);
     }
     const community = [...this.maps.keys()];
-    this.rotation = options.mapsOnly && community.length ? community : [...ARENA_IDS, ...community];
+    this.rotation = options.mapsOnly && community.length ? community : [...(options.arenas ?? ARENA_IDS), ...community];
     this.encoder = new NetEncoder(this.sim);
     this.sim.combat = MODE.combat;
     // Les destructions de chaque joueur (ses robots successifs portent ses commandes)

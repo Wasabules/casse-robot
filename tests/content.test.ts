@@ -9,7 +9,7 @@ import { WHEEL_TYPES } from "../src/shared/catalog/wheels";
 import { PRESET_BOTS } from "../src/shared/design/presets";
 import { validateDesign } from "../src/shared/design/robotDesign";
 import { catalogData, catalogSchema } from "../tools/schemas/catalog";
-import { unsupportedKeywords, validateSchema } from "./jsonSchema";
+import { undocumented, unsupportedKeywords, validateSchema } from "./jsonSchema";
 
 /*
  * Le catalogue du jeu en données ouvertes (content/catalog.json, fait par tools/schemas/catalog.ts ;
@@ -21,30 +21,6 @@ import { unsupportedKeywords, validateSchema } from "./jsonSchema";
 
 const SCHEMA = catalogSchema();
 const DATA = JSON.parse(readFileSync(new URL("../content/catalog.json", import.meta.url), "utf8")) as Record<string, Record<string, Record<string, unknown>>>;
-
-/**
- * Les sous-schémas sans description (un champ d'un objet, une définition), avec leur chemin. Les
- * contraintes (une branche d'`anyOf` qui ne fait que restreindre des champs déjà décrits, sans
- * `type`) ne décrivent pas de champ.
- */
-function undocumented(schema: unknown, path = "#"): string[] {
-  if (!schema || typeof schema !== "object" || Array.isArray(schema)) return [];
-  const s = schema as Record<string, unknown>;
-  const out: string[] = [];
-  for (const group of s.type === "object" ? ["properties", "$defs"] : ["$defs"]) {
-    const named = s[group];
-    if (named && typeof named === "object") {
-      for (const [name, sub] of Object.entries(named)) {
-        const subSchema = sub as Record<string, unknown>;
-        if (typeof subSchema.description !== "string" && typeof subSchema.$ref !== "string" && !("const" in subSchema)) out.push(`${path}/${group}/${name}`);
-        out.push(...undocumented(sub, `${path}/${group}/${name}`));
-      }
-    }
-  }
-  for (const key of ["items", "additionalProperties"]) out.push(...undocumented(s[key], `${path}/${key}`));
-  for (const key of ["anyOf", "oneOf"]) if (Array.isArray(s[key])) (s[key] as unknown[]).forEach((sub, i) => out.push(...undocumented(sub, `${path}/${key}/${i}`)));
-  return out;
-}
 
 describe("catalogue du jeu en données ouvertes (content/)", () => {
   it("le catalogue suit son schéma, sans champ que le schéma ignore ; le schéma n'emploie que des mots-clés connus", () => {

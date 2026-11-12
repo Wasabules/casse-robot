@@ -33,7 +33,7 @@
     "models": "vite build --ssr tools/models/build.ts --outDir dist-tools/models --emptyOutDir --logLevel warn && node dist-tools/models/build.js",
     "share": "node tools/share.mjs",
     "native": "node tools/native/build.mjs",
-    "native:test": "cargo test -p casse-sim"
+    "native:test": "cargo test -p casse-sim --features sim"
   },
   "dependencies": {
     "@babylonjs/core": "9.28.0",

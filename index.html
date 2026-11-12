@@ -95,13 +95,16 @@
 </div>
 </div>
 <div class="hint" id="hint" data-i18n="hud.page.hint">Deux équipes s'affrontent. Tire sur un baril pour une explosion en chaîne, abats un rotor du drone, ou clique sur un nom pour suivre un robot.</div>
-<!-- Commandes tactiles en pilotant (client/input/touchPad.ts) -->
+<!-- Commandes tactiles en pilotant (client/input/touchPad.ts) : le manche à gauche, les boutons à
+     droite, et le manche de visée si on vise au manche (réglage) ; leur place : style.css -->
 <div class="touchpad" id="touchPad" hidden>
   <div class="tp-stick" id="tpStick" aria-label="Manche : avancer et tourner" data-i18n-aria-label="hud.page.touchStick"><div class="tp-knob" id="tpKnob"></div></div>
   <div class="tp-buttons">
+    <!-- (le manche de visée d'abord : les boutons passent par-dessus la zone qu'on peut toucher autour de lui) -->
+    <div class="tp-stick tp-aim" id="tpAim" aria-label="Manche de visée : tourner la caméra" data-i18n-aria-label="hud.page.touchAim"><div class="tp-knob" id="tpAimKnob"></div></div>
     <button class="tp-btn tp-fire" data-hold="fire" data-i18n="hud.page.touchFire">Tir</button>
-    <button class="tp-btn" data-hold="up" aria-label="Monter" data-i18n-aria-label="hud.page.touchUp">▲</button>
-    <button class="tp-btn" data-hold="down" aria-label="Descendre" data-i18n-aria-label="hud.page.touchDown">▼</button>
+    <button class="tp-btn tp-up" data-hold="up" aria-label="Monter" data-i18n-aria-label="hud.page.touchUp">▲</button>
+    <button class="tp-btn tp-down" data-hold="down" aria-label="Descendre" data-i18n-aria-label="hud.page.touchDown">▼</button>
     <button class="tp-btn tp-boost" data-hold="boost" data-i18n="hud.page.touchBoost">Turbo</button>
     <button class="tp-btn tp-scope" data-hold="scope" data-i18n="hud.page.touchScope">Viseur</button>
   </div>

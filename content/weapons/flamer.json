@@ -1,0 +1,24 @@
+{
+  "$schema": "../schemas/weapons.schema.json",
+  "$comment": "Jet de flammes : de petites gouttes brûlantes, à courte portée, qui mettent le feu aux blocs et laissent parfois une flaque de feu au sol ; environ 4 s de jet continu.",
+  "cooldown": 0.07,
+  "automatic": true,
+  "spread": 0.07,
+  "recoil": 0.3,
+  "range": 11,
+  "engage": 6,
+  "handling": { "hip": 1, "move": 0, "turn": 0 },
+  "heat": { "perShot": 0.032, "cooling": 0.2 },
+  "projectile": {
+    "look": "flame",
+    "speed": 15,
+    "gravity": 0.1,
+    "life": 0.8,
+    "damage": 5,
+    "damageType": "fire",
+    "penetrating": false,
+    "impulse": 0.3,
+    "ignite": 0.12,
+    "puddle": { "radius": 0.9, "life": 4, "chance": 0.3 }
+  }
+}

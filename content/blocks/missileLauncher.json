@@ -1,0 +1,20 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "cost": 30,
+  "mass": 6,
+  "hp": 90,
+  "tinted": false,
+  "bond": 150,
+  "turret": {
+    "weapon": "missile",
+    "yawRate": 1.5,
+    "pitchRate": 1,
+    "minPitch": 0,
+    "maxPitch": 0.9,
+    "height": 0.4,
+    "barrel": 0.5,
+    "head": [0.46, 0.34, 0.5],
+    "caliber": 0.34
+  },
+  "price": 300
+}

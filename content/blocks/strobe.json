@@ -1,0 +1,11 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Feu à éclats : un stroboscope blanc, double éclat (sous un avion, au bout de ses ailes). Sans effet dans la simulation : la nuit, il éclaire la scène.",
+  "cost": 2,
+  "mass": 0.2,
+  "hp": 20,
+  "tinted": false,
+  "bond": 40,
+  "light": { "kind": "point", "range": 14, "color": "white", "pattern": "strobe" },
+  "price": 50
+}

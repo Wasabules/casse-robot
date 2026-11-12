@@ -41,6 +41,8 @@ const TYPES: Record<string, string> = {
   webp: "image/webp",
   woff2: "font/woff2",
   txt: "text/plain; charset=utf-8",
+  glb: "model/gltf-binary",
+  zip: "application/zip",
 };
 
 /** Type d'un fichier d'après son extension. */
@@ -56,4 +58,19 @@ export function contentType(path: string): string {
  */
 export function cacheControl(path: string): string {
   return path.startsWith("assets/") ? "public, max-age=31536000, immutable" : "no-cache";
+}
+
+/** Une ressource d'une carte (map/pack.ts) : son adresse dit son empreinte, elle ne change jamais. */
+export const IMMUTABLE = "public, max-age=31536000, immutable";
+
+/**
+ * L'empreinte SHA-256 de la ressource de carte que demande l'adresse `url`
+ * (« /map-assets/<64 chiffres hexadécimaux> », voir `MAP_ASSET_PATH`), ou null si ce n'en est pas une.
+ * Le serveur ne sert que les ressources des cartes qu'il a lues, d'après leur empreinte : rien d'un dossier.
+ */
+export function mapAssetHash(url: string, prefix: string): string | null {
+  const path = url.split(/[?#]/, 1)[0];
+  if (!path.startsWith(prefix)) return null;
+  const hash = path.slice(prefix.length);
+  return /^[0-9a-f]{64}$/.test(hash) ? hash : null;
 }

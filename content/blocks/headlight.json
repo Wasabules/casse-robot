@@ -1,0 +1,11 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Phare : la nuit, il éclaire devant lui (le long de son haut : posé sur l'avant du robot, droit devant). Sans effet dans la simulation : la nuit, il éclaire la scène.",
+  "cost": 3,
+  "mass": 0.4,
+  "hp": 30,
+  "tinted": false,
+  "bond": 40,
+  "light": { "kind": "spot", "range": 34, "cone": 1.4, "color": "warm", "pattern": "steady" },
+  "price": 60
+}

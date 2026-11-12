@@ -1,10 +1,14 @@
 import type * as B from "../babylon";
-import type { ArenaLayout, BoxLook, MapKey } from "../../shared/arena/layout";
+import type { ArenaLayout, BoxLook, MapAsset, MapAssets, MapKey } from "../../shared/arena/layout";
 import type { Terrain } from "../../shared/arena/terrain";
-import { CAR_HALF, propDef, propHalf } from "../../shared/catalog/props";
+import { CAR_HALF, propDef, propHalf, type PropType } from "../../shared/catalog/props";
+import { ambienceIssue, isArchive, modelIssue, modelPath, PACKAGE_FILES, readMapArchive } from "../../shared/map/pack";
+import type { ReadResult } from "../../shared/map/read";
+import { sha256 } from "../../shared/media/sha256";
+import { mapAssets } from "../maps/assets";
 import {
   addElement, applyBrush, arenaFromMap, blankMap, centerOf, checkMap, duplicateElements, elementCenter, elementsOf, fieldHeight, fieldOf, getElement,
-  imageFromHeights, issueTarget, MAP_LIMITS, MapHistory, moveElements, movePoint, paletteEntry, readMapText, removeElements, rotateElements,
+  imageFromHeights, issueTarget, MAP_LIMITS, MapHistory, moveElements, PACKAGE_LIMITS, movePoint, paletteEntry, readMapText, removeElements, rotateElements,
   setElement, slabSize, spawnsOf, terrainFromImage, terrainOfField, terrainSideFor, traceElement, TRACE_POINTS, unionRegion, withField,
   type ArenaOrigins, type Brush, type ElementRef, type FieldSpec, type HeightField, type HeightImage, type MapElement, type MapFile,
   type MapBox, type MapIssue, type MapLava, type MapPoint, type MapPrefab, type MapSpawn, type PaletteTab, type Placed, type Region, type TerrainImport, type TraceKind,
@@ -17,7 +21,7 @@ import { t } from "../i18n/i18n";
 import { mapIssueText, placeName } from "../i18n/names";
 import { isHeightmapError } from "../../shared/map/heightmap";
 import { heightmapErrorText } from "../i18n/names";
-import { downloadHeightPng, downloadMap, heightImageFromFile, mapFileName, pickFile } from "../maps/files";
+import { downloadHeightPng, downloadMap, downloadPackage, heightImageFromFile, inflate, inflateRaw, mapFileName, pickFile } from "../maps/files";
 import { mapName, type MapEntry, type MapLibrary } from "../maps/library";
 import { MapChecker } from "./checker";
 import { dropDraft, loadDraft, saveDraft, type DraftSource, type DraftView } from "./drafts";
@@ -860,11 +864,22 @@ export class MapEditor {
     this.note(t("editor.note.opened", { name: mapName(this.map) }));
   }
 
-  /** Ouvre un fichier de carte (lisible : il peut avoir des problèmes, l'éditeur est là pour les corriger). */
+  /**
+   * Ouvre un fichier de carte (lisible : il peut avoir des problèmes, l'éditeur est là pour les
+   * corriger), ou un paquet (.casse-map.zip : ses ressources se gardent dans ce navigateur, la carte les garde).
+   */
   async openFile(): Promise<void> {
-    const file = await pickFile(".json,application/json");
+    const file = await pickFile(".json,.zip,application/json,application/zip");
     if (!file) return;
-    const read = readMapText(await file.text());
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let read: ReadResult;
+    if (isArchive(bytes)) {
+      const pkg = await readMapArchive(bytes, inflate, inflateRaw);
+      if (pkg.ok) await mapAssets.keep(pkg.assets);
+      read = pkg.ok ? { ok: true, map: pkg.map } : pkg;
+    } else {
+      read = readMapText(new TextDecoder().decode(bytes));
+    }
     if (!read.ok) {
       this.note(t("editor.note.fileRefused", { issue: mapIssueText(read.issues[0] ?? { code: "json" }) }), true);
       this.host.sound("error");
@@ -879,8 +894,45 @@ export class MapEditor {
     this.note(t("editor.note.opened", { name: mapName(this.map) }));
   }
 
-  exportMap(): void {
-    downloadMap(this.map);
+  /**
+   * Ajoute une ressource à la carte (elle devient un paquet) : le modèle d'un type d'accessoire (`type`),
+   * ou l'ambiance (null). Le fichier passe les contrôles d'un paquet (un .glb que le jeu lit, un Ogg
+   * Opus de 2 à 60 s), puis se garde dans ce navigateur ; la carte n'en porte que l'empreinte.
+   */
+  async addAsset(type: PropType | null): Promise<void> {
+    const file = await pickFile(type ? ".glb,model/gltf-binary" : ".ogg,audio/ogg");
+    if (!file) return;
+    const path = type ? modelPath(type) : PACKAGE_FILES.ambience;
+    const limit = type ? PACKAGE_LIMITS.model : PACKAGE_LIMITS.ambience;
+    const bytes = file.size > limit ? null : new Uint8Array(await file.arrayBuffer());
+    const issue: MapIssue | null = !bytes
+      ? { code: "assetSize", path, size: Math.ceil(file.size / 1024), max: limit / 1024 }
+      : type ? modelIssue(path, bytes) : ambienceIssue(path, bytes);
+    if (issue || !bytes) {
+      this.note(t("editor.note.fileRefused", { issue: mapIssueText(issue ?? { code: "archive" }) }), true);
+      this.host.sound("error");
+      return;
+    }
+    const asset = { sha256: sha256(bytes), bytes: bytes.length };
+    await mapAssets.keep(new Map([[asset.sha256, bytes]]));
+    this.commit(withAsset(this.map, type, asset));
+    this.note(t("editor.note.assetAdded", { path }));
+  }
+
+  /** Retire une ressource de la carte : le modèle d'un type d'accessoire, ou l'ambiance (null). */
+  removeAsset(type: PropType | null): void {
+    this.commit(withAsset(this.map, type, null));
+    this.note(t("editor.note.assetRemoved", { path: type ? modelPath(type) : PACKAGE_FILES.ambience }));
+  }
+
+  /** Exporte la carte : un fichier .casse-map.json, ou un paquet .casse-map.zip si elle a des ressources (modèles, ambiance). */
+  async exportMap(): Promise<void> {
+    if (!this.map.assets) downloadMap(this.map);
+    else if (!(await downloadPackage(this.map, mapAssets))) {
+      this.note(t("maps.exportMissing"), true);
+      this.host.sound("error");
+      return;
+    }
     this.note(t("editor.note.exported", { file: mapFileName(this.map) }));
   }
 
@@ -1287,8 +1339,30 @@ export function changesBetween(a: MapFile | null, b: MapFile): { ground: boolean
   const sown = (b.prefabs ?? []).some((p) => p.kind === "woods" || p.kind === "rocks");
   const layout = ground || a.zones !== b.zones || a.spawns !== b.spawns || a.bounds !== b.bounds || a.boxes !== b.boxes;
   const boxes = a.boxes !== b.boxes || a.prefabs !== b.prefabs || a.terrain !== b.terrain || a.limits !== b.limits || a.bounds !== b.bounds || (sown && layout);
-  const props = a.props !== b.props || a.prefabs !== b.prefabs || a.terrain !== b.terrain || (sown && layout);
+  // (les modèles d'un paquet : ceux des accessoires changent)
+  const props = a.props !== b.props || a.prefabs !== b.prefabs || a.terrain !== b.terrain || a.assets !== b.assets || (sown && layout);
   return { ground, boxes, props };
+}
+
+/**
+ * La carte avec une ressource de plus, remplacée ou retirée (`asset` null) : le modèle d'un type
+ * d'accessoire (`type`), ou l'ambiance (null). Une carte sans ressources n'a plus de champ `assets`
+ * (elle redevient la même carte qu'avant les paquets). Les modèles restent rangés par type, comme
+ * les range la lecture.
+ */
+export function withAsset(map: MapFile, type: PropType | null, asset: MapAsset | null): MapFile {
+  const models: Partial<Record<PropType, MapAsset>> = { ...(map.assets?.models ?? {}) };
+  let ambience = map.assets?.ambience;
+  if (type) {
+    if (asset) models[type] = asset;
+    else delete models[type];
+  } else {
+    ambience = asset ?? undefined;
+  }
+  const sorted = Object.fromEntries(Object.entries(models).sort(([a], [b]) => (a < b ? -1 : 1))) as Partial<Record<PropType, MapAsset>>;
+  const assets: MapAssets = { ...(Object.keys(sorted).length ? { models: sorted } : {}), ...(ambience ? { ambience } : {}) };
+  const { assets: _old, ...rest } = map;
+  return assets.models || assets.ambience ? { ...rest, assets } : rest;
 }
 
 /** Une boîte du décor (et pas un préfabriqué : elle a ses trois dimensions). */

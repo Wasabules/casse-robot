@@ -220,3 +220,27 @@ function bestErrors(outcomes: readonly Outcome[]): string {
 export function validateSchema(schema: object, value: unknown, options: { unknownProperties?: boolean } = {}): SchemaError[] {
   return new Validator(schema as Schema, options.unknownProperties ?? false).at(schema, value, "");
 }
+
+/**
+ * Les sous-schémas sans description (un champ d'un objet, une définition), avec leur chemin. Les
+ * contraintes (une branche d'`anyOf` qui ne fait que restreindre des champs déjà décrits, sans
+ * `type`) ne décrivent pas de champ.
+ */
+export function undocumented(schema: unknown, path = "#"): string[] {
+  if (!schema || typeof schema !== "object" || Array.isArray(schema)) return [];
+  const s = schema as Record<string, unknown>;
+  const out: string[] = [];
+  for (const group of s.type === "object" ? ["properties", "$defs"] : ["$defs"]) {
+    const named = s[group];
+    if (named && typeof named === "object") {
+      for (const [name, sub] of Object.entries(named)) {
+        const subSchema = sub as Record<string, unknown>;
+        if (typeof subSchema.description !== "string" && typeof subSchema.$ref !== "string" && !("const" in subSchema)) out.push(`${path}/${group}/${name}`);
+        out.push(...undocumented(sub, `${path}/${group}/${name}`));
+      }
+    }
+  }
+  for (const key of ["items", "additionalProperties"]) out.push(...undocumented(s[key], `${path}/${key}`));
+  for (const key of ["anyOf", "oneOf"]) if (Array.isArray(s[key])) (s[key] as unknown[]).forEach((sub, i) => out.push(...undocumented(sub, `${path}/${key}/${i}`)));
+  return out;
+}

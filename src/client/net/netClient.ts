@@ -1,8 +1,11 @@
+import { isArenaId, type ArenaId } from "../../shared/arena/layout";
 import { checkMap } from "../../shared/map/validate";
-import { DEFAULT_PORT, KNOWN_MAPS, type ClientMessage, type ServerMessage } from "../../shared/net/protocol";
+import { decodeFrame, DEFAULT_PORT, KNOWN_MAPS, type ClientMessage, type ServerMessage } from "../../shared/net/protocol";
 import { Replica } from "../../shared/net/replica";
 import { t } from "../i18n/i18n";
 import { refusalText } from "../i18n/names";
+import { httpOrigin, mapAssets } from "../maps/assets";
+import { arenaReady, loadArena } from "../maps/gameArenas";
 import type { MapLibrary } from "../maps/library";
 
 /** Port de `vite preview` : comme en développement, la page vient de Vite, et le serveur de jeu tourne à côté. */
@@ -33,23 +36,38 @@ export class NetClient {
   private readonly socket: WebSocket;
   private welcomed = false;
   private closing = false;
+  /**
+   * Messages retenus, dans l'ordre, pendant que se charge le fichier d'une arène du jeu qu'une image
+   * annonce (une grande arène que ce navigateur n'a pas encore : client/maps/gameArenas.ts) : la
+   * réplique la trouve quand elle rejoue cette image. Le protocole ne change pas : le serveur ne dit
+   * que l'identifiant de l'arène.
+   */
+  private held: (string | ArrayBuffer)[] | null = null;
+  /** Les arènes dont le fichier n'a pas pu se charger : on ne les attend plus (la réplique note l'arène manquante). */
+  private readonly unavailable = new Set<ArenaId>();
 
   /** Les cartes communautaires de ce navigateur (`maps`) : celles qu'on a, le serveur ne les envoie pas ; celles qu'il envoie, on les garde. */
   private readonly maps: MapLibrary | null;
 
+  /** L'origine HTTP du serveur (« http://hôte:8787 ») : il y sert les ressources des cartes qu'il envoie. */
+  private readonly origin: string | null;
+
   constructor(url: string, join: Extract<ClientMessage, { t: "join" }>, maps: MapLibrary | null = null) {
     this.maps = maps;
+    this.origin = httpOrigin(url);
     if (maps) {
       join = { ...join, maps: maps.knownKeys().slice(0, KNOWN_MAPS) };
-      this.replica.resolveArena = (key) => maps.arena(key);
+      this.replica.resolveArena = (key) => {
+        const arena = maps.arena(key);
+        // (une carte qu'on a déjà, mais dont une ressource a manqué la dernière fois : ce serveur l'a)
+        if (arena && this.origin) mapAssets.fetchFrom(this.origin, arena);
+        return arena;
+      };
     }
     this.socket = new WebSocket(url);
     this.socket.binaryType = "arraybuffer";
     this.socket.addEventListener("open", () => this.send(join));
-    this.socket.addEventListener("message", (e) => {
-      if (typeof e.data === "string") this.onText(JSON.parse(e.data) as ServerMessage);
-      else this.replica.receive(new Uint8Array(e.data as ArrayBuffer));
-    });
+    this.socket.addEventListener("message", (e) => this.onMessage(e.data as string | ArrayBuffer));
     this.socket.addEventListener("close", () => {
       if (this.closing) return;
       this.closing = true;
@@ -67,7 +85,48 @@ export class NetClient {
     this.socket.close();
   }
 
-  /** Une carte communautaire envoyée par le serveur : vérifiée comme une carte importée, puis gardée et donnée à la réplique. */
+  private onMessage(data: string | ArrayBuffer): void {
+    if (this.held) {
+      this.held.push(data);
+      return;
+    }
+    if (typeof data === "string") {
+      this.onText(JSON.parse(data) as ServerMessage);
+      return;
+    }
+    const frame = decodeFrame(new Uint8Array(data));
+    for (const e of frame.header.events) {
+      if (e.t === "arena" && isArenaId(e.id) && !arenaReady(e.id) && !this.unavailable.has(e.id)) {
+        this.hold(e.id, data);
+        return;
+      }
+    }
+    this.replica.receiveFrame(frame);
+  }
+
+  /** Retient cette image et celles qui suivent le temps que le fichier de l'arène se charge, puis les rend. */
+  private hold(arena: ArenaId, first: ArrayBuffer): void {
+    this.held = [first];
+    const release = (): void => {
+      const held = this.held ?? [];
+      this.held = null;
+      for (const data of held) {
+        if (this.closing) return;
+        this.onMessage(data);
+      }
+    };
+    loadArena(arena).then(release, (e: unknown) => {
+      console.warn(`Arène ${arena} : fichier impossible à charger`, e);
+      this.unavailable.add(arena);
+      release();
+    });
+  }
+
+  /**
+   * Une carte communautaire envoyée par le serveur : vérifiée comme une carte importée, puis gardée et
+   * donnée à la réplique. Ses ressources (un paquet : modèles, ambiance) se téléchargent chez le serveur,
+   * en parallèle de la partie (client/maps/assets.ts).
+   */
   private receiveMap(msg: Extract<ServerMessage, { t: "map" }>): void {
     const check = checkMap(msg.map);
     if (!check.map || !check.arena || check.key !== msg.key || check.issues.length) {
@@ -75,6 +134,7 @@ export class NetClient {
       return;
     }
     this.replica.addArena(check.arena);
+    if (this.origin) mapAssets.fetchFrom(this.origin, check.map);
     void this.maps?.save(check.map, "server");
   }
 

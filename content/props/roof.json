@@ -1,0 +1,12 @@
+{
+  "$schema": "../schemas/props.schema.json",
+  "$comment": "Des tuiles sur une charpente de bois : elle brûle. Un toit repose sur ses murs (`PropSpot.rests`) et tombe quand ils ont tous cédé.",
+  "shape": { "kind": "slab" },
+  "mass": 600,
+  "friction": 0.7,
+  "hp": 40,
+  "shatters": true,
+  "anchored": true,
+  "burns": { "time": 12, "reach": 0.3 },
+  "resist": { "kinetic": 0.5, "pierce": 0.8, "energy": 0.8, "explosive": 1.5, "impact": 1.5, "fire": 1.5 }
+}

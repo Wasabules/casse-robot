@@ -1,0 +1,269 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Wasabules/casse-robot/main/content/schemas/props.schema.json",
+  "title": "Casse-Robot prop type",
+  "description": "A prop of the scenery: a physical body that can be pushed, broken, that reacts. Its 3D look can come from a glTF model (docs/models.md). One file per prop type: content/props/<type>.json, named after the type's identifier (a map's `props[].type`), read by the game as it is (src/shared/catalog/props.ts). Adding a type also takes its look and its name in each language in the client (docs/architecture.md, \"Architecture rules\"). Generated from the game's code (npm run schemas). Units: meters, kilograms, seconds, radians, newtons.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "description": "The schema of this file's family (content/schemas/<family>.schema.json), relative to the file, for the editor of whoever edits it. The game ignores it, like every field whose name starts with `$`.",
+      "type": "string"
+    },
+    "$comment": {
+      "description": "A note for whoever edits this file (why the values are what they are). The game ignores it.",
+      "type": "string"
+    },
+    "shape": {
+      "description": "Its collision shape.",
+      "anyOf": [
+        {
+          "description": "A cube.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "box"
+            },
+            "half": {
+              "description": "Half side (m).",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "half"
+          ]
+        },
+        {
+          "description": "An upright cylinder (a map spot may scale it).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "cylinder"
+            },
+            "radius": {
+              "description": "Radius (m).",
+              "type": "number",
+              "minimum": 0
+            },
+            "halfHeight": {
+              "description": "Half height (m).",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "radius",
+            "halfHeight"
+          ]
+        },
+        {
+          "description": "A box whose dimensions each spot gives (a wall, a roof; a car is 4.2 × 1.44 × 1.84 m).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "slab"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      ]
+    },
+    "mass": {
+      "description": "Mass (kg); for a slab, density (kg/m³).",
+      "type": "number",
+      "minimum": 0
+    },
+    "friction": {
+      "description": "Friction coefficient.",
+      "type": "number",
+      "minimum": 0
+    },
+    "hp": {
+      "description": "Hit points (for a slab, per m² of its largest face): at 0 it breaks, explodes or bolts.",
+      "type": "number",
+      "minimum": 0
+    },
+    "resist": {
+      "$ref": "#/$defs/resistances"
+    },
+    "explosion": {
+      "description": "Explosion when it gives way (after `fuse` s): neighboring explosions can set it off in a chain.",
+      "$ref": "#/$defs/explosion"
+    },
+    "fuse": {
+      "description": "Delay between the break and the explosion (s).",
+      "type": "number",
+      "minimum": 0
+    },
+    "vent": {
+      "description": "A gas leak: once punctured, the jet propels it along its axis, spinning, then it explodes.",
+      "type": "object",
+      "properties": {
+        "thrust": {
+          "description": "Thrust (N).",
+          "type": "number",
+          "minimum": 0
+        },
+        "duration": {
+          "description": "Duration (s).",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "thrust",
+        "duration"
+      ]
+    },
+    "shatters": {
+      "description": "It breaks into pieces when it gives way.",
+      "type": "boolean"
+    },
+    "anchored": {
+      "description": "Anchored: a fixed body that nothing pushes, until it is released or topples.",
+      "type": "boolean"
+    },
+    "topples": {
+      "description": "It topples instead of breaking the first time it gives way, keeping this share of its hit points.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "burns": {
+      "description": "Wood: it catches fire, loses hit points, chars, and goes out if not rekindled.",
+      "type": "object",
+      "properties": {
+        "time": {
+          "description": "Time before it goes out (s).",
+          "type": "number",
+          "minimum": 0
+        },
+        "reach": {
+          "description": "Reach of its flames beyond its surface (m): the neighbors it can set alight.",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "time",
+        "reach"
+      ]
+    }
+  },
+  "required": [
+    "shape",
+    "mass",
+    "friction",
+    "hp"
+  ],
+  "$defs": {
+    "resistances": {
+      "description": "Damage factor per kind of damage (1 when absent; below 1 it resists, above 1 it is sensitive).",
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "kinetic",
+          "pierce",
+          "explosive",
+          "impact",
+          "fire",
+          "energy",
+          "cut"
+        ]
+      },
+      "additionalProperties": {
+        "description": "Factor applied to the damage of this kind.",
+        "type": "number",
+        "minimum": 0
+      }
+    },
+    "groundFire": {
+      "description": "A puddle of fire on the ground: it burns what stands in it (fire damage, and it may set it ablaze) and sets wood alight.",
+      "type": "object",
+      "properties": {
+        "radius": {
+          "description": "Radius (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "life": {
+          "description": "How long it burns (s).",
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "radius",
+        "life"
+      ]
+    },
+    "explosion": {
+      "description": "An explosion: area damage decreasing linearly to its edge, and a blast that pushes bodies.",
+      "type": "object",
+      "properties": {
+        "look": {
+          "description": "Its look (effect and sound in the client).",
+          "enum": [
+            "shell",
+            "missile",
+            "rocket",
+            "flak",
+            "mine",
+            "bomb",
+            "napalm",
+            "warhead",
+            "barrel",
+            "gas",
+            "car"
+          ]
+        },
+        "radius": {
+          "description": "Radius of the damage area (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "damage": {
+          "description": "Damage at the center, decreasing to 0 at the edge (explosive damage).",
+          "type": "number",
+          "minimum": 0
+        },
+        "blastRadius": {
+          "description": "Radius of the blast (m).",
+          "type": "number",
+          "minimum": 0
+        },
+        "power": {
+          "description": "Impulse of the blast at the center (N·s per block hit).",
+          "type": "number",
+          "minimum": 0
+        },
+        "lift": {
+          "description": "Vertical component added to the blast's direction.",
+          "type": "number"
+        },
+        "ignite": {
+          "description": "Chance to set fire to each block left whole in the damage area.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "puddle": {
+          "description": "A puddle of fire left on the ground (napalm).",
+          "$ref": "#/$defs/groundFire"
+        }
+      },
+      "required": [
+        "look",
+        "radius",
+        "damage",
+        "blastRadius",
+        "power",
+        "lift"
+      ]
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Balise lumineuse : la nuit, elle luit tout autour, de la couleur de son équipe. Sans effet dans la simulation : la nuit, il éclaire la scène.",
+  "cost": 3,
+  "mass": 0.4,
+  "hp": 30,
+  "tinted": false,
+  "bond": 40,
+  "light": { "kind": "point", "range": 9, "color": "team", "pattern": "pulse" },
+  "price": 60
+}

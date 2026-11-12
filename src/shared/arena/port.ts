@@ -2,7 +2,9 @@ import { axisAngle, vec3, type Quat } from "../math/vec";
 import { box, incline, zone } from "./builders";
 import type { ArenaLayout, BoxLook, CaptureZone, StaticBox, StaticKind, TerrainPath } from "./layout";
 import { makeTerrain, noise2, smoothstep } from "./terrain";
-import { house, PropList, seeded } from "./valley";
+import { quantizeTerrain } from "../map/codec";
+import { house, PropList, seeded } from "./buildings";
+import { PORT_GROUND } from "./grounds";
 
 /*
  * Le Port : une grande carte (±100 m de terrain de jeu) au bord de la mer, qui est à l'est. Au
@@ -64,7 +66,7 @@ function portHeight(x: number, z: number): number {
   return h + smoothstep(HILL_FOOT, HILL_TOP, edge) * (11 + 4 * noise2(x / 40 - 2, z / 40 + 6));
 }
 
-const TERRAIN = makeTerrain(440, 220, portHeight);
+const TERRAIN = quantizeTerrain(makeTerrain(440, 220, portHeight));
 
 const yaw = (a: number): Quat => axisAngle(vec3(0, 1, 0), a);
 
@@ -407,10 +409,7 @@ export const PORT: ArenaLayout = {
   paths: PATHS,
   waterColor: "#2c5a6b",
   // Le béton des quais, ses taches ; l'herbe des collines au-dessus des quais
-  ground: {
-    base: ["#8a8984", "#7e7d78"], dirt: "#5d5f61", sand: "#6f6d66", mud: "#3c4846", rock: "#6c7d47", peak: "#77736b",
-    rockLine: Q + 1.5, rockSpan: 2, peakLine: 30, stains: 0.15, grain: 6, slope: { color: "#6c7d47", from: 0.82, span: 0.18 },
-  },
+ground: PORT_GROUND,
   sky: { color: "#c4d3dd", fog: 0.0042 },
   // Les noms sont posés là où ils ne se chevauchent pas sur la carte (la zone garde sa lettre)
   places: [

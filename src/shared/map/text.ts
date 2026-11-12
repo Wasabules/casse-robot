@@ -40,7 +40,7 @@ function layout(v: unknown, indent: string): string {
  * puis son relief (une très longue ligne) ; un champ inconnu (« $schema ») en tête.
  */
 const FILE_ORDER: readonly string[] = [
-  "format", "meta", "bounds", "limits", "sky", "ground", "ambience", "water", "lava", "vents", "falls", "paths", "urban", "nav", "navGraph",
+  "format", "meta", "bounds", "limits", "sky", "ground", "ambience", "assets", "water", "lava", "vents", "falls", "paths", "urban", "nav", "navGraph",
   "zones", "places", "spawns", "boxes", "props", "prefabs", "terrain",
 ] satisfies readonly (keyof MapFile)[];
 

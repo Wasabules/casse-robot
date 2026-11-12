@@ -1,0 +1,23 @@
+{
+  "$schema": "../schemas/weapons.schema.json",
+  "$comment": "Fusil à pompe : une gerbe de neuf plombs, dévastatrice au contact (180 dégâts si tout touche), qui s'éparpille au loin ; un chargeur de six cartouches, rechargées une à une.",
+  "cooldown": 0.9,
+  "automatic": false,
+  "spread": 0.004,
+  "recoil": 30,
+  "range": 22,
+  "engage": 9,
+  "handling": { "hip": 1.5, "move": 0.002, "turn": 0.008 },
+  "ammo": { "capacity": 6, "reload": 1.4 },
+  "projectile": {
+    "look": "pellet",
+    "speed": 150,
+    "gravity": 1,
+    "life": 0.3,
+    "damage": 20,
+    "damageType": "kinetic",
+    "penetrating": false,
+    "impulse": 5,
+    "pellets": { "count": 9, "spread": 0.075 }
+  }
+}

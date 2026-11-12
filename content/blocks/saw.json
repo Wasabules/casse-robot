@@ -1,0 +1,12 @@
+{
+  "$schema": "../schemas/blocks.schema.json",
+  "$comment": "Scie circulaire (arme de contact qui mord) : le moteur et le bras qui porte le disque devant le bloc ; le disque pèse 3 kg. Bloc lourd et solide, comme les autres armes de contact mécaniques.",
+  "cost": 34,
+  "mass": 8,
+  "hp": 170,
+  "tinted": false,
+  "bond": 220,
+  "resist": { "cut": 0.7, "kinetic": 0.85, "impact": 0.8 },
+  "melee": "saw",
+  "price": 420
+}

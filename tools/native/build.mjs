@@ -3,8 +3,11 @@
 // sert la page, le Worker de la partie solo, le serveur Node et les tests, sans fichier à servir à
 // part. Il faut Rust (rustup : la version de rust-toolchain.toml, et sa cible wasm32-unknown-unknown).
 //
-// `npm run native -- --probe` : la sonde de la physique (Rapier 0.36 compilé ici, fonctionnalité
-// `physics`) dans target/probe/, pour tests/nativePhysics.test.ts ; rien n'est embarqué.
+// `npm run native -- --probe` : la sonde (fonctionnalité `sim` : Rapier 0.36 compilé ici, et la
+// simulation portée, propriétaire de son monde) dans target/probe/, pour tests/nativePhysics.test.ts
+// et tests/nativeSim.test.ts ; rien n'est embarqué. `--dev` : la même, construite vite (profil
+// `probe-dev` : sans LTO, mêmes calculs flottants), pour itérer ; les tests prennent la plus récente
+// des deux (tests/probe.ts).
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -16,14 +19,17 @@ const TARGET = "wasm32-unknown-unknown";
 // (les chemins de la machine n'entrent pas dans le module : le même d'une machine à l'autre)
 const flags = [`--remap-path-prefix=${ROOT}=.`, process.env.RUSTFLAGS ?? ""].join(" ").trim();
 const probe = process.argv.includes("--probe");
-const cargo = spawnSync("cargo", ["build", "-p", "casse-sim", "--release", "--target", TARGET, ...(probe ? ["--features", "physics"] : [])], {
+const dev = probe && process.argv.includes("--dev");
+const profile = dev ? ["--profile", "probe-dev"] : ["--release"];
+const cargo = spawnSync("cargo", ["build", "-p", "casse-sim", ...profile, "--target", TARGET, ...(probe ? ["--features", "sim"] : [])], {
   cwd: ROOT,
   stdio: "inherit",
   env: { ...process.env, RUSTFLAGS: flags, ...(probe ? { CARGO_TARGET_DIR: join(ROOT, "target", "probe") } : {}) },
 });
 if (cargo.status !== 0) process.exit(cargo.status ?? 1);
 if (probe) {
-  console.log(`» ${join(ROOT, "target", "probe", TARGET, "release", "casse_sim.wasm")} : la sonde de la physique`);
+  const built = join(ROOT, "target", "probe", TARGET, dev ? "probe-dev" : "release", "casse_sim.wasm");
+  console.log(`» ${built} : la sonde (${(readFileSync(built).length / 1024).toFixed(1)} Ko)`);
   process.exit(0);
 }
 const wasm = readFileSync(join(ROOT, "target", TARGET, "release", "casse_sim.wasm"));

@@ -1,0 +1,23 @@
+{
+  "$schema": "../schemas/weapons.schema.json",
+  "$comment": "Obus électromagnétique : peu de dégâts, mais les robots proches de l'impact sont paralysés.",
+  "cooldown": 4,
+  "automatic": false,
+  "spread": 0.0027,
+  "recoil": 12,
+  "range": 55,
+  "engage": 22,
+  "handling": { "hip": 1.5, "move": 0.004, "turn": 0.015 },
+  "ammo": { "capacity": 2, "reload": 12 },
+  "projectile": {
+    "look": "orb",
+    "speed": 40,
+    "gravity": 0.25,
+    "life": 3,
+    "damage": 10,
+    "damageType": "kinetic",
+    "penetrating": false,
+    "impulse": 4,
+    "emp": { "radius": 4.5, "duration": 4 }
+  }
+}

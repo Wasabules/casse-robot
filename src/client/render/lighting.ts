@@ -33,6 +33,12 @@ const NO_HALO = /^(tag|zone|fx-vapor|fx-smoke|fx-streak-vapor|fx-streak-smoke|fx
 const HALO_INTENSITY = 0.75;
 const HALO_RATIO = 0.4;
 const HALO_BLUR = 28;
+/**
+ * Le halo n'est recalculé qu'une image sur HALO_REFRESH : un flou qui suit son objet avec une
+ * image de retard ne se voit pas, et sa texture (un second rendu de la scène) coûtait ~6 % du fil
+ * de la page (profil de `npm run perf -- --cpuprofile`, bataille de référence).
+ */
+const HALO_REFRESH = 2;
 
 // --- Lumières ---
 
@@ -132,6 +138,44 @@ interface Heat {
   strength: number;
 }
 
+
+/**
+ * Le halo allégé. Sa texture est un second rendu de la scène, où ce qui ne brille pas est dessiné en
+ * noir pour masquer ce qui brille derrière (le halo d'une flamme ne se voit pas à travers un mur).
+ * N'y sont plus dessinés que ce qui peut briller (matière sans éclairage avec une couleur propre,
+ * effets en shaders) et le décor figé, qui masque (le sol, le relief, les boîtes fusionnées de
+ * l'arène, les lots d'accessoires ancrés) : plus les robots, les roues ni ce qui bouge, qui ne
+ * masquent qu'un instant un halo flou. Et elle n'est refaite qu'une image sur `HALO_REFRESH`.
+ * Mesuré (profil du processeur, bataille de référence, machine chargée) : la texture du halo
+ * passe de 6,3 % à 1,7 % du fil de la page, la préparation de l'image de 25,0 à 21,2 ms (20,5 sans
+ * halo). Babylon n'offre pas ces réglages : `_mainTexture` et `_shouldRenderMesh` sont internes.
+ */
+function lightenHalo(glow: B.GlowLayer): void {
+  const inner = glow as unknown as {
+    _mainTexture?: { refreshRate: number };
+    _createMainTexture(): void;
+    _thinEffectLayer: { _shouldRenderMesh(mesh: B.AbstractMesh): boolean };
+  };
+  if (inner._mainTexture) inner._mainTexture.refreshRate = HALO_REFRESH;
+  // (la texture est refaite quand l'écran change de taille : elle garde son rythme)
+  const create = inner._createMainTexture.bind(glow);
+  inner._createMainTexture = () => {
+    create();
+    if (inner._mainTexture) inner._mainTexture.refreshRate = HALO_REFRESH;
+  };
+  const layer = inner._thinEffectLayer;
+  const listed = layer._shouldRenderMesh.bind(layer);
+  layer._shouldRenderMesh = (mesh) => {
+    if (!listed(mesh)) return false;
+    const material = mesh.material;
+    if (!material) return false;
+    if (material.getClassName() === "ShaderMaterial") return true;
+    const m = material as B.StandardMaterial;
+    if (m.disableLighting && m.emissiveColor) return true;
+    return mesh.isWorldMatrixFrozen || mesh.name === "ground";
+  };
+}
+
 /**
  * Halo, lumières et distorsion de chaleur de la scène de l'arène. `bind` la rattache au monde
  * affiché ; `update` à chaque image.
@@ -220,6 +264,7 @@ export class SceneLighting {
     };
     // Les lueurs des effets : leur propre matière, pour la couleur de chaque instance
     for (const mesh of this.glowMeshes) glow.referenceMeshToUseItsOwnMaterial(mesh);
+    lightenHalo(glow);
     this.glow = glow;
   }
 

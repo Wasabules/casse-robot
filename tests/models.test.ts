@@ -4,22 +4,26 @@ import { join, resolve } from "node:path";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as B from "../src/client/babylon";
-import { readPropModel, type PropModelData } from "../src/client/render/propGltf";
+import { readGltfModel, type GltfModel } from "../src/client/render/gltfModel";
+import { blockDef } from "../src/shared/catalog/blocks";
+import { wheelDef } from "../src/shared/catalog/wheels";
 import { crateModel } from "../tools/models/crate";
 import { readGlb, writeGlb, type GlbModel, type GlbPrimitive } from "../tools/models/glb";
 import { MANIFEST_FILE, manifestText, scanModels } from "../tools/models/manifest";
+import { armorModel, cannonHeadModel, wheelModel } from "../tools/models/parts";
 
 /*
- * Les modèles glTF des accessoires (public/models/props/<type>.glb, docs/models.md) : le manifeste
- * livré est celui que fait `npm run models` d'après le dossier, chaque modèle livré se lit, l'outil
- * refuse ce que le jeu ne saurait pas lire ; et la lecture du jeu (render/propGltf.ts, dans une
- * scène Babylon sans carte graphique) garde la géométrie, les nœuds, les matières et le sens des
- * faces que le jeu attend.
+ * Les modèles glTF (public/models/<famille>/<type>.glb : accessoires, blocs, têtes de tourelle,
+ * roues ; docs/models.md) : le manifeste livré est celui que fait `npm run models` d'après le
+ * dossier, chaque modèle livré se lit, l'outil refuse ce que le jeu ne saurait pas lire ; les
+ * modèles d'exemple suivent les conventions de leur famille ; et la lecture du jeu
+ * (render/gltfModel.ts, dans une scène Babylon sans carte graphique) garde la géométrie, les
+ * nœuds, les matières et le sens des faces que le jeu attend.
  */
 
 const ROOT = resolve(__dirname, "..");
 
-describe("modèles glTF des accessoires : fichiers et manifeste", () => {
+describe("modèles glTF : fichiers et manifeste", () => {
   it("le manifeste est celui que fait `npm run models` d'après public/models/, et chaque modèle se lit", () => {
     const scan = scanModels(ROOT);
     expect(scan.problems).toEqual([]);
@@ -53,7 +57,7 @@ describe("modèles glTF des accessoires : fichiers et manifeste", () => {
     try {
       const props = join(root, "public", "models", "props");
       mkdirSync(props, { recursive: true });
-      mkdirSync(join(root, "public", "models", "blocks"));
+      mkdirSync(join(root, "public", "models", "robots"));
       const glb = writeGlb(crateModel());
       writeFileSync(join(props, "crate.glb"), glb);
       writeFileSync(join(props, "barrel.gltf"), "{}");
@@ -63,13 +67,77 @@ describe("modèles glTF des accessoires : fichiers et manifeste", () => {
       const scan = scanModels(root);
       expect(scan.entries.map((e) => e.type)).toEqual(["crate"]);
       expect(scan.problems).toHaveLength(4);
-      expect(scan.problems.join("\n")).toMatch(/blocks/);
+      expect(scan.problems.join("\n")).toMatch(/robots/);
       expect(scan.problems.join("\n")).toMatch(/barrel\.gltf/);
       expect(scan.problems.join("\n")).toMatch(/crates/);
       expect(scan.problems.join("\n")).toMatch(/pine\.glb/);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+
+  it("blocs, têtes, roues : chaque famille a son dossier, ses types, ce qu'elle refuse ; le manifeste les range par famille", () => {
+    const root = mkdtempSync(join(tmpdir(), "casse-models-"));
+    try {
+      const dir = (family: string): string => {
+        const path = join(root, "public", "models", family);
+        mkdirSync(path, { recursive: true });
+        return path;
+      };
+      writeFileSync(join(dir("blocks"), "armor.glb"), writeGlb(armorModel()));
+      // Une aile (son profil vient de ses voisines), un type inconnu
+      writeFileSync(join(dir("blocks"), "wing.glb"), writeGlb(armorModel()));
+      writeFileSync(join(dir("blocks"), "armour.glb"), writeGlb(armorModel()));
+      writeFileSync(join(dir("heads"), "cannonTurret.glb"), writeGlb(cannonHeadModel()));
+      // Un bloc qui n'est pas une tourelle n'a pas de tête
+      writeFileSync(join(dir("heads"), "armor.glb"), writeGlb(cannonHeadModel()));
+      writeFileSync(join(dir("wheels"), "standard.glb"), writeGlb(wheelModel()));
+      // Un galet de chenille garde son modèle
+      writeFileSync(join(dir("wheels"), "track.glb"), writeGlb(wheelModel()));
+      const scan = scanModels(root);
+      expect(scan.entries.map((e) => `${e.family}/${e.type}`)).toEqual(["blocks/armor", "heads/cannonTurret", "wheels/standard"]);
+      expect(scan.entries.map((e) => e.file)).toEqual(["models/blocks/armor.glb", "models/heads/cannonTurret.glb", "models/wheels/standard.glb"]);
+      const problems = scan.problems.join("\n");
+      expect(scan.problems).toHaveLength(4);
+      expect(problems).toMatch(/blocks\/wing\.glb : une aile/);
+      expect(problems).toMatch(/blocks\/armour\.glb : « armour » n'est pas un type de bloc/);
+      expect(problems).toMatch(/heads\/armor\.glb : « armor » n'est pas une tourelle/);
+      expect(problems).toMatch(/wheels\/track\.glb : un galet de chenille/);
+      // Les mesures : le bloc dans sa case, la bouche du canon, la roue symétrique
+      const notes = scan.notes.join("\n");
+      expect(notes).toMatch(/armor\.glb : 0\.50 × 0\.50 × 0\.50 m \(x, y, z\) ; dans sa case/);
+      expect(notes).toMatch(new RegExp(`bouche du canon attendue à z = ${blockDef("cannonTurret").turret!.barrel.toFixed(2)} m`));
+      expect(notes).toMatch(/standard\.glb : rayon 0\.55 m \(le jeu : 0\.55 m\), largeur 0\.37 m \(le jeu : 0\.30 m\), symétrique/);
+      // Le manifeste : une constante par famille, typée par ses types
+      const text = manifestText(scan.entries);
+      expect(text).toContain(`export const BLOCK_MODEL_FILES: { readonly [T in BlockType]?: ModelFile } = {\n  armor: { file: "models/blocks/armor.glb", hash: "${scan.entries[0].hash}" },\n};`);
+      expect(text).toContain("export const HEAD_MODEL_FILES: { readonly [T in TurretBlockType]?: ModelFile } = {\n  cannonTurret:");
+      expect(text).toContain("export const WHEEL_MODEL_FILES: { readonly [T in WheelType]?: ModelFile } = {\n  standard:");
+      expect(text).toContain("export const PROP_MODEL_FILES: { readonly [T in PropType]?: ModelFile } = {};");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("les exemples suivent les conventions de leur famille : un bloc dans sa case, une tête dont le canon finit à sa bouche, une roue symétrique", () => {
+    const armor = readGlb(writeGlb(armorModel()));
+    expect(armor.problems).toEqual([]);
+    expect(armor.json?.materials?.map((m) => m.name)).toEqual(["paint", "steel"]);
+    for (let k = 0; k < 3; k++) {
+      expect(armor.bounds!.min[k]).toBeCloseTo(-0.25, 3);
+      expect(armor.bounds!.max[k]).toBeCloseTo(0.25, 3);
+    }
+    const head = readGlb(writeGlb(cannonHeadModel()));
+    expect(head.problems).toEqual([]);
+    expect(head.bounds!.max[2]).toBeCloseTo(blockDef("cannonTurret").turret!.barrel, 3);
+    const wheel = readGlb(writeGlb(wheelModel()));
+    const { radius, width } = wheelDef("standard");
+    expect(wheel.problems).toEqual([]);
+    expect(wheel.bounds!.min[0] + wheel.bounds!.max[0]).toBeCloseTo(0, 5);
+    expect(wheel.bounds!.max[1]).toBeCloseTo(radius, 2);
+    expect(wheel.bounds!.max[0] * 2).toBeGreaterThan(width);
+    // Le même modèle donne les mêmes octets
+    expect(writeGlb(wheelModel())).toEqual(writeGlb(wheelModel()));
   });
 });
 
@@ -113,12 +181,12 @@ function windings(positions: ArrayLike<number>, normals: ArrayLike<number>, indi
   return signs;
 }
 
-describe("modèles glTF des accessoires : lecture par le jeu (render/propGltf.ts)", () => {
+describe("modèles glTF des accessoires : lecture par le jeu (render/gltfModel.ts)", () => {
   let engine: NullEngine;
   let scene: B.Scene;
-  const read = (model: GlbModel): Promise<PropModelData> => {
+  const read = (model: GlbModel): Promise<GltfModel> => {
     const bytes = writeGlb(model);
-    return readPropModel(scene, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, "essai.glb");
+    return readGltfModel(scene, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, "essai.glb");
   };
 
   beforeAll(() => {

@@ -1,0 +1,39 @@
+{
+  "$schema": "../schemas/melee.schema.json",
+  "$comment": "Mâchoire broyeuse : deux mâchoires dentées devant son bloc ; sur ordre elles se referment, et ce qu'elles trouvent entre elles est saisi, écrasé en continu (le blindage lourd tient plus longtemps) et traîné. C'est le plus lourd des deux robots qui ne bouge pas : un robot léger qui en mord un lourd ne fait que s'y accrocher.",
+  "look": "jaw",
+  "motion": "grip",
+  "axis": "left",
+  "hub": [0, 0, 0.28],
+  "jaw": {
+    "length": 0.8,
+    "half": 0.3,
+    "open": 0.55,
+    "shut": 0.05,
+    "close": 0.2,
+    "reopen": 0.4,
+    "cooldown": 0.8,
+    "mouth": [0.15, 0.85],
+    "strength": 6000,
+    "slip": 0.4,
+    "tear": 0.6,
+    "crush": 110,
+    "bite": 60,
+    "power": 1.6,
+    "hold": 6
+  },
+  "hit": {
+    "damageType": "impact",
+    "damage": 0,
+    "bite": 1,
+    "fling": 0,
+    "push": { "tangent": 0, "radial": 1, "axial": 0, "lift": 0 },
+    "recoil": 0,
+    "spread": 0.25,
+    "wheels": 1.2,
+    "wear": 1.5,
+    "gap": 0,
+    "minSpeed": 0
+  },
+  "engage": 2
+}

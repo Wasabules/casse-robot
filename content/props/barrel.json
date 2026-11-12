@@ -1,0 +1,19 @@
+{
+  "$schema": "../schemas/props.schema.json",
+  "$comment": "Un robot moyen qui le percute lancé le fait sauter, pas un petit qui le frôle ; les flammes l'allument vite.",
+  "shape": { "kind": "cylinder", "radius": 0.35, "halfHeight": 0.5 },
+  "mass": 25,
+  "friction": 0.6,
+  "hp": 20,
+  "resist": { "impact": 0.4, "fire": 2 },
+  "explosion": {
+    "look": "barrel",
+    "radius": 3.2,
+    "damage": 260,
+    "blastRadius": 4.5,
+    "power": 7,
+    "lift": 0.8,
+    "ignite": 0.5
+  },
+  "fuse": 0.25
+}

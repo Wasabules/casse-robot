@@ -1,0 +1,34 @@
+{
+  "$schema": "../schemas/melee.schema.json",
+  "$comment": "Lame laser rotative : un arc d'énergie qui balaie à plat au-dessus de son bloc. Ni gyroscope, ni recul, ni balourd : rien ne tourne vraiment. Elle s'allume en une demi-seconde et découpe vite, à petits coups rapprochés (dégâts d'énergie, que le blindage lourd ne réduit pas) ; allumée, elle vide les batteries (1,5 kW pour tenir sa charge, plus qu'en donne le générateur ; 3 kW pour la refaire en coupant). Sous une IEM, une paralysie, ou le moyeu dans l'eau, elle s'éteint d'un coup.",
+  "look": "saber",
+  "motion": "spin",
+  "axis": "up",
+  "hub": [0, 0.36, 0],
+  "quench": true,
+  "blade": { "inner": 0.2, "outer": 1.05, "half": 0.06 },
+  "spin": {
+    "inertia": 2.4,
+    "speed": 32,
+    "spinUp": 0.5,
+    "spinDown": 2,
+    "gyro": 0,
+    "unbalance": 0,
+    "mass": 0,
+    "reaction": 0
+  },
+  "hit": {
+    "damageType": "energy",
+    "damage": 80,
+    "bite": 0.3,
+    "fling": 0,
+    "push": { "tangent": 1, "radial": 0.2, "axial": 0, "lift": 0 },
+    "recoil": 0,
+    "spread": 0.2,
+    "wheels": 1.2,
+    "wear": 0.5,
+    "gap": 0.08,
+    "minSpeed": 0.45
+  },
+  "engage": 1.5
+}
