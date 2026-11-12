@@ -10,7 +10,10 @@
 use super::catalog::{axis, catalog};
 use super::colliders::rebuild_colliders;
 use super::physics::{BodyDesc, ColliderDesc, groups};
-use super::robot::{Block, Bot, COCKPIT_BATTERY, Cell, Input, NEIGHBORS, Part, Turret, WHEEL_ANGULAR_DAMPING, Wheel, link_key, part_damping, unsupported, wheel_local_pos};
+use super::brain::AiState;
+use super::robot::{
+    Block, Bot, COCKPIT_BATTERY, Cell, Input, NEIGHBORS, Part, Turret, WHEEL_ANGULAR_DAMPING, Wheel, design_radius, link_key, part_damping, unsupported, wheel_local_pos,
+};
 use super::vec::{Q, V3, add, axis_angle, cross, qrot, quat_from_basis, scale, v3};
 use super::wheels::{WheelPose, place_wheel, wheel_collider};
 use super::world::{Owner, Sim};
@@ -294,10 +297,11 @@ pub fn refresh_wheels(sim: &mut Sim, bot: usize) {
 }
 
 /// Construit un robot d'un seul morceau à la position `pos`, tourné de `yaw` autour de la verticale
-/// (`spawnBot`) ; son numéro. Le plan est supposé valide (`validateDesign` : les robots du catalogue
-/// le sont). Chaque tourelle tire au hasard sa cadence de départ (`registerOrgans`) : la simulation
-/// portée ne s'en sert pas, mais tire autant, pour garder la même suite de tirages.
-pub fn spawn_bot(sim: &mut Sim, id: &str, pos: V3, yaw: f64) -> Result<usize, String> {
+/// (`spawnBot`), dans l'équipe `team`, aux commandes d'un pilote (`takeControl`) ou de l'IA ; son
+/// numéro. Le plan est supposé valide (`validateDesign` : les robots du catalogue le sont). Chaque
+/// tourelle tire au hasard sa cadence de départ (`registerOrgans`) : la simulation portée ne s'en
+/// sert pas, mais tire autant, pour garder la même suite de tirages.
+pub fn spawn_bot(sim: &mut Sim, id: &str, pos: V3, yaw: f64, team: usize, piloted: bool) -> Result<usize, String> {
     let c = catalog();
     let robot = c.robots.get(id).ok_or_else(|| format!("robot inconnu : {id}"))?;
     for b in &robot.design.blocks {
@@ -322,6 +326,7 @@ pub fn spawn_bot(sim: &mut Sim, id: &str, pos: V3, yaw: f64) -> Result<usize, St
         mobility: robot.mobility,
         blocks: Vec::new(),
         cells: HashMap::new(),
+        live: Vec::new(),
         cockpit: 0,
         parts: Vec::new(),
         wheels: Vec::new(),
@@ -334,6 +339,14 @@ pub fn spawn_bot(sim: &mut Sim, id: &str, pos: V3, yaw: f64) -> Result<usize, St
         drawn: 0.0,
         flipped_for: 0.0,
         righting: 0.0,
+        last_hit: f64::NEG_INFINITY,
+        rebuild_at: 0.0,
+        team,
+        radius: design_radius(&robot.design),
+        charges: robot.charges,
+        last_pos: pos,
+        piloted,
+        ai: AiState::new(pos),
     });
 
     // Le morceau (`makePart`)
@@ -365,6 +378,7 @@ pub fn spawn_bot(sim: &mut Sim, id: &str, pos: V3, yaw: f64) -> Result<usize, St
         });
         let cell = b.blocks[index].cell();
         b.cells.insert(cell, index);
+        b.live.push(index);
         if spec.kind == "cockpit" {
             cockpit = Some(index);
         }

@@ -2,18 +2,19 @@
 //! (dégâts `fire`) et peut gagner ses voisins ; il s'éteint au bout de quelques secondes s'il n'est
 //! pas ravivé. On l'allume par une explosion (`Explosion.ignite`), quand une batterie est détruite,
 //! ou au contact d'un accessoire en bois qui brûle. Le bois du décor brûle aussi : il perd des
-//! points, noircit, gagne le bois voisin et les robots qui le frôlent. Le tout par tranches de
-//! `TICK` s, avec les tirages du hasard aux mêmes endroits que le TypeScript.
-//!
-//! Pas encore porté : les flaques de feu au sol (lance-flammes, napalm) : rien de ce qui est porté
-//! n'en allume (une explosion qui en laisserait une est comptée dans `Stats.unported`).
+//! points, noircit, gagne le bois voisin et les robots qui le frôlent. Et les flaques de feu au sol
+//! (`GroundFire` : le napalm d'une explosion, le jet du lance-flammes) brûlent les blocs et les roues
+//! qui s'y tiennent (sauf ceux du robot qui les a allumées), les enflamment parfois, et allument le
+//! bois qu'elles touchent ; jamais sous l'eau, 40 au plus. Le tout par tranches de `TICK` s, avec les
+//! tirages du hasard aux mêmes endroits que le TypeScript.
 
+use super::catalog::{PropShape, Puddle, catalog};
 use super::damage::{DamageBatch, Target, inflict};
 use super::debris::block_world_pos;
+use super::physics::groups;
 use super::props::{prop, prop_distance, prop_mut, prop_nearest, present};
-use super::catalog::{PropShape, catalog};
 use super::structure::linked_neighbors;
-use super::vec::{V3, v3};
+use super::vec::{V3, len, v3};
 use super::world::{STEP, Sim};
 use crate::det::{dcos, dsin};
 use crate::jsmath;
@@ -38,6 +39,28 @@ const PROP_GAP: f64 = 1.5;
 /// Un bloc à moins de cette distance (m) d'un accessoire en feu peut s'enflammer (chance par seconde).
 const PROP_SCORCH: f64 = 0.5;
 const PROP_SCORCH_CHANCE: f64 = 0.6;
+/// Dégâts d'une flaque de feu (points par seconde, avant résistance) ; hauteur (m) au-dessus d'elle qu'elle atteint.
+const GROUND_FIRE_DPS: f64 = 9.0;
+const GROUND_FIRE_HEIGHT: f64 = 1.1;
+/// Chance, par seconde, qu'une flaque enflamme un bloc qui s'y tient, ou un accessoire en bois qu'elle touche.
+const GROUND_IGNITE: f64 = 0.5;
+const GROUND_PROP_IGNITE: f64 = 1.2;
+/// Flaques de feu à la fois, au plus (combat/burning.ts) : au-delà, un nouveau jet ne fait que raviver les flaques.
+const MAX_GROUND_FIRES: usize = 40;
+/// Une flaque à moins de cette part de son rayon d'une autre la ravive au lieu d'en faire une nouvelle.
+const MERGE: f64 = 0.8;
+/// Hauteur (m) au-dessus du sol en deçà de laquelle un jet ou une explosion trouve le sol.
+pub const PUDDLE_REACH: f64 = 1.5;
+
+/// Une flaque de feu au sol (`GroundFire`) : son centre (au sol), son rayon, jusqu'à quand elle
+/// brûle, et le robot qui l'a allumée (ses flaques ne le brûlent pas).
+#[derive(Clone, Copy, Debug)]
+pub struct GroundFire {
+    pub pos: V3,
+    pub radius: f64,
+    pub until: f64,
+    pub owner: Option<usize>,
+}
 
 /// Sensibilité d'un bloc au feu : son facteur de dégâts `fire` (`flammability`).
 fn flammability(sim: &Sim, bot: usize, block: usize) -> f64 {
@@ -52,7 +75,11 @@ pub fn ignite(sim: &mut Sim, bot: usize, block: usize, duration: f64) {
     let time = duration * jsmath::min(1.5, flammability(sim, bot, block));
     let b = &mut sim.bots[bot].blocks[block];
     if b.burn <= 0.0 {
-        sim.fires.push((bot, block));
+        // (un `Set` : un bloc détruit en brûlant, qui repousse éteint avant le prochain passage du
+        // feu, y est encore)
+        if !sim.fires.contains(&(bot, block)) {
+            sim.fires.push((bot, block));
+        }
         sim.stats.fires_started += 1;
     }
     b.burn = jsmath::max(b.burn, time);
@@ -100,7 +127,7 @@ pub fn update_fires(sim: &mut Sim) {
     if (sim.time / TICK).floor() == ((sim.time - STEP) / TICK).floor() {
         return;
     }
-    if sim.fires.is_empty() && sim.prop_fires.is_empty() {
+    if sim.fires.is_empty() && sim.prop_fires.is_empty() && sim.ground_fires.is_empty() {
         return;
     }
     let mut batch = DamageBatch::default();
@@ -123,12 +150,109 @@ pub fn update_fires(sim: &mut Sim) {
     }
     // Tout ce qui se lit sur les corps se lit avant d'infliger quoi que ce soit
     let props = burn_props(sim);
+    let puddles = burn_ground(sim);
     if !batch.blocks.is_empty() {
-        inflict(sim, &batch, UP);
+        inflict(sim, &batch, UP, None);
+    }
+    for b in puddles {
+        inflict(sim, &b, UP, None);
     }
     for (b, dir) in props {
-        inflict(sim, &b, dir);
+        inflict(sim, &b, dir, None);
     }
+}
+
+/// Le sol ou le décor fixe sous `point`, à moins de `depth` m (un rayon qui ne voit qu'eux), ou
+/// rien : un jet qui s'éteint en l'air ne laisse pas de flaque (`groundBelow`).
+pub fn ground_below(sim: &Sim, point: V3, depth: f64) -> Option<V3> {
+    let from = v3(point.x, point.y + 0.2, point.z);
+    let toi = sim.phys.cast_ray(from, v3(0.0, -1.0, 0.0), depth + 0.2, true, groups::GROUND_RAY)?;
+    Some(v3(point.x, from.y - toi, point.z))
+}
+
+/// Allume une flaque de feu au sol en `pos`, ou ravive celle qui y brûle déjà (sans l'agrandir)
+/// (`spawnGroundFire`) ; `owner` : le robot qui l'a allumée. Rien sous l'eau, ni au-delà de
+/// `MAX_GROUND_FIRES`. Vrai si une flaque brûle là (nouvelle ou ravivée).
+pub fn spawn_ground_fire(sim: &mut Sim, pos: V3, spec: Puddle, owner: Option<usize>) -> bool {
+    // L'eau l'éteint
+    if let Some(water) = sim.water
+        && pos.y < water
+    {
+        return false;
+    }
+    let time = sim.time;
+    for f in sim.ground_fires.iter_mut() {
+        if jsmath::hypot2(f.pos.x - pos.x, f.pos.z - pos.z) < f.radius * MERGE && (f.pos.y - pos.y).abs() < 1.0 {
+            f.until = jsmath::max(f.until, time + spec.life);
+            return true;
+        }
+    }
+    if sim.ground_fires.len() >= MAX_GROUND_FIRES {
+        return false;
+    }
+    sim.ground_fires.push(GroundFire { pos, radius: spec.radius, until: time + spec.life, owner });
+    sim.stats.ground_fires_added += 1;
+    true
+}
+
+/// Ce point est-il dans la flaque : à moins de son rayon (dans le plan), et au plus `height` m
+/// au-dessus d'elle (`inPuddle`) ?
+fn in_puddle(fire: &GroundFire, p: V3, height: f64) -> bool {
+    let dy = p.y - fire.pos.y;
+    dy > -0.3 && dy < height && len(v3(p.x - fire.pos.x, 0.0, p.z - fire.pos.z)) < fire.radius
+}
+
+/// Les flaques de feu (`burnGround`) : celles qui ont fait leur temps s'éteignent ; les autres
+/// brûlent les blocs et les roues qui s'y tiennent (sauf ceux du robot qui les a allumées), les
+/// enflamment parfois, et allument le bois qu'elles touchent. Un lot par flaque (chacune a son
+/// auteur, que la simulation portée ne crédite pas : elle ne compte pas les destructions par robot).
+fn burn_ground(sim: &mut Sim) -> Vec<DamageBatch> {
+    let time = sim.time;
+    let before = sim.ground_fires.len();
+    sim.ground_fires.retain(|f| time < f.until);
+    sim.stats.ground_fires_removed += (before - sim.ground_fires.len()) as u32;
+    let mut out = Vec::new();
+    for k in 0..sim.ground_fires.len() {
+        let fire = sim.ground_fires[k];
+        let mut batch = DamageBatch::default();
+        for bot in 0..sim.bots.len() {
+            let b = &sim.bots[bot];
+            if Some(bot) == fire.owner || !b.cockpit_alive() {
+                continue;
+            }
+            let ck = sim.phys.translation(sim.part(b.cockpit_part()).rb);
+            if jsmath::hypot3(ck.x - fire.pos.x, ck.y - fire.pos.y, ck.z - fire.pos.z) > fire.radius + 6.0 {
+                continue;
+            }
+            for block in sim.bots[bot].live.clone() {
+                if !in_puddle(&fire, block_world_pos(sim, bot, block), GROUND_FIRE_HEIGHT) {
+                    continue;
+                }
+                batch.add(sim, Some(Target::Block(bot, block)), GROUND_FIRE_DPS * TICK, "fire");
+                if sim.bots[bot].blocks[block].burn <= 0.0 && sim.rng.rand(0.0, 1.0) < GROUND_IGNITE * TICK * flammability(sim, bot, block) {
+                    ignite(sim, bot, block, BURN_TIME);
+                }
+            }
+            for w in 0..sim.bots[bot].wheels.len() {
+                let wheel = &sim.bots[bot].wheels[w];
+                if wheel.part.is_some() && in_puddle(&fire, wheel.rb.pos, GROUND_FIRE_HEIGHT) {
+                    batch.add(sim, Some(Target::Wheel(bot, w)), GROUND_FIRE_DPS * TICK, "fire");
+                }
+            }
+        }
+        for i in present(sim) {
+            if prop(sim, i).burn > 0.0 || !burnable(sim, i) {
+                continue;
+            }
+            if prop_distance(sim, i, fire.pos) < fire.radius && sim.rng.rand(0.0, 1.0) < GROUND_PROP_IGNITE * TICK {
+                ignite_prop(sim, i);
+            }
+        }
+        if !batch.blocks.is_empty() || !batch.wheels.is_empty() {
+            out.push(batch);
+        }
+    }
+    out
 }
 
 /// Les accessoires en feu (`burnProps`) : dégâts (chacun son lot : un arbre qui cède bascule d'un
@@ -208,9 +332,8 @@ fn scorch_robots(sim: &mut Sim, i: usize) {
         if jsmath::hypot3(ck.x - center.x, ck.y - center.y, ck.z - center.z) > size {
             continue;
         }
-        for block in 0..sim.bots[bot].blocks.len() {
-            let k = &sim.bots[bot].blocks[block];
-            if !k.alive || k.burn > 0.0 {
+        for block in sim.bots[bot].live.clone() {
+            if sim.bots[bot].blocks[block].burn > 0.0 {
                 continue;
             }
             if prop_distance(sim, i, block_world_pos(sim, bot, block)) < PROP_SCORCH

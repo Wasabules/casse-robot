@@ -4,9 +4,12 @@
 //!
 //! Un robot naît d'un seul morceau (lifecycle.rs, `spawnBot`) ; les chocs (collisions.rs) et les
 //! dégâts (damage.rs) le découpent : blocs détruits, liaisons faibles rompues (structure.rs), morceaux
-//! séparés, roues arrachées. Les morceaux vivent dans le monde (world.rs : `Sim.parts`), le robot
-//! garde leurs numéros dans l'ordre où ils sont nés (`bot.parts`, un `Set` du TypeScript).
+//! séparés, roues arrachées ; ses modules de réparation le remettent en état (repair.rs). Les
+//! morceaux vivent dans le monde (world.rs : `Sim.parts`), le robot garde leurs numéros dans l'ordre
+//! où ils sont nés (`bot.parts`, un `Set` du TypeScript). Un robot est conduit par un pilote (ses
+//! commandes : `Input`) ou par l'IA (brain.rs : son état, `AiState`).
 
+use super::brain::AiState;
 use super::catalog::{BlockShape, Catalog, Design, Mobility, Robot, WheelDef, WheelMount, catalog};
 use super::shapes::shape_pieces;
 use super::vec::{Q, V3, v3};
@@ -161,6 +164,9 @@ pub struct Bot {
     pub blocks: Vec<Block>,
     /// Ses blocs vivants, par case (`bot.blocks` du TypeScript).
     pub cells: HashMap<Cell, usize>,
+    /// Ses blocs vivants dans l'ordre où les parcourt le TypeScript (celui de la `Map` `bot.blocks` :
+    /// l'ordre du plan, un bloc qui repousse passant au bout).
+    pub live: Vec<usize>,
     pub cockpit: usize,
     /// Ses morceaux, dans l'ordre où ils sont nés (numéros de `Sim.parts`).
     pub parts: Vec<usize>,
@@ -179,11 +185,34 @@ pub struct Bot {
     /// Redressement (src/shared/robot/righting.ts).
     pub flipped_for: f64,
     pub righting: f64,
+    /// Quand il a été touché pour la dernière fois (`lastHit` ; -∞ : jamais) : ses modules de
+    /// réparation attendent un moment sans coup.
+    pub last_hit: f64,
+    /// Pas de bloc repoussé avant ce moment (`rebuildAt`, combat/repair.ts).
+    pub rebuild_at: f64,
+    /// Son équipe (`team` : 0 les rouges, 1 les bleus).
+    pub team: usize,
+    /// Rayon de son plan, autour de son origine, dans le plan horizontal (`radius` : `designRadius`).
+    pub radius: f64,
+    /// Heurté, il fonce sur qui l'a heurté au lieu de fuir (`profile.behavior` « charge »).
+    pub charges: bool,
+    /// Centre de masse du morceau de son cockpit au dernier pas où il était vivant (`lastPos`) ; sa
+    /// position de départ avant le premier pas.
+    pub last_pos: V3,
+    /// Aux commandes d'un pilote (`controller` « player ») ; sinon, l'IA le conduit.
+    pub piloted: bool,
+    /// L'état de son IA (même piloté : un choc le change, `onHit`, sans que rien ne le lise).
+    pub ai: AiState,
 }
 
 impl Bot {
     pub fn cockpit_alive(&self) -> bool {
         self.blocks[self.cockpit].alive
+    }
+
+    /// Le bloc `k` est-il perdu (`bot.lost`) : détruit, et pas le cockpit (il ne repousse pas) ?
+    pub fn lost(&self, k: usize) -> bool {
+        !self.blocks[k].alive && k != self.cockpit
     }
 
     /// Le morceau du cockpit.
@@ -211,6 +240,23 @@ pub fn wheel_local_pos(m: &WheelMount, def: &WheelDef, block_size: f64) -> V3 {
 pub fn steer_clearance(def: &WheelDef) -> f64 {
     let angle = if def.caster.is_some() { std::f64::consts::PI / 2.0 } else { def.steering.map_or(0.0, |s| s.0) };
     def.radius * dsin(angle) + (def.width / 2.0) * (dcos(angle) - 1.0)
+}
+
+/// Rayon d'un plan autour de son origine, dans le plan horizontal (`designRadius`, robot/lifecycle.ts) :
+/// ses blocs et ses roues (un anneau-coque, qui l'agrandirait, est une arme de contact : refusé).
+pub fn design_radius(design: &Design) -> f64 {
+    let c = catalog();
+    let bs = c.constants.block_size;
+    let mut r: f64 = 0.0;
+    for b in &design.blocks {
+        r = crate::jsmath::max(r, crate::jsmath::hypot2(b.x, b.z) * bs + bs * 0.71);
+    }
+    for m in &design.wheels {
+        let def = &c.wheels[&m.kind];
+        let p = wheel_local_pos(m, def, bs);
+        r = crate::jsmath::max(r, crate::jsmath::hypot2(p.x, p.z) + def.radius);
+    }
+    r
 }
 
 /// Hauteur de l'origine d'un robot posé au sol (`groundHeight`).

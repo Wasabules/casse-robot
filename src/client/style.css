@@ -604,8 +604,9 @@
   }
 
   /*
-   * Au doigt (hud/touchHud.ts) : en partie, la pause et le plein écran en haut à gauche ; la page ne
-   * se zoome pas d'un pincement, ne défile pas, ne sélectionne pas de texte d'un appui long
+   * Au doigt (hud/touchHud.ts) : en partie, la pause en haut à gauche (le plein écran est dans le
+   * menu pause) ; la page ne se zoome pas d'un pincement, ne défile pas, ne sélectionne pas de texte
+   * d'un appui long
    */
   .touch-hud {
     position: fixed; z-index: 8; display: none; gap: 8px;
@@ -620,8 +621,6 @@
   }
   .th-btn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
   .th-btn:active { background: var(--signal); color: var(--signal-ink); }
-  .th-btn .th-exit, .th-btn.on .th-enter { display: none; }
-  .th-btn.on .th-exit { display: inline; }
   html, body { overscroll-behavior: none; }
   button { touch-action: manipulation; }
   body.touch-ui:not(.menu-open):not(.in-garage):not(.in-editor) { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1148,6 +1147,8 @@
   .menu-panel.hero .menu-subtitle { margin-bottom: 14px; }
   .menu-panel.hero .menu-entry { padding: 14px 16px; }
   .menu-panel.hero .menu-entry .menu-label { font-size: 20px; }
+  /* Un écran d'ordinateur peu haut (720 px) : l'accueil et ses six entrées tiennent sans défiler */
+  @media (min-width: 761px) and (min-height: 561px) and (max-height: 780px) { .menu-panel.hero .menu-entry { padding-block: 11px; } }
 
   /* Paramètres : onglets, puis une ligne par réglage (libellé à gauche, commande à droite) */
   /* Centré quand il tient dans l'écran, en haut sinon : l'onglet des contrôles (toutes les touches) est plus haut que l'écran */
@@ -1294,7 +1295,6 @@
   }
   @media (max-height: 560px) {
     .menu-panel.settings { width: min(760px, 100%); }
-    body.menu-open .now-playing.np-on { bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
     .menu-panel.tiles .menu-entries { grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); }
     .menu-panel.tiles .menu-entry.primary { grid-column: span 2; }
     .menu-panel.tiles.hero .menu-title { font-size: 34px; }
@@ -1330,8 +1330,10 @@
   .pad-badge span:empty { display: none; }
   /*
    * Musique en cours (hud/nowPlaying.ts) : en partie, un mot sous la mini-carte quand un morceau
-   * commence ; dans les menus et au garage, une ligne en bas à droite, au-dessus des menus, avec
-   * ses boutons. Rien pendant un chargement, dans l'éditeur de cartes, ni quand la musique est coupée.
+   * commence ; dans les menus et au garage, une ligne en bas à droite (en haut sur un petit écran),
+   * au-dessus des menus, avec ses boutons, ou réduite à une pastille (np-folded), ou cachée
+   * (np-hidden), selon le réglage. Rien pendant un chargement, dans l'éditeur de cartes, ni quand la
+   * musique est coupée.
    */
   .now-playing {
     position: fixed; right: 14px; top: calc(252px + env(safe-area-inset-top, 0px)); z-index: 21;
@@ -1345,6 +1347,24 @@
   }
   body.menu-open .now-playing.np-toast, body.in-garage .now-playing.np-toast { animation: np-flash 1.2s ease-out; }
   body.loading-open .now-playing, body.in-editor .now-playing, .now-playing.np-muted { display: none !important; }
+  /* Caché (réglage) : rien dans les menus ni au garage ; en partie, le mot d'un morceau que le joueur a changé */
+  body.menu-open .now-playing.np-hidden, body.in-garage .now-playing.np-hidden { display: none !important; }
+  /* La note : une simple icône ; un bouton quand le lecteur se réduit tout seul (np-auto), dans les menus et au garage */
+  .np-toggle {
+    flex: none; display: grid; place-items: center; width: 15px; height: 15px; padding: 0; margin: 0;
+    color: inherit; background: none; border: 0; border-radius: 50%; pointer-events: none;
+    touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  }
+  body.menu-open .now-playing.np-auto .np-toggle, body.in-garage .now-playing.np-auto .np-toggle {
+    width: 30px; height: 30px; margin: -8px -6px -8px -8px; pointer-events: auto; cursor: pointer;
+  }
+  .np-toggle:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
+  @media (hover: hover) { .now-playing.np-auto .np-toggle:hover { background: rgba(255, 255, 255, 0.08); } }
+  /* Réduit : une pastille ronde, la note seule (un toucher la déplie) */
+  body.menu-open .now-playing.np-folded, body.in-garage .now-playing.np-folded { gap: 0; padding: 0; border-radius: 999px; }
+  body.menu-open .now-playing.np-folded .np-toggle, body.in-garage .now-playing.np-folded .np-toggle { width: 42px; height: 42px; margin: 0; }
+  body.menu-open .now-playing.np-folded :is(.np-text, .np-controls), body.in-garage .now-playing.np-folded :is(.np-text, .np-controls) { display: none; }
+  body.menu-open .now-playing.np-folded .np-icon, body.in-garage .now-playing.np-folded .np-icon { width: 18px; height: 18px; }
   .now-playing .np-icon { flex: none; width: 15px; height: 15px; fill: var(--signal); }
   .now-playing.np-loading .np-icon { animation: np-pulse 0.9s ease-in-out infinite alternate; }
   .now-playing.np-bad .np-icon { fill: var(--bad); }
@@ -1364,6 +1384,8 @@
   .np-btn:hover:not(:disabled), .np-btn:focus-visible { border-color: var(--line-strong); background: rgba(40, 48, 56, 0.92); outline: none; }
   .np-btn:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
   .np-btn:disabled { opacity: 0.35; cursor: default; }
+  /* Au doigt : des boutons à la taille d'un pouce */
+  body.touch-ui .np-btn { width: 38px; height: 34px; }
   @keyframes np-in { from { opacity: 0; transform: translateY(-6px); } }
   @keyframes np-flash { from { border-color: var(--signal); box-shadow: 0 0 0 1px var(--signal), 0 8px 22px rgba(10, 14, 20, 0.3); } }
   @keyframes np-pulse { to { opacity: 0.35; } }
@@ -1372,16 +1394,20 @@
   @media (max-width: 900px) { body.in-garage .now-playing.np-on { display: none; } }
   /* Commandes tactiles : le mot passe en haut, à gauche de la mini-carte */
   body.touch-pilot:not(.menu-open) .now-playing { right: 224px; top: calc(14px + env(safe-area-inset-top, 0px)); }
-  /* Sur un téléphone, à gauche sous la pause et le plein écran (il les cachait en hauteur, et le score à l'horizontale) ; en hauteur, sous le score */
+  /* Sur un téléphone, à gauche sous le bouton de pause (il le cachait en hauteur, et le score à l'horizontale) ; en hauteur, sous le score */
   @media (max-width: 760px), (max-height: 560px) {
     body.touch-pilot:not(.menu-open) .now-playing { right: auto; left: calc(10px + env(safe-area-inset-left, 0px)); top: calc(62px + env(safe-area-inset-top, 0px)); }
   }
   @media (max-width: 760px) and (orientation: portrait) {
     body.touch-pilot:not(.menu-open) .now-playing { top: calc(104px + env(safe-area-inset-top, 0px)); }
   }
-  /* Écran étroit : les menus occupent le bas de l'écran ; la ligne passe en haut */
-  @media (max-width: 760px) {
-    body.menu-open .now-playing.np-on { top: calc(8px + env(safe-area-inset-top, 0px)); bottom: auto; right: 10px; }
+  /*
+   * Écran étroit : les menus occupent le bas de l'écran ; la ligne passe en haut. Écran bas (un
+   * téléphone à l'horizontale) : en haut aussi, au-dessus des tuiles (en bas, elle mordait sur leur
+   * dernière ligne, et sur le bouton de la fiche des choix du robot et de l'arène)
+   */
+  @media (max-width: 760px), (max-height: 560px) {
+    body.menu-open .now-playing.np-on { top: calc(8px + env(safe-area-inset-top, 0px)); bottom: auto; right: calc(10px + env(safe-area-inset-right, 0px)); }
   }
   @media (prefers-reduced-motion: reduce) { .now-playing, .now-playing .np-icon { animation: none !important; } }
   @media (max-width: 760px) {

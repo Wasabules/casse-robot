@@ -51,6 +51,13 @@ export type TouchAim = (typeof TOUCH_AIMS)[number];
 /** Bornes de la taille des commandes à l'écran (1 : celle d'origine) et de leur opacité. */
 export const TOUCH_SIZE_RANGE = { min: 0.7, max: 1.4 } as const;
 export const TOUCH_OPACITY_RANGE = { min: 0.3, max: 1 } as const;
+/**
+ * Le lecteur de musique dans les menus et au garage (hud/nowPlaying.ts) : toujours déplié (le titre,
+ * précédent, suivant), réduit de lui-même à une pastille quelques secondes après un changement de
+ * morceau (un toucher la déplie), ou caché.
+ */
+export const MUSIC_PLAYERS = ["always", "auto", "hidden"] as const;
+export type MusicPlayerMode = (typeof MUSIC_PLAYERS)[number];
 
 /** Réglages du joueur, gardés dans le navigateur d'une visite à l'autre. */
 export interface Settings {
@@ -116,6 +123,8 @@ export interface Settings {
   volume: number;
   /** Volume de la musique (0 à 1), par-dessus le volume général. */
   music: number;
+  /** Le lecteur de musique des menus et du garage : déplié, qui se réduit tout seul, ou caché (par défaut, selon la machine). */
+  musicPlayer: MusicPlayerMode;
   // --- Profil ---
   /** Langue des textes du jeu (i18n/) ; par défaut, celle du navigateur. */
   language: Locale;
@@ -174,6 +183,8 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   sound: true,
   volume: 0.8,
   music: 0.5,
+  // (celui d'un ordinateur : au doigt, il se réduit tout seul, `defaultMusicPlayer`)
+  musicPlayer: "always",
   language: detectLocale(browserLanguages()),
   allParts: false,
   soundLog: false,
@@ -240,18 +251,32 @@ export function deviceInfo(): DeviceInfo {
   };
 }
 
-/** Les réglages par défaut pour cette machine : ceux de `DEFAULT_SETTINGS`, aux graphismes de `firstRunPreset`. */
+/**
+ * Le lecteur de musique par défaut : au doigt (un téléphone, une tablette), il se réduit tout seul à
+ * une pastille (déplié, il couvre une bonne part d'un petit écran, en haut de l'accueil) ; sur un
+ * ordinateur, il reste déplié, discret en bas à droite, ses boutons à portée de souris.
+ */
+export function defaultMusicPlayer(device: DeviceInfo): MusicPlayerMode {
+  return device.coarse ? "auto" : "always";
+}
+
+/**
+ * Les réglages par défaut pour cette machine : ceux de `DEFAULT_SETTINGS`, aux graphismes de
+ * `firstRunPreset` et au lecteur de musique de `defaultMusicPlayer`.
+ */
 export function defaultSettings(device: DeviceInfo = deviceInfo()): Settings {
-  return { ...DEFAULT_SETTINGS, ...GRAPHICS_PRESETS[firstRunPreset(device)] };
+  return { ...DEFAULT_SETTINGS, ...GRAPHICS_PRESETS[firstRunPreset(device)], musicPlayer: defaultMusicPlayer(device) };
 }
 
 const KEY = "casse-robot.settings";
 
 /**
  * Réglages lus depuis un texte JSON : chaque valeur absente, du mauvais type ou hors de ses choix
- * reprend sa valeur par défaut (réglages d'une ancienne version, stockage abîmé).
+ * reprend sa valeur par défaut (réglages d'une ancienne version, stockage abîmé) ; celle du lecteur
+ * de musique, celle de cette machine (`device` : un téléphone qui avait des réglages d'avant ce
+ * réglage a le lecteur qui se réduit tout seul).
  */
-export function parseSettings(json: string | null): Settings {
+export function parseSettings(json: string | null, device: DeviceInfo = deviceInfo()): Settings {
   let saved: Record<string, unknown> = {};
   try {
     const parsed: unknown = JSON.parse(json ?? "{}");
@@ -302,6 +327,7 @@ export function parseSettings(json: string | null): Settings {
   s.fxLook = pick(FX_LOOKS, saved.fxLook) ?? (saved.effects === "reduced" && saved.glow === false ? "simple" : s.fxLook);
   s.drive = pick(DRIVE_MODES, saved.drive) ?? s.drive;
   s.touchAim = pick(TOUCH_AIMS, saved.touchAim) ?? s.touchAim;
+  s.musicPlayer = pick(MUSIC_PLAYERS, saved.musicPlayer) ?? defaultMusicPlayer(device);
   // L'ancien pilotage assisté : à la souris
   s.flight = pick(FLIGHT_MODES, saved.flight === "assisted" ? "mouse" : saved.flight) ?? s.flight;
   if (isLocale(saved.language)) s.language = saved.language;

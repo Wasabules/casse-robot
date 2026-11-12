@@ -10,23 +10,35 @@
 //! (rng.rs). Troisième jalon, « les accessoires » : caisses, barils, bouteilles de gaz, murs et
 //! arbres ancrés (props.rs), leurs chocs avec les robots et la percée d'un accessoire ancré
 //! (collisions.rs), les explosions et leur souffle (explosion.rs), le feu des blocs et du bois
-//! (fire.rs). tests/nativeSim.test.ts fait rouler et se heurter les mêmes robots, contre les mêmes
-//! accessoires, ici et dans la simulation du TypeScript, et compare leurs états au bit près.
+//! (fire.rs). Quatrième jalon, « la réparation et les flaques de feu » : les modules de réparation
+//! (repair.rs : blocs et roues réparés, blocs perdus qui repoussent, y compris ceux restés sur un
+//! morceau arraché), les flaques de feu au sol (fire.rs : le napalm d'une explosion, le jet du
+//! lance-flammes). Cinquième jalon, « l'IA qui conduit » : hors combat (comme au stand de tir), l'IA
+//! patrouille, contourne le décor, prend les rampes, se dégage quand elle est coincée, fuit ou fonce
+//! sur qui la heurte (brain.rs, navigation.rs), et chaque équipe repère l'autre (detection.rs), dans
+//! les petites arènes (Dépôt, Forteresse, Tranchées, Chantier : sans relief). tests/nativeSim.test.ts
+//! fait rouler et se heurter les mêmes robots, pilotés ou conduits par l'IA, contre les mêmes
+//! accessoires, dans les mêmes flaques, ici et dans la simulation du TypeScript, et compare leurs
+//! états au bit près.
 //!
 //! L'interface : des fonctions `extern "C"` (comme ffi.rs) ; un monde est désigné par un numéro.
 
+pub mod brain;
 pub mod catalog;
 pub mod colliders;
 pub mod collisions;
 pub mod damage;
 pub mod debris;
+pub mod detection;
 pub mod drive;
 pub mod explosion;
 pub mod fire;
 pub mod json;
 pub mod lifecycle;
+pub mod navigation;
 pub mod physics;
 pub mod props;
+pub mod repair;
 pub mod rng;
 pub mod robot;
 pub mod shapes;
@@ -75,10 +87,29 @@ pub extern "C" fn sim_free(id: u32) {
     SIMS.with(|list| list.borrow_mut()[id as usize - 1] = None);
 }
 
-/// Une boîte du décor fixe : centre, demi-dimensions, rotation (x, y, z, w), `round` non nul : un cylindre.
+/// Une boîte du décor fixe : sa sorte `kind` (UTF-8, `len` octets : « wall », « ramp », « pillar »,
+/// « platform »…), son centre, ses demi-dimensions, sa rotation (x, y, z, w), `round` non nul : un cylindre.
+///
+/// # Safety
+/// `kind` pointe sur `len` octets.
 #[unsafe(no_mangle)]
-pub extern "C" fn sim_add_box(id: u32, x: f64, y: f64, z: f64, hx: f64, hy: f64, hz: f64, qx: f64, qy: f64, qz: f64, qw: f64, round: u32) {
-    with(id, |s| s.add_box(v3(x, y, z), v3(hx, hy, hz), Q { x: qx, y: qy, z: qz, w: qw }, round != 0));
+pub unsafe extern "C" fn sim_add_box(
+    id: u32, kind: *const u8, len: usize, x: f64, y: f64, z: f64, hx: f64, hy: f64, hz: f64, qx: f64, qy: f64, qz: f64, qw: f64, round: u32,
+) {
+    let kind = unsafe { text(kind, len) }.to_string();
+    with(id, |s| s.add_box(&kind, v3(x, y, z), v3(hx, hy, hz), Q { x: qx, y: qy, z: qz, w: qw }, round != 0));
+}
+
+/// Retire le décor fixe (`clearScenery`), comme on change d'arène (`loadArena`).
+#[unsafe(no_mangle)]
+pub extern "C" fn sim_clear_scenery(id: u32) {
+    with(id, |s| s.clear_scenery());
+}
+
+/// Les dimensions de l'arène (`ArenaBounds`) : la demi-largeur de son terrain, celle de la zone où rôde l'IA (m).
+#[unsafe(no_mangle)]
+pub extern "C" fn sim_set_bounds(id: u32, half: f64, roam: f64) {
+    with(id, |s| s.bounds = world::Bounds { half, roam });
 }
 
 /// L'accessoire de l'emplacement suivant de l'arène : son type `name` (UTF-8, `len` octets), sa
@@ -121,6 +152,24 @@ pub extern "C" fn sim_prop_rest(id: u32, prop: u32, on: u32) {
 pub unsafe extern "C" fn sim_spawn(id: u32, name: *const u8, len: usize, x: f64, y: f64, z: f64, yaw: f64) -> i32 {
     let name = unsafe { text(name, len) }.to_string();
     match with(id, |s| s.spawn(&name, v3(x, y, z), yaw)) {
+        Ok(bot) => bot as i32,
+        Err(message) => {
+            ERROR.with(|e| *e.borrow_mut() = message);
+            -1
+        }
+    }
+}
+
+/// Fait apparaître le robot préfabriqué `name` (UTF-8, `len` octets), que conduit l'IA, dans l'équipe
+/// `team` (0 : les rouges, 1 : les bleus), en (`x`, `y`, `z`), tourné de `yaw` ; son numéro dans le
+/// monde, ou -1 (le message : `sim_error`).
+///
+/// # Safety
+/// `name` pointe sur `len` octets.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sim_spawn_ai(id: u32, name: *const u8, len: usize, x: f64, y: f64, z: f64, yaw: f64, team: u32) -> i32 {
+    let name = unsafe { text(name, len) }.to_string();
+    match with(id, |s| if team > 1 { Err(format!("équipe inconnue : {team}")) } else { s.spawn_ai(&name, v3(x, y, z), yaw, team as usize) }) {
         Ok(bot) => bot as i32,
         Err(message) => {
             ERROR.with(|e| *e.borrow_mut() = message);
@@ -185,6 +234,74 @@ pub extern "C" fn sim_control(id: u32, bot: u32, throttle: f64, steer: f64, brak
 #[unsafe(no_mangle)]
 pub extern "C" fn sim_seed(id: u32, seed: u32) {
     with(id, |s| s.rng = rng::Rng::new(seed));
+}
+
+/// Le niveau de l'eau de l'arène (`arena.water` ; NaN : pas d'eau) : elle éteint les flaques de feu.
+#[unsafe(no_mangle)]
+pub extern "C" fn sim_set_water(id: u32, level: f64) {
+    with(id, |s| s.water = (!level.is_nan()).then_some(level));
+}
+
+/// Le robot `owner` (-1 : aucun) d'un monde, s'il existe.
+fn owner_of(s: &Sim, owner: i32) -> Result<Option<usize>, String> {
+    if owner < 0 {
+        return Ok(None);
+    }
+    if owner as usize >= s.bots.len() {
+        return Err(format!("robot inconnu : {owner}"));
+    }
+    Ok(Some(owner as usize))
+}
+
+/// L'explosion du projectile de l'arme `name` (UTF-8, `len` octets) en (`x`, `y`, `z`), dans la
+/// direction (`dx`, `dy`, `dz`), à l'origine de laquelle est le robot `owner` (-1 : aucun), comme
+/// quand une mine saute (`explode`) : 0, ou -1 (le message : `sim_error`).
+///
+/// # Safety
+/// `name` pointe sur `len` octets.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sim_explode(id: u32, name: *const u8, len: usize, x: f64, y: f64, z: f64, dx: f64, dy: f64, dz: f64, owner: i32) -> i32 {
+    let name = unsafe { text(name, len) }.to_string();
+    let done = with(id, |s| {
+        let ex = catalog::catalog().weapons.get(&name).and_then(|w| w.explosion).ok_or_else(|| format!("arme sans explosion : {name}"))?;
+        let attacker = owner_of(s, owner)?;
+        explosion::explode(s, v3(x, y, z), &ex, v3(dx, dy, dz), v3(x, y, z), attacker);
+        Ok::<(), String>(())
+    });
+    match done {
+        Ok(()) => 0,
+        Err(message) => {
+            ERROR.with(|e| *e.borrow_mut() = message);
+            -1
+        }
+    }
+}
+
+/// La flaque de feu que laisse le projectile de l'arme `name` (UTF-8, `len` octets) arrivé en (`x`,
+/// `y`, `z`), allumée par le robot `owner` (-1 : aucun), s'il y a du sol juste dessous, comme le jet
+/// du lance-flammes (`groundBelow`, `spawnGroundFire` ; sans sa chance, que tire le projectile) : 1
+/// si une flaque y brûle (nouvelle ou ravivée), 0 sinon, -1 (le message : `sim_error`).
+///
+/// # Safety
+/// `name` pointe sur `len` octets.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sim_puddle(id: u32, name: *const u8, len: usize, x: f64, y: f64, z: f64, owner: i32) -> i32 {
+    let name = unsafe { text(name, len) }.to_string();
+    let done = with(id, |s| {
+        let spec = catalog::catalog().weapons.get(&name).and_then(|w| w.puddle).ok_or_else(|| format!("arme sans flaque : {name}"))?;
+        let owner = owner_of(s, owner)?;
+        Ok::<bool, String>(match fire::ground_below(s, v3(x, y, z), fire::PUDDLE_REACH) {
+            Some(ground) => fire::spawn_ground_fire(s, ground, spec, owner),
+            None => false,
+        })
+    });
+    match done {
+        Ok(lit) => lit as i32,
+        Err(message) => {
+            ERROR.with(|e| *e.borrow_mut() = message);
+            -1
+        }
+    }
 }
 
 /// Avance de `n` pas.
@@ -260,17 +377,105 @@ pub extern "C" fn sim_block_count(id: u32, bot: u32) -> u32 {
 
 /// L'état d'un bloc (dans l'ordre du plan) : ses points de structure, s'il est vivant (1 ou 0), le
 /// rang de son morceau parmi ceux du robot (-1 s'il est détruit), son feu (secondes qu'il brûlera
-/// encore) : quatre nombres de 8 octets.
+/// encore), s'il est perdu (1 ou 0 : détruit, une réparation pourra le faire repousser) : cinq
+/// nombres de 8 octets.
 ///
 /// # Safety
-/// `out` pointe sur 4 f64.
+/// `out` pointe sur 5 f64.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sim_block_state(id: u32, bot: u32, block: u32, out: *mut f64) {
     with(id, |s| {
         let b = &s.bots[bot as usize];
         let k = &b.blocks[block as usize];
         let at = if k.alive { b.parts.iter().position(|&x| x == k.part).map_or(-3.0, |i| i as f64) } else { -1.0 };
-        unsafe { std::slice::from_raw_parts_mut(out, 4) }.copy_from_slice(&[k.hp, if k.alive { 1.0 } else { 0.0 }, at, k.burn]);
+        let lost = if b.lost(block as usize) { 1.0 } else { 0.0 };
+        unsafe { std::slice::from_raw_parts_mut(out, 5) }.copy_from_slice(&[k.hp, if k.alive { 1.0 } else { 0.0 }, at, k.burn, lost]);
+    });
+}
+
+/// L'état d'un robot : quand il a été touché pour la dernière fois (-∞ : jamais), le moment avant
+/// lequel aucun bloc ne lui repousse, l'énergie de ses batteries (kJ), et l'ordre de ses blocs
+/// vivants (`bot.blocks`) résumé en un nombre (la somme de leurs numéros pondérés par leur rang) :
+/// quatre nombres de 8 octets.
+///
+/// # Safety
+/// `out` pointe sur 4 f64.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sim_bot_state(id: u32, bot: u32, out: *mut f64) {
+    with(id, |s| {
+        let b = &s.bots[bot as usize];
+        let order = b.live.iter().enumerate().fold(0.0, |sum, (rank, &k)| sum + ((rank + 1) * (k + 1)) as f64);
+        unsafe { std::slice::from_raw_parts_mut(out, 4) }.copy_from_slice(&[b.last_hit, b.rebuild_at, b.energy, order]);
+    });
+}
+
+/// L'état de l'IA du robot `bot` : son mode (le rang de `brain::Mode`), sa destination (x, y, z), le
+/// temps avant d'en changer, le temps restant dans son mode, ses compteurs de blocage (coincé, bloqué),
+/// le sens de sa marche arrière, sa position au dernier pas (`lastPos` : x, y, z), et la portée de ses
+/// rayons d'évitement (devant, à gauche, à droite, jusqu'à quand ; NaN avant le premier) : seize
+/// nombres de 8 octets.
+///
+/// # Safety
+/// `out` pointe sur 16 f64.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sim_ai_state(id: u32, bot: u32, out: *mut f64) {
+    with(id, |s| {
+        let b = &s.bots[bot as usize];
+        let ai = &b.ai;
+        let (t, p) = (ai.target, b.last_pos);
+        let probes = ai.probes.map_or([f64::NAN; 4], |r| [r.ahead, r.left, r.right, r.until]);
+        let values = [
+            ai.mode as u32 as f64, t.x, t.y, t.z, ai.timer, ai.mode_t, ai.stuck_t, ai.blocked_t, ai.flip, p.x, p.y, p.z, probes[0], probes[1], probes[2], probes[3],
+        ];
+        unsafe { std::slice::from_raw_parts_mut(out, 16) }.copy_from_slice(&values);
+    });
+}
+
+/// Le point vers lequel l'IA du robot `bot` roulerait de sa position au dernier pas à sa destination
+/// (`navigate`, sans rien changer : de quoi comparer le chemin) : trois nombres de 8 octets.
+///
+/// # Safety
+/// `out` pointe sur 3 f64.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sim_nav_goal(id: u32, bot: u32, out: *mut f64) {
+    with(id, |s| {
+        let b = bot as usize;
+        let (pos, target) = (s.bots[b].last_pos, s.bots[b].ai.target);
+        let unported = s.stats.unported;
+        let goal = navigation::navigate(s, b, pos, target);
+        // (une question, pas un pas : ce qui n'est pas porté ne se compte pas deux fois)
+        s.stats.unported = unported;
+        unsafe { std::slice::from_raw_parts_mut(out, 3) }.copy_from_slice(&[goal.x, goal.y, goal.z]);
+    });
+}
+
+/// Les ennemis que l'équipe `team` (0 : les rouges, 1 : les bleus) a repérés : la somme de 2 à la
+/// puissance de leurs numéros, ou -1 tant que la détection n'a pas tourné.
+#[unsafe(no_mangle)]
+pub extern "C" fn sim_detected(id: u32, team: u32) -> f64 {
+    with(id, |s| match &s.detected[team as usize] {
+        None => -1.0,
+        Some(seen) => seen.iter().fold(0.0, |sum, &b| sum + (2.0f64).powi(b as i32)),
+    })
+}
+
+/// Le nombre de flaques de feu au sol.
+#[unsafe(no_mangle)]
+pub extern "C" fn sim_ground_fire_count(id: u32) -> u32 {
+    with(id, |s| s.ground_fires.len() as u32)
+}
+
+/// L'état de la flaque de feu `i` (dans l'ordre où elles ont pris) : son centre (x, y, z), son rayon,
+/// jusqu'à quand elle brûle, le robot qui l'a allumée (-1 : aucun) : six nombres de 8 octets.
+///
+/// # Safety
+/// `out` pointe sur 6 f64.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sim_ground_fire_state(id: u32, i: u32, out: *mut f64) {
+    with(id, |s| {
+        let f = &s.ground_fires[i as usize];
+        let owner = f.owner.map_or(-1.0, |b| b as f64);
+        unsafe { std::slice::from_raw_parts_mut(out, 6) }.copy_from_slice(&[f.pos.x, f.pos.y, f.pos.z, f.radius, f.until, owner]);
     });
 }
 
@@ -333,19 +538,21 @@ pub unsafe extern "C" fn sim_debris_state(id: u32, i: u32, out: *mut f64) {
 /// Ce qui s'est passé depuis la création du monde : chocs, lots de dégâts, blocs détruits,
 /// liaisons rompues, robots hors de combat, roues arrachées, roues retirées, ce qui n'est pas porté,
 /// tirages du hasard, explosions, accessoires retirés, accessoires libérés, blocs allumés, blocs
-/// éteints, événements du feu des accessoires : quinze nombres de 8 octets.
+/// éteints, événements du feu des accessoires, blocs repoussés, blocs réparés, flaques de feu
+/// allumées, flaques éteintes : dix-neuf nombres de 8 octets.
 ///
 /// # Safety
-/// `out` pointe sur 15 f64.
+/// `out` pointe sur 19 f64.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sim_stats(id: u32, out: *mut f64) {
     with(id, |s| {
         let t = s.stats;
         let values = [
             t.collisions, t.damage, t.destroyed, t.links_broken, t.killed, t.wheels_released, t.wheels_removed, t.unported, 0, t.explosions,
-            t.props_removed, t.props_released, t.fires_started, t.fires_ended, t.prop_fire_events,
+            t.props_removed, t.props_released, t.fires_started, t.fires_ended, t.prop_fire_events, t.rebuilt, t.repaired,
+            t.ground_fires_added, t.ground_fires_removed,
         ];
-        let out = unsafe { std::slice::from_raw_parts_mut(out, 15) };
+        let out = unsafe { std::slice::from_raw_parts_mut(out, 19) };
         for (o, v) in out.iter_mut().zip(values) {
             *o = v as f64;
         }
@@ -380,7 +587,7 @@ mod tests {
     fn un_robot_qui_heurte_un_mur_s_abime() {
         // Le mille-pattes, lancé contre un mur : des blocs détruits, des liaisons rompues, des morceaux
         let mut sim = Sim::new();
-        sim.add_box(v3(0.0, 0.6, -36.0), v3(36.5, 0.6, 0.5), vec::NO_ROTATION, false);
+        sim.add_box("wall", v3(0.0, 0.6, -36.0), v3(36.5, 0.6, 0.5), vec::NO_ROTATION, false);
         sim.rng = rng::Rng::new(7);
         let y = robot::ground_height(&catalog::catalog().robots["centi"].design) + 0.03;
         let bot = sim.spawn("centi", v3(0.0, y, 8.0), std::f64::consts::PI).unwrap();
@@ -399,7 +606,7 @@ mod tests {
     fn un_baril_ecrase_contre_un_mur_explose_et_met_le_feu() {
         // Le char lancé contre un baril coincé au pied du mur sud, entre des caisses
         let mut sim = Sim::new();
-        sim.add_box(v3(0.0, 0.6, -36.0), v3(36.5, 0.6, 0.5), vec::NO_ROTATION, false);
+        sim.add_box("wall", v3(0.0, 0.6, -36.0), v3(36.5, 0.6, 0.5), vec::NO_ROTATION, false);
         sim.rng = rng::Rng::new(13);
         sim.add_prop("barrel", v3(0.0, 0.5, -35.1), None, None, None).unwrap();
         for x in [2.8, -2.8] {
@@ -417,5 +624,131 @@ mod tests {
         assert!(sim.props[0].is_none(), "le baril n'est plus là");
         assert!(s.destroyed > 0 && s.fires_started > 0, "le char est abîmé et en feu : {} blocs détruits, {} allumés", s.destroyed, s.fires_started);
         assert_eq!(s.unported, 0);
+    }
+
+    #[test]
+    fn un_mecanicien_qui_heurte_un_mur_se_repare() {
+        // Lancé contre le mur sud, un peu de recul, puis le calme : son module de réparation travaille
+        let mut sim = Sim::new();
+        sim.add_box("wall", v3(0.0, 0.6, -36.0), v3(36.5, 0.6, 0.5), vec::NO_ROTATION, false);
+        sim.rng = rng::Rng::new(11);
+        let y = robot::ground_height(&catalog::catalog().robots["mechanic"].design) + 0.03;
+        let bot = sim.spawn("mechanic", v3(0.0, y, -14.0), std::f64::consts::PI).unwrap();
+        for i in 0..23 * 60 {
+            let input = match i {
+                0..60 => robot::Input::default(),
+                60..540 => robot::Input { throttle: 1.0, steer: 0.0, brake: 0.0, boost: true },
+                540..660 => robot::Input { throttle: -0.5, ..robot::Input::default() },
+                _ => robot::Input::default(),
+            };
+            sim.bots[bot].input = input;
+            sim.step();
+        }
+        let s = sim.stats;
+        assert!(s.destroyed > 0 && s.rebuilt == s.destroyed, "{} blocs détruits, {} repoussés", s.destroyed, s.rebuilt);
+        assert!(s.repaired > 0);
+        let b = &sim.bots[bot];
+        assert!((0..b.blocks.len()).all(|k| !b.lost(k)), "plus de bloc perdu");
+        assert_eq!(b.live.len(), b.blocks.len());
+    }
+
+    /// Les murs et les piliers du Dépôt (sans ses rampes).
+    fn depot_walls_and_pillars(sim: &mut Sim) {
+        for (x, z, hx, hz) in [(0.0, -36.0, 36.5, 0.5), (-36.0, 0.0, 0.5, 36.5), (0.0, 36.0, 36.5, 0.5), (36.0, 0.0, 0.5, 36.5)] {
+            sim.add_box("wall", v3(x, 0.6, z), v3(hx, 0.6, hz), vec::NO_ROTATION, false);
+        }
+        for (x, z) in [(12.0, 12.0), (-12.0, 14.0), (14.0, -14.0), (-10.0, -18.0)] {
+            sim.add_box("pillar", v3(x, 1.5, z), v3(0.8, 1.5, 0.8), vec::NO_ROTATION, false);
+        }
+    }
+
+    #[test]
+    fn l_ia_patrouille_et_contourne_les_piliers() {
+        let mut sim = Sim::new();
+        depot_walls_and_pillars(&mut sim);
+        sim.rng = rng::Rng::new(5);
+        let mut bots = Vec::new();
+        for (i, id) in ["trike", "scarab", "tank"].into_iter().enumerate() {
+            let y = robot::ground_height(&catalog::catalog().robots[id].design) + 0.03;
+            bots.push(sim.spawn_ai(id, v3(-10.0 + 10.0 * i as f64, y, -27.0), 0.0, i % 2).unwrap());
+        }
+        let start: Vec<vec::V3> = bots.iter().map(|&b| sim.bots[b].last_pos).collect();
+        let mut targets = 0;
+        let mut corners = 0;
+        let mut last = bots.iter().map(|&b| sim.bots[b].ai.target).collect::<Vec<_>>();
+        for _ in 0..40 * 60 {
+            sim.step();
+            for (k, &b) in bots.iter().enumerate() {
+                let (pos, target) = (sim.bots[b].last_pos, sim.bots[b].ai.target);
+                if target != last[k] {
+                    targets += 1;
+                    last[k] = target;
+                }
+                let goal = navigation::navigate(&mut sim, b, pos, target);
+                if goal != target {
+                    corners += 1;
+                }
+            }
+        }
+        assert!(targets > bots.len(), "des destinations de patrouille : {targets}");
+        assert!(corners > 0, "des coins de pilier visés");
+        for (k, &b) in bots.iter().enumerate() {
+            let p = sim.bots[b].last_pos;
+            assert!(navigation::flat_distance(p, start[k]) > 5.0, "le robot {b} a roulé");
+        }
+        // (rouges et bleus se voient, au moins de temps en temps : l'arène est petite)
+        assert!(sim.detected.iter().all(Option::is_some));
+        assert_eq!(sim.stats.unported, 0);
+    }
+
+    #[test]
+    fn un_choc_fait_fuir_ou_foncer() {
+        // Un robot fait pour charger (le char) et un qui fuit (le scarabée) : une explosion entre eux
+        let mut sim = Sim::new();
+        sim.rng = rng::Rng::new(3);
+        let mut bots = Vec::new();
+        for (x, id) in [(-3.0, "tank"), (3.0, "scarab")] {
+            let y = robot::ground_height(&catalog::catalog().robots[id].design) + 0.03;
+            bots.push(sim.spawn_ai(id, v3(x, y, 0.0), 0.0, 0).unwrap());
+        }
+        for _ in 0..30 {
+            sim.step();
+        }
+        let barrel = catalog::catalog().props["barrel"].explosion.unwrap();
+        explosion::explode(&mut sim, v3(0.0, 0.3, 0.0), &barrel, v3(0.0, 1.0, 0.0), v3(0.0, 0.3, 0.0), None);
+        assert_eq!(sim.bots[bots[0]].ai.mode, brain::Mode::Charge);
+        assert_eq!(sim.bots[bots[1]].ai.mode, brain::Mode::Flee);
+        let t = sim.bots[bots[1]].ai.target;
+        assert!(t.x > 10.0, "il fuit à l'opposé de l'explosion : {t:?}");
+    }
+
+    #[test]
+    fn le_napalm_laisse_une_flaque_qui_brule_puis_s_eteint() {
+        // Une mine incendiaire saute à côté du camion, arrêté : ses blocs brûlent, une flaque reste
+        // sept secondes au sol ; une autre, sous l'eau, ne prend pas
+        let mut sim = Sim::new();
+        sim.rng = rng::Rng::new(11);
+        let y = robot::ground_height(&catalog::catalog().robots["truck"].design) + 0.03;
+        sim.spawn("truck", v3(0.0, y, -20.0), 0.0).unwrap();
+        // (posé d'abord : les requêtes de Rapier ne voient un collider qu'après un pas, le sol compris)
+        for _ in 0..60 {
+            sim.step();
+        }
+        let napalm = catalog::catalog().weapons["fireMine"].explosion.unwrap();
+        explosion::explode(&mut sim, v3(2.5, 0.3, -20.0), &napalm, v3(0.0, 1.0, 0.0), v3(2.5, 0.3, -20.0), None);
+        assert_eq!(sim.ground_fires.len(), 1);
+        assert!(sim.ground_fires[0].pos.y.abs() < 1e-6, "au sol : {}", sim.ground_fires[0].pos.y);
+        let puddle = catalog::catalog().weapons["flamer"].puddle.unwrap();
+        assert!(fire::spawn_ground_fire(&mut sim, v3(2.6, 0.0, -20.0), puddle, None), "ravivée");
+        sim.water = Some(0.4);
+        assert!(!fire::spawn_ground_fire(&mut sim, v3(-10.0, 0.0, -10.0), puddle, None), "sous l'eau");
+        assert_eq!(sim.ground_fires.len(), 1);
+        for _ in 0..8 * 60 {
+            sim.step();
+        }
+        let s = sim.stats;
+        assert_eq!((s.ground_fires_added, s.ground_fires_removed), (1, 1), "allumée, puis éteinte");
+        assert!(sim.ground_fires.is_empty());
+        assert!(s.fires_started > 0 && s.destroyed > 0);
     }
 }

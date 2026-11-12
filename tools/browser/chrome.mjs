@@ -333,5 +333,12 @@ export const MATCH_STARTED = `getComputedStyle(document.getElementById("loading"
 /** Ouvre le jeu et attend qu'il ait démarré. */
 export async function openGame(page, url) {
   await page.navigate(url);
-  await page.waitFor(BOOTED, 120_000, "démarrage du jeu");
+  try {
+    await page.waitFor(BOOTED, 120_000, "démarrage du jeu");
+  } catch (err) {
+    // Où le chargement s'est arrêté, et les dernières erreurs de la page : de quoi comprendre un démarrage bloqué
+    const step = await page.evaluate(`document.getElementById("loadingStep")?.textContent ?? "?"`).catch(() => "?");
+    const errors = page.errors.slice(-5);
+    throw new Error(`${err.message} (écran de chargement : « ${step} »${errors.length ? ` ; ${errors.join(" | ")}` : ""})`);
+  }
 }

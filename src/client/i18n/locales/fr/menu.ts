@@ -268,6 +268,14 @@ export const menu = {
   "menu.snd.previousTitle": "« {title} »",
   "menu.snd.previousNone": "Aucun pour l'instant",
   "menu.snd.previous": "Revenir",
+  /** Le lecteur de musique des menus et du garage (hud/nowPlaying.ts) : toujours déplié, qui se réduit tout seul, ou caché. */
+  "menu.snd.player": "Lecteur de musique",
+  "menu.snd.playerAlways": "Affiché",
+  "menu.snd.playerAuto": "Se réduit",
+  "menu.snd.playerHidden": "Caché",
+  "menu.snd.playerAlwaysDetail": "Dans les menus et au garage, le morceau en cours et ses boutons précédent et suivant restent affichés.",
+  "menu.snd.playerAutoDetail": "Le lecteur se réduit tout seul à une pastille (la note) quelques secondes après un changement de morceau ; un toucher (ou un clic) la déplie.",
+  "menu.snd.playerHiddenDetail": "Rien dans les menus ni au garage ; en partie, seul un morceau que tu changes s'annonce. Le morceau en cours et ses boutons restent ici.",
   // Profil
   /** Le libellé du réglage de la langue garde le mot anglais : on le retrouve sans lire la langue affichée. */
   "menu.prof.language": "Langue · Language",
@@ -293,6 +301,9 @@ export const menu = {
   "music.next": "Morceau suivant",
   /** Le bouton du morceau précédent, au survol : `{title}`, le morceau auquel il reviendrait. */
   "music.previousTo": "Morceau précédent : {title}",
+  /** La note du lecteur qui se réduit tout seul : déplier la pastille, ou réduire le lecteur. */
+  "music.unfold": "Afficher le lecteur de musique",
+  "music.fold": "Réduire le lecteur de musique",
   ...section("music.theme", {
     menu: "Accueil",
     garage: "Garage",

@@ -1,6 +1,7 @@
 //! Les catalogues du jeu, lus dans content/catalog.json (incorporé au module) : ce qu'il faut à la
-//! simulation portée des blocs (masse, forme, tourelle…), des roues, des robots préfabriqués (leurs
-//! plans) et des accessoires (forme, masse, résistances, explosion, mèche, fuite, bois…). Le
+//! simulation portée des blocs (masse, forme, tourelle, réparation…), des roues, des robots
+//! préfabriqués (leurs plans), des accessoires (forme, masse, résistances, explosion, mèche, fuite,
+//! bois…) et des armes (l'explosion et la flaque de feu de leur projectile, seulement). Le
 //! catalogue est fait par `npm run schemas` depuis les catalogues du TypeScript
 //! (src/shared/catalog/) : ses nombres sont les leurs, au bit près (json.rs) ; seuls les sommets des
 //! formes y sont arrondis (ils sont recalculés, comme le fait shapes.ts, quand on les porte).
@@ -63,6 +64,21 @@ pub struct BlockDef {
     pub resist: HashMap<String, f64>,
     /// Générateur de bouclier (`shield`) : rayon (m), part absorbée, coût (kJ par point).
     pub shield: Option<Shield>,
+    /// Module de réparation (`repair`, combat/repair.ts).
+    pub repair: Option<RepairSpec>,
+    /// Portée de son radar (`radar.range`, m ; 0 : il n'en est pas un) et de son brouilleur
+    /// (`jammer.range` : au-delà, les radars ennemis ne repèrent plus son robot) (sim/detection.ts).
+    pub radar: f64,
+    pub jammer: Option<f64>,
+}
+
+/// Module de réparation (`RepairSpec`) : points rendus par seconde, rayon (m), et le temps sans
+/// être touché (s) au bout duquel il se met au travail.
+#[derive(Clone, Copy, Debug)]
+pub struct RepairSpec {
+    pub rate: f64,
+    pub radius: f64,
+    pub delay: f64,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -162,6 +178,8 @@ pub struct Robot {
     pub speed: f64,
     pub turn: f64,
     pub mobility: Mobility,
+    /// Heurté, il fonce sur qui l'a heurté (`behavior` « charge ») au lieu de fuir.
+    pub charges: bool,
     pub design: Design,
 }
 
@@ -184,8 +202,24 @@ pub struct Explosion {
     pub lift: f64,
     /// Part des blocs touchés qu'elle enflamme (`ignite` ; absent : 0).
     pub ignite: f64,
-    /// Elle laisse une flaque de feu (le napalm) : pas encore portée.
-    pub puddle: bool,
+    /// La flaque de feu qu'elle laisse au sol (le napalm).
+    pub puddle: Option<Puddle>,
+}
+
+/// Flaque de feu au sol (`GroundFireSpec`) : son rayon (m), sa durée (s).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Puddle {
+    pub radius: f64,
+    pub life: f64,
+}
+
+/// Arme (`Weapon`, catalog/weapons.ts) : ce qu'il en faut à la simulation portée, qui n'a pas encore
+/// de projectiles : l'explosion de son projectile (celle d'une mine qui saute) et la flaque de feu
+/// qu'il laisse parfois au sol (le jet du lance-flammes ; sans sa chance, que tire le projectile).
+#[derive(Clone, Copy, Debug)]
+pub struct WeaponDef {
+    pub explosion: Option<Explosion>,
+    pub puddle: Option<Puddle>,
 }
 
 /// Type d'accessoire (`PropTypeDef`, src/shared/catalog/props.ts).
@@ -223,6 +257,7 @@ pub struct Catalog {
     pub wheels: HashMap<String, WheelDef>,
     pub robots: HashMap<String, Robot>,
     pub props: HashMap<String, PropDef>,
+    pub weapons: HashMap<String, WeaponDef>,
 }
 
 /// Le catalogue, lu une fois.
@@ -281,6 +316,18 @@ fn read_block(j: &Json) -> Result<BlockDef, String> {
             Some(s) => Some(Shield { radius: num(s, "radius")?, absorb: num(s, "absorb")?, cost: num(s, "cost")? }),
             None => None,
         },
+        repair: match j.get("repair") {
+            Some(r) => Some(RepairSpec { rate: num(r, "rate")?, radius: num(r, "radius")?, delay: num(r, "delay")? }),
+            None => None,
+        },
+        radar: match j.get("radar") {
+            Some(r) => num(r, "range")?,
+            None => 0.0,
+        },
+        jammer: match j.get("jammer") {
+            Some(r) => Some(num(r, "range")?),
+            None => None,
+        },
     })
 }
 
@@ -320,7 +367,26 @@ fn read_explosion(j: &Json) -> Result<Explosion, String> {
         power: num(j, "power")?,
         lift: num(j, "lift")?,
         ignite: opt(j, "ignite").unwrap_or(0.0),
-        puddle: j.get("puddle").is_some(),
+        puddle: read_puddle(j)?,
+    })
+}
+
+/// La flaque de feu d'une explosion ou d'un projectile (`puddle`), s'il y en a une.
+fn read_puddle(j: &Json) -> Result<Option<Puddle>, String> {
+    match j.get("puddle") {
+        Some(p) => Ok(Some(Puddle { radius: num(p, "radius")?, life: num(p, "life")? })),
+        None => Ok(None),
+    }
+}
+
+fn read_weapon(j: &Json) -> Result<WeaponDef, String> {
+    let p = j.get("projectile").ok_or("catalogue : arme sans projectile")?;
+    Ok(WeaponDef {
+        explosion: match p.get("explosion") {
+            Some(e) => Some(read_explosion(e)?),
+            None => None,
+        },
+        puddle: read_puddle(p)?,
     })
 }
 
@@ -411,13 +477,18 @@ fn read(text: &str) -> Result<Catalog, String> {
             _ => Mobility::Ground,
         };
         let design = read_design(r.get("design").ok_or("catalogue : robot sans plan")?)?;
-        robots.insert(id.clone(), Robot { speed: num(r, "speed")?, turn: num(r, "turn")?, mobility, design });
+        let charges = r.get("behavior").and_then(Json::str) == Some("charge");
+        robots.insert(id.clone(), Robot { speed: num(r, "speed")?, turn: num(r, "turn")?, mobility, charges, design });
     }
     let mut props = HashMap::new();
     for (id, p) in root.get("props").map(Json::fields).unwrap_or(&[]) {
         props.insert(id.clone(), read_prop(p)?);
     }
-    Ok(Catalog { constants, blocks, wheels, robots, props })
+    let mut weapons = HashMap::new();
+    for (id, w) in root.get("weapons").map(Json::fields).unwrap_or(&[]) {
+        weapons.insert(id.clone(), read_weapon(w)?);
+    }
+    Ok(Catalog { constants, blocks, wheels, robots, props, weapons })
 }
 
 #[cfg(test)]
@@ -437,6 +508,10 @@ mod tests {
         let tank = &c.robots["tank"];
         assert_eq!(tank.design.wheels.len(), 10);
         assert_eq!(tank.mobility, Mobility::Ground);
+        assert!(tank.charges && !c.robots["scarab"].charges);
+        assert_eq!(c.blocks["radar"].radar, 120.0);
+        assert_eq!(c.blocks["jammer"].jammer, Some(25.0));
+        assert_eq!((c.blocks["cockpit"].radar, c.blocks["cockpit"].jammer), (0.0, None));
         let barrel = &c.props["barrel"];
         assert_eq!(barrel.shape, PropShape::Cylinder { radius: 0.35, half_height: 0.5 });
         assert_eq!(barrel.fuse, 0.25);
@@ -444,5 +519,12 @@ mod tests {
         assert_eq!(c.props["gas"].vent, Some((600.0, 1.6)));
         assert!(c.props["pine"].anchored && c.props["pine"].topples == 0.5);
         assert_eq!(c.props["crate"].burns, Some((9.0, 0.2)));
+        let repair = c.blocks["repairModule"].repair.expect("module de réparation");
+        assert_eq!((repair.rate, repair.radius, repair.delay), (20.0, 3.0, 3.0));
+        let napalm = c.weapons["fireMine"].explosion.expect("explosion de la mine incendiaire");
+        assert_eq!(napalm.puddle, Some(Puddle { radius: 2.4, life: 7.0 }));
+        assert_eq!(c.weapons["flamer"].puddle, Some(Puddle { radius: 0.9, life: 4.0 }));
+        // (aucun accessoire ne laisse de flaque : c'est l'affaire des armes)
+        assert!(c.props.values().all(|p| p.explosion.is_none_or(|e| e.puddle.is_none())));
     }
 }

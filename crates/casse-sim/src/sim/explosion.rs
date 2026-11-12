@@ -4,14 +4,16 @@
 //! proche et éprouve les liaisons des morceaux poussés. Les barils voisins s'allument et sautent à
 //! leur tour (réaction en chaîne, props.rs).
 //!
-//! Il n'y a pas encore de projectiles ni de murs d'énergie (rien à abattre, rien qui arrête le
-//! souffle) ; une explosion qui laisserait une flaque de feu (le napalm) est comptée dans
-//! `Stats.unported`.
+//! Une explosion de napalm laisse une flaque de feu au sol, sous elle (fire.rs). Il n'y a pas encore
+//! de projectiles ni de murs d'énergie (rien à abattre, rien qui arrête le souffle) : les explosions
+//! sont celles des accessoires qui sautent, et celles que l'essai fait partir (`sim_explode` : celle
+//! d'une mine qui saute, avec le robot qui l'a posée).
 
+use super::brain::react;
 use super::catalog::{Explosion, catalog};
 use super::damage::{DamageBatch, Target, resolve_damage};
 use super::debris::block_world_pos;
-use super::fire::{BURN_TIME, ignite, ignite_prop};
+use super::fire::{BURN_TIME, PUDDLE_REACH, ground_below, ignite, ignite_prop, spawn_ground_fire};
 use super::props::{present, prop, prop_distance, prop_mass, prop_nearest};
 use super::vec::{V3, add, len, norm, scale, sub, v3};
 use super::world::Sim;
@@ -39,15 +41,15 @@ fn wheel_pos(sim: &Sim, bot: usize, w: usize) -> V3 {
     }
 }
 
-/// Explosion en `point` (`explode`), d'un accessoire qui saute (sans tireur) : `dir`, la direction
-/// du coup (les débris partent de ce côté).
-pub fn explode(sim: &mut Sim, point: V3, ex: &Explosion, dir: V3) {
+/// Explosion en `point` (`explode`) : `dir`, la direction du coup (les débris partent de ce côté) ;
+/// `shooter`, d'où elle vient (l'IA des robots touchés réagit : ils fuient, ou foncent dessus) ;
+/// `attacker`, le robot à l'origine de l'explosion (aucun pour un accessoire qui saute) : la flaque
+/// de feu qu'elle laisse est la sienne. Le reste de ce qu'il change (le dernier attaquant de ceux
+/// qu'elle touche) ne sert qu'à créditer une destruction.
+pub fn explode(sim: &mut Sim, point: V3, ex: &Explosion, dir: V3, shooter: V3, attacker: Option<usize>) {
     let mut batch = DamageBatch::default();
     for bot in 0..sim.bots.len() {
-        for b in 0..sim.bots[bot].blocks.len() {
-            if !sim.bots[bot].blocks[b].alive {
-                continue;
-            }
+        for b in sim.bots[bot].live.clone() {
             let amount = damage_at(ex, distance(block_world_pos(sim, bot, b), point));
             batch.add(sim, Some(Target::Block(bot, b)), amount, "explosive");
         }
@@ -65,7 +67,7 @@ pub fn explode(sim: &mut Sim, point: V3, ex: &Explosion, dir: V3) {
     }
     sim.stats.explosions += 1;
     // (pas de projectiles : rien à abattre, pas de mines à faire sauter)
-    resolve_damage(sim, &batch, dir);
+    let mut hit = resolve_damage(sim, &batch, dir);
     // Une explosion incendiaire enflamme une partie des blocs restés entiers dans sa zone, et du bois du décor
     if ex.ignite != 0.0 {
         for &((bot, b), _) in &batch.blocks {
@@ -80,15 +82,18 @@ pub fn explode(sim: &mut Sim, point: V3, ex: &Explosion, dir: V3) {
             }
         }
     }
-    // Le napalm laisserait une flaque de feu au sol (pas encore porté)
-    if ex.puddle {
-        sim.stats.unported += 1;
+    // Le napalm laisse une flaque de feu au sol, sous l'explosion
+    if let Some(puddle) = ex.puddle
+        && let Some(ground) = ground_below(sim, point, PUDDLE_REACH)
+    {
+        spawn_ground_fire(sim, ground, puddle, attacker);
     }
     // Le souffle agit sur ce qui reste ; ses chocs peuvent rompre des liaisons
     let mut shocks = DamageBatch::default();
-    blast(sim, point, dir, ex, &mut shocks);
-    resolve_damage(sim, &shocks, dir);
-    // (la réaction de l'IA ne sert pas à des robots pilotés ; un événement `damage`)
+    hit.extend(blast(sim, point, dir, ex, &mut shocks));
+    hit.extend(resolve_damage(sim, &shocks, dir));
+    // Les robots touchés réagissent (l'ordre n'y fait rien : chacun pour soi) ; un événement `damage`
+    react(sim, &hit, Some(shooter));
     sim.stats.damage += 1;
 }
 
@@ -102,8 +107,9 @@ fn push(sim: &mut Sim, rb: RigidBodyHandle, at: V3, point: V3, dir: V3, ex: &Exp
 }
 
 /// Souffle (`blast`) : pousse les corps proches du centre. Le choc reçu par chaque morceau (somme des
-/// poussées, au point moyen où elles s'appliquent) est ajouté à `shocks`.
-fn blast(sim: &mut Sim, point: V3, dir: V3, ex: &Explosion, shocks: &mut DamageBatch) {
+/// poussées, au point moyen où elles s'appliquent) est ajouté à `shocks`. Les robots poussés.
+fn blast(sim: &mut Sim, point: V3, dir: V3, ex: &Explosion, shocks: &mut DamageBatch) -> Vec<usize> {
+    let mut touched = Vec::new();
     for bot in 0..sim.bots.len() {
         for part in sim.bots[bot].parts.clone() {
             let mut total = v3(0.0, 0.0, 0.0);
@@ -119,6 +125,9 @@ fn blast(sim: &mut Sim, point: V3, dir: V3, ex: &Explosion, shocks: &mut DamageB
                     total = add(total, impulse);
                     where_ = add(where_, scale(p, len(impulse)));
                     weight += len(impulse);
+                    if !touched.contains(&bot) {
+                        touched.push(bot);
+                    }
                 }
             }
             if weight > 0.0 {
@@ -159,4 +168,5 @@ fn blast(sim: &mut Sim, point: V3, dir: V3, ex: &Explosion, shocks: &mut DamageB
             push(sim, rb, p, point, dir, ex, (1.0 - dist / ex.blast_radius) * 0.15, 1.0);
         }
     }
+    touched
 }

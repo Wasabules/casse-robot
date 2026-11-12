@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { assignBinding, BINDINGS_VERSION, DEFAULT_BINDINGS } from "../src/client/input/bindings";
-import { DEFAULT_SETTINGS, defaultSettings, firstRunPreset, GRAPHICS_PRESETS, graphicsPreset, parseSettings, requestedRenderer } from "../src/client/settings";
+import {
+  DEFAULT_SETTINGS, defaultMusicPlayer, defaultSettings, firstRunPreset, GRAPHICS_PRESETS, graphicsPreset, parseSettings, requestedRenderer,
+} from "../src/client/settings";
 
 describe("Réglages du joueur", () => {
   it("sans réglages enregistrés, ou illisibles : les réglages par défaut", () => {
@@ -128,11 +130,40 @@ describe("Réglages du joueur", () => {
     expect(firstRunPreset({ coarse: false, screen: 768 })).toBe("medium");
     expect(firstRunPreset({ coarse: false, screen: 768, memory: 2 })).toBe("low");
     expect(firstRunPreset({ coarse: false, screen: 768, cores: 2 })).toBe("low");
-    // Les réglages par défaut de cette machine : ceux de toujours, aux graphismes choisis
+    // Les réglages par défaut de cette machine : ceux de toujours, aux graphismes choisis (et au lecteur de musique du doigt)
     const phone = defaultSettings({ coarse: true, screen: 390 });
     expect(graphicsPreset(phone)).toBe("low");
-    expect({ ...phone, ...GRAPHICS_PRESETS.medium }).toEqual(DEFAULT_SETTINGS);
+    expect({ ...phone, ...GRAPHICS_PRESETS.medium, musicPlayer: DEFAULT_SETTINGS.musicPlayer }).toEqual(DEFAULT_SETTINGS);
     expect(defaultSettings({ coarse: false, screen: 1080, memory: 8, cores: 8 })).toEqual(DEFAULT_SETTINGS);
+  });
+
+  it("le lecteur de musique : au doigt, il se réduit tout seul ; sur ordinateur, toujours affiché ; des réglages d'avant prennent celui de la machine", () => {
+    const phone = { coarse: true, screen: 390 };
+    const tablet = { coarse: true, screen: 1024, memory: 8, cores: 8 };
+    const desktop = { coarse: false, screen: 1080 };
+    expect(defaultMusicPlayer(phone)).toBe("auto");
+    expect(defaultMusicPlayer(tablet)).toBe("auto");
+    expect(defaultMusicPlayer(desktop)).toBe("always");
+    expect(DEFAULT_SETTINGS.musicPlayer).toBe("always");
+    expect(defaultSettings(phone).musicPlayer).toBe("auto");
+    expect(defaultSettings(tablet).musicPlayer).toBe("auto");
+    expect(defaultSettings(desktop).musicPlayer).toBe("always");
+    // Des réglages enregistrés avant ce réglage : celui de la machine, le reste gardé
+    const old = JSON.stringify({ volume: 0.4, music: 0.3, touchAim: "stick" });
+    expect(parseSettings(old, phone)).toMatchObject({ volume: 0.4, music: 0.3, touchAim: "stick", musicPlayer: "auto" });
+    expect(parseSettings(old, desktop)).toMatchObject({ volume: 0.4, music: 0.3, musicPlayer: "always" });
+    // (sans machine donnée, hors du navigateur : un ordinateur)
+    expect(parseSettings(old).musicPlayer).toBe("always");
+    // Le choix du joueur est gardé, quelle que soit la machine ; une valeur inconnue prend celui de la machine
+    for (const mode of ["always", "auto", "hidden"] as const) {
+      expect(parseSettings(JSON.stringify({ musicPlayer: mode }), phone).musicPlayer).toBe(mode);
+      expect(parseSettings(JSON.stringify({ musicPlayer: mode }), desktop).musicPlayer).toBe(mode);
+    }
+    expect(parseSettings(JSON.stringify({ musicPlayer: "mini" }), phone).musicPlayer).toBe("auto");
+    expect(parseSettings(JSON.stringify({ musicPlayer: 2 }), desktop).musicPlayer).toBe("always");
+    // Enregistré puis relu : le même
+    const s = { ...defaultSettings(phone), musicPlayer: "hidden" as const };
+    expect(parseSettings(JSON.stringify(s), desktop)).toMatchObject({ musicPlayer: "hidden" });
   });
 
   it("le jeu au doigt : par défaut, visée en glissant, viseur qui bascule ; des réglages d'avant restent lisibles", () => {

@@ -76,6 +76,8 @@ struct Clash {
 /// Choc mesuré, prêt à infliger : tout ce qu'il faut lire de Rapier l'a été (`Impact`).
 struct Impact {
     owners: [Option<Owner>; 2],
+    /// Combien de ses deux côtés sont des robots (relevé à la mesure, quand tous les morceaux sont là).
+    robots: usize,
     points: Vec<(V3, f64)>,
     total: f64,
     normal: V3,
@@ -169,9 +171,10 @@ fn measure(sim: &Sim, clash: &Clash, before: &HashMap<RigidBodyHandle, Motion>) 
         return None;
     }
     let owners = [owner_of_body(sim, clash.a, clash), owner_of_body(sim, clash.b, clash)];
+    let robots = owners.iter().filter(|o| owner_is_bot(sim, **o)).count();
     let damage = DAMAGE_PER_IMPULSE * clash.impulse * (1.0 - SAFE_SPEED / closing);
     let breach = breach_of(sim, clash, &owners, [ma, mb], n, closing, damage);
-    Some(Impact { owners, points, total, normal: n, center, impulse: clash.impulse, damage, breach })
+    Some(Impact { owners, robots, points, total, normal: n, center, impulse: clash.impulse, damage, breach })
 }
 
 /// Le choc brise-t-il un accessoire ancré (`damage` : ce qu'un arrêt net lui inflige) ? Alors le
@@ -217,6 +220,15 @@ fn breach_of(sim: &Sim, clash: &Clash, owners: &[Option<Owner>; 2], motions: [Op
         linvel: sub(motion.linvel, scale(dir, along - speed)),
         angvel: motion.angvel,
     })
+}
+
+/// Ce côté du choc est-il un robot (`ownerBot` : un morceau, une roue, une tête de tourelle) ?
+fn owner_is_bot(sim: &Sim, owner: Option<Owner>) -> bool {
+    match owner {
+        Some(Owner::Part(p)) => sim.parts[p].is_some(),
+        Some(Owner::Wheel(..)) | Some(Owner::Head(..)) => true,
+        _ => false,
+    }
 }
 
 /// Ce que représente un corps pris dans un choc : on le retrouve par l'un de ses colliders (`ownerOfBody`).
@@ -292,8 +304,8 @@ fn strike_impact(sim: &mut Sim, impact: &Impact) {
         }
     }
     sim.stats.collisions += 1;
-    // (la réaction de l'IA à un choc entre deux robots ne sert pas à des robots pilotés)
-    inflict(sim, &batch, n);
+    // Un robot ne réagit (fuite, charge) qu'à un choc avec un autre robot, pas contre un mur ou une caisse
+    inflict(sim, &batch, n, if impact.robots == 2 { Some(impact.center) } else { None });
     if let Some(breach) = &impact.breach {
         break_through(sim, breach);
     }

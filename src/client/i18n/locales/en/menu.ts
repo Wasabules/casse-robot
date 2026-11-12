@@ -253,6 +253,13 @@ export const menu = {
   "menu.snd.previousTitle": "“{title}”",
   "menu.snd.previousNone": "None yet",
   "menu.snd.previous": "Go back",
+  "menu.snd.player": "Music player",
+  "menu.snd.playerAlways": "Shown",
+  "menu.snd.playerAuto": "Shrinks",
+  "menu.snd.playerHidden": "Hidden",
+  "menu.snd.playerAlwaysDetail": "In the menus and the garage, the current track and its previous and next buttons stay on screen.",
+  "menu.snd.playerAutoDetail": "The player shrinks on its own to a pill (the music note) a few seconds after the track changes; tap or click it to unfold it.",
+  "menu.snd.playerHiddenDetail": "Nothing in the menus or the garage; in a match, only a track you change is announced. The current track and its buttons stay here.",
   // Profil
   "menu.prof.language": "Language",
   "menu.prof.languageDetail": "The game's text; by default, your browser's language.",
@@ -273,6 +280,8 @@ export const menu = {
   "music.previous": "Previous track",
   "music.next": "Next track",
   "music.previousTo": "Previous track: {title}",
+  "music.unfold": "Show the music player",
+  "music.fold": "Collapse the music player",
   ...section("music.theme", {
     menu: "Home",
     garage: "Garage",

@@ -26,7 +26,8 @@ import {
 } from "./input/bindings";
 import type { MenuCommand } from "./input/controls";
 import { PadBadge } from "./hud/padBadge";
-import { fullscreenSupported, isFullscreen, toggleFullscreen, TouchHud } from "./hud/touchHud";
+import { TouchHud } from "./hud/touchHud";
+import { fullscreenSupported, isFullscreen, onFullscreenChange, toggleFullscreen } from "./hud/fullscreen";
 import { lockedParts, matchReward } from "../shared/design/progression";
 import { FpsBadge } from "./hud/fpsBadge";
 import { setLocale } from "./i18n/state";
@@ -41,7 +42,7 @@ import { defaultServer, NetClient } from "./net/netClient";
 import {
   DEADZONE_RANGE, defaultSettings, FOV_RANGE, GRAPHICS_PRESETS, graphicsPreset, loadSettings, saveSettings, SENSITIVITY_RANGE,
   TOUCH_OPACITY_RANGE, TOUCH_SIZE_RANGE,
-  type GraphicsPreset, type NumberSetting, type Settings,
+  type GraphicsPreset, type MusicPlayerMode, type NumberSetting, type Settings,
   requestedRenderer,
 } from "./settings";
 import { arenaInfo, arenaName, botName, communityInfo, mapIssueText, modeInfo, modeName, partName, rewardLineText } from "./i18n/names";
@@ -64,6 +65,10 @@ export type SettingsTab = "graphics" | "controls" | "touch" | "sound" | "profile
 const SETTINGS_TABS = {
   graphics: "menu.settings.graphics", controls: "menu.settings.controls", touch: "menu.settings.touch", sound: "menu.settings.sound", profile: "menu.settings.profile",
 } as const satisfies Record<SettingsTab, MessageKey>;
+/** Ce que fait chaque réglage du lecteur de musique (onglet Son). */
+const PLAYER_DETAILS = {
+  always: "menu.snd.playerAlwaysDetail", auto: "menu.snd.playerAutoDetail", hidden: "menu.snd.playerHiddenDetail",
+} as const satisfies Record<MusicPlayerMode, MessageKey>;
 /** Change un réglage : il est appliqué, enregistré, puis l'écran des paramètres est redessiné. */
 type Setter = <K extends keyof Settings>(key: K) => (value: Settings[K]) => void;
 
@@ -119,7 +124,7 @@ export class App {
   private readonly padBadge = new PadBadge();
   /** Le lecteur de musique : le morceau en cours, et ses boutons dans les menus et au garage. */
   private readonly nowPlaying: NowPlaying;
-  /** Au doigt : la pause et le plein écran en partie, le mot du garage et de l'éditeur. */
+  /** Au doigt : la pause en partie, le mot du garage et de l'éditeur. */
   private readonly touchHud = new TouchHud();
 
   constructor(game: ArenaGame, canvas: HTMLCanvasElement, loading: LoadingScreen) {
@@ -155,7 +160,11 @@ export class App {
     this.fps = new FpsBadge(game.engine);
     this.soundLog = new SoundLog();
     // La musique : ses titres, et de quoi changer de morceau (les touches en partie passent par les commandes)
-    this.nowPlaying = new NowPlaying({ previous: () => this.skipMusic(-1), next: () => this.skipMusic(1) });
+    this.nowPlaying = new NowPlaying({
+      previous: () => this.skipMusic(-1),
+      next: () => this.skipMusic(1),
+      toggle: () => game.sound.ui("click"),
+    });
     game.sound.onMusic = (now, change, manual, track) => this.musicChanged(now, change, manual, track);
     this.applySettings();
     // Les boutons des menus : un clic, et un léger son au survol
@@ -198,6 +207,12 @@ export class App {
     this.touchHud.onPause = () => {
       if (this.state === "playing") this.pause();
     };
+    // Entré en plein écran ou sorti (par le menu, ou par le navigateur : Échap, le geste retour) :
+    // l'accueil et la pause, qui le proposent, disent ce que fera leur entrée
+    onFullscreenChange(() => {
+      if (this.menu.screen === "title") this.renderTitle();
+      else if (this.menu.screen === "pause" && this.state === "paused") this.pause();
+    });
     // Le clavier du joueur appris (ou la manette prise) : les noms des touches changent, au garage aussi
     const labels = controls.onLabels;
     controls.onLabels = () => {
@@ -249,16 +264,19 @@ export class App {
   }
 
   /**
-   * L'entrée « Plein écran » (ou « Quitter le plein écran ») d'un menu, au doigt, là où le navigateur
-   * le permet ; `redraw` redessine le menu une fois la page passée en plein écran (ou sortie).
+   * L'entrée « Plein écran » (ou « Quitter le plein écran ») de l'accueil et du menu pause, là où le
+   * navigateur le permet (pas sur l'iPhone) ; au doigt, elle tourne aussi l'écran à l'horizontale, là
+   * où c'est possible. Le menu se redessine quand la page entre en plein écran ou en sort
+   * (`onFullscreenChange`, dans le constructeur).
    */
-  private fullscreenEntry(redraw: () => void): MenuEntry[] {
-    if (!this.touchHud.active || !fullscreenSupported()) return [];
+  private fullscreenEntry(): MenuEntry[] {
+    if (!fullscreenSupported()) return [];
     const on = isFullscreen();
     return [{
       label: on ? t("hud.page.exitFullscreen") : t("hud.page.fullscreen"),
-      detail: on ? undefined : t("menu.fullscreenDetail"),
-      onSelect: () => void toggleFullscreen().then(redraw),
+      // (l'explication sur une tuile, au doigt ; sur ordinateur, l'accueil tient ainsi en 720 px de haut)
+      detail: on || !this.touchHud.active ? undefined : t("menu.fullscreenDetail"),
+      onSelect: () => void toggleFullscreen(this.touchHud.active),
     }];
   }
 
@@ -326,7 +344,7 @@ export class App {
         },
         { label: t("editor.menu"), detail: t("editor.menuDetail"), onSelect: () => void this.openEditor({ kind: "resume" }) },
         { label: t("menu.settings.title"), detail: t("menu.title.settingsDetail"), onSelect: () => this.showSettings(() => this.renderTitle()) },
-        ...this.fullscreenEntry(() => this.state === "title" && this.renderTitle()),
+        ...this.fullscreenEntry(),
       ],
       footer: t("menu.title.footer"),
     });
@@ -670,7 +688,7 @@ export class App {
         entries: [
           { label: t("menu.pause.resume"), detail: this.escapeHint, primary: true, onSelect: () => this.resume() },
           { label: t("menu.settings.title"), onSelect: () => this.showSettings(() => this.pause()) },
-          ...this.fullscreenEntry(() => this.state === "paused" && this.pause()),
+          ...this.fullscreenEntry(),
           { label: t("menu.pause.quit"), onSelect: () => this.showTitle() },
         ],
       });
@@ -692,7 +710,7 @@ export class App {
           ? [{ label: t("menu.pause.changeRobot"), onSelect: () => this.pickRobot(modeName(mode), (p) => this.play(mode, p), () => this.pause()) }]
           : []),
         { label: t("menu.settings.title"), onSelect: () => this.showSettings(() => this.pause()) },
-        ...this.fullscreenEntry(() => this.state === "paused" && this.pause()),
+        ...this.fullscreenEntry(),
         { label: t("menu.pause.main"), onSelect: () => this.showTitle() },
       ],
     });
@@ -1591,6 +1609,18 @@ export class App {
         format: (v) => (v === 0 ? t("menu.snd.musicOff") : pct(v / 100)),
         onChange: (v, done) => this.slide("music", v / 100, done, redraw),
       },
+      // Le lecteur des menus et du garage (par défaut : au doigt, il se réduit tout seul)
+      choiceRow(
+        t("menu.snd.player"),
+        [
+          { value: "always", label: t("menu.snd.playerAlways") },
+          { value: "auto", label: t("menu.snd.playerAuto") },
+          { value: "hidden", label: t("menu.snd.playerHidden") },
+        ],
+        s.musicPlayer,
+        set("musicPlayer"),
+        t(PLAYER_DETAILS[s.musicPlayer]),
+      ),
       ...this.musicRows(),
     ];
   }
@@ -1624,7 +1654,7 @@ export class App {
    */
   private musicChanged(now: MusicNow, change: MusicChange, manual: boolean, track: Track | null): void {
     const toast = manual || (change === "start" && now.theme !== null);
-    this.nowPlaying.update(now, change, toast, track);
+    this.nowPlaying.update({ now, change, toast, asked: manual, track });
     if (this.settingsTab === "sound" && this.menu.screen === "settings") this.redrawSettings?.();
   }
 
@@ -1704,6 +1734,7 @@ export class App {
     game.sound.setVolume(s.volume);
     game.sound.setMusicVolume(s.music);
     this.nowPlaying.setMuted(!game.sound.musicAudible);
+    this.nowPlaying.setMode(s.musicPlayer);
     this.soundLog.setVisible(s.soundLog);
     game.sound.setTrace(s.soundLog ? (label) => this.soundLog.push(label) : null);
     this.fps.setVisible(s.showFps);

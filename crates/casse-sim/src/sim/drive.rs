@@ -1,10 +1,11 @@
-//! La conduite d'un robot au sol par son pilote (sans IA) : `thinkBot` et `thinkPlayer` pour un robot
-//! au sol (src/shared/ai/brain.ts, src/shared/sim/player.ts), `drive` et `driveWheels`
+//! La conduite d'un robot au sol : `thinkBot` (src/shared/ai/brain.ts : le pilote, `thinkPlayer` de
+//! src/shared/sim/player.ts ; ou l'IA, brain.rs), `drive` et `driveWheels`
 //! (src/shared/robot/propulsion.ts), la géométrie de direction et la stabilité au freinage
 //! (src/shared/robot/steering.ts), le redressement (src/shared/robot/righting.ts) et l'énergie
 //! (src/shared/robot/energy.ts). Seules les roues du morceau du cockpit sont motorisées et dirigées ;
 //! un robot hors de combat ne conduit plus.
 
+use super::brain::{Mode, think_ground};
 use super::lifecycle::energy_capacity;
 use super::physics::Physics;
 use super::robot::{Bot, Wheel};
@@ -26,10 +27,10 @@ const PITCH_MARGIN: f64 = 0.85;
 /// En deçà de cet écart à la ligne du centre de rotation (m), une roue directrice n'a pas à braquer.
 const MIN_ARM: f64 = 0.05;
 /// Redressement (righting.ts).
-const FLIPPED_UP_Y: f64 = 0.55;
+pub const FLIPPED_UP_Y: f64 = 0.55;
 const RIGHTING_DELAY: f64 = 3.0;
 const STILL_SPEED: f64 = 1.5;
-const RIGHTING_TIME: f64 = 2.0;
+pub const RIGHTING_TIME: f64 = 2.0;
 const HOP_TIME: f64 = 0.15;
 const HOP_SPEED: f64 = 3.0;
 const TURN_RATE: f64 = 4.0;
@@ -37,12 +38,12 @@ const UPRIGHT_Y: f64 = 0.92;
 const UP: V3 = v3(0.0, 1.0, 0.0);
 
 /// Centre de masse du morceau du cockpit, dans le repère du robot (`localCom`).
-fn local_com(phys: &Physics, rb: RigidBodyHandle) -> V3 {
+pub fn local_com(phys: &Physics, rb: RigidBodyHandle) -> V3 {
     qrot_inv(phys.rotation(rb), sub(phys.world_com(rb), phys.translation(rb)))
 }
 
 /// Roues montées sur le morceau du cockpit : les seules qui sont motorisées (`drivenWheels`).
-fn driven_wheels(bot: &Bot) -> Vec<&Wheel> {
+pub fn driven_wheels(bot: &Bot) -> Vec<&Wheel> {
     if !bot.cockpit_alive() {
         return Vec::new();
     }
@@ -52,12 +53,12 @@ fn driven_wheels(bot: &Bot) -> Vec<&Wheel> {
 
 /// Géométrie de direction (`steeringGeometry`) : la ligne du centre de rotation et la courbure
 /// maximale (0 : pas de roue directrice alimentée, conduite différentielle).
-struct Geometry {
+pub struct Geometry {
     pivot_z: f64,
-    max_curvature: f64,
+    pub max_curvature: f64,
 }
 
-fn steering_geometry(phys: &Physics, bot: &Bot, ck_rb: Option<RigidBodyHandle>) -> Geometry {
+pub fn steering_geometry(phys: &Physics, bot: &Bot, ck_rb: Option<RigidBodyHandle>) -> Geometry {
     let wheels = driven_wheels(bot);
     let steered: Vec<&&Wheel> = wheels.iter().filter(|w| w.steerable).collect();
     if steered.is_empty() {
@@ -185,7 +186,7 @@ fn sprint_factor(bot: &mut Bot) -> f64 {
 
 /// Conduite au sol (`drive`) : roues seulement (ce jalon n'a ni appuis ni propulseurs).
 #[allow(clippy::too_many_arguments)]
-fn drive(phys: &Physics, bot: &mut Bot, ck_rb: Option<RigidBodyHandle>, throttle: f64, steer: f64, boost: bool, sprint: bool, brake: f64, gravity: f64) {
+pub fn drive(phys: &Physics, bot: &mut Bot, ck_rb: Option<RigidBodyHandle>, throttle: f64, steer: f64, boost: bool, sprint: bool, brake: f64, gravity: f64) {
     let brake = clamp(brake, 0.0, 1.0);
     let boost = boost && brake == 0.0;
     let sprint = if sprint && brake == 0.0 && throttle != 0.0 && bot.cockpit_alive() { sprint_factor(bot) } else { 1.0 };
@@ -233,23 +234,37 @@ fn update_righting(phys: &mut Physics, bot: &mut Bot, rb: RigidBodyHandle, dt: f
     false
 }
 
-/// Un pas du robot `b`, piloté au sol (`thinkBot` puis `thinkPlayer`, sans tourelle qui vise : le
-/// point visé est absent), puis son énergie (`settleEnergy`). Hors de combat (cockpit détruit), il
-/// ne conduit plus : ses roues passent en roue libre.
+/// Un pas du robot `b` (`thinkBot`), puis son énergie (`settleEnergy`). Hors de combat (cockpit
+/// détruit), il ne conduit plus : ses roues passent en roue libre. Renversé, son gyroscope le
+/// redresse. Sinon, piloté au sol (`thinkPlayer`, sans tourelle qui vise : le point visé est absent),
+/// ou conduit par l'IA (brain.rs, `thinkGround`). Sa position (`lastPos`) est relevée à chaque pas
+/// où il est vivant : la détection et la réaction aux coups la lisent.
 pub fn think(sim: &mut Sim, b: usize) {
     let gravity = sim.gravity;
     let ck_rb = if sim.bots[b].cockpit_alive() { Some(sim.part(sim.bots[b].cockpit_part()).rb) } else { None };
-    let bot = &mut sim.bots[b];
-    let phys = &mut sim.phys;
     match ck_rb {
-        None => drive(phys, bot, None, 0.0, 0.0, false, false, 0.0, gravity),
+        None => {
+            let bot = &mut sim.bots[b];
+            bot.ai.mode = Mode::Dead;
+            drive(&sim.phys, bot, None, 0.0, 0.0, false, false, 0.0, gravity);
+        }
         Some(rb) => {
+            let pos = sim.phys.world_com(rb);
+            sim.bots[b].last_pos = pos;
+            let bot = &mut sim.bots[b];
+            let phys = &mut sim.phys;
             if update_righting(phys, bot, rb, STEP) {
+                bot.ai.mode = Mode::Flipped;
                 drive(phys, bot, ck_rb, 0.0, 0.0, false, false, 0.0, gravity);
-            } else {
+            } else if bot.piloted {
+                // (`thinkPlayer` : le mode de son IA dit seulement s'il est renversé)
+                let up = qrot(phys.rotation(rb), UP);
+                bot.ai.mode = if up.y < FLIPPED_UP_Y { Mode::Flipped } else { Mode::Patrol };
                 let input = bot.input;
                 let brake = clamp(input.brake, 0.0, 1.0);
                 drive(phys, bot, ck_rb, input.throttle, input.steer, input.boost, input.boost, brake, gravity);
+            } else {
+                think_ground(sim, b, pos);
             }
         }
     }

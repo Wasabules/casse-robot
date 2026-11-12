@@ -5,12 +5,14 @@
 // une vraie image (pas un aplat : le canvas seul, ses couleurs doivent varier). Par défaut sans
 // carte graphique (SwiftShader, comme l'intégration continue) ; `--gpu` : celle de la machine.
 // `--renderer=webgpu` : le même parcours sous WebGPU (échoue si le navigateur ne l'offre pas, sauf
-// avec `--optional` : l'essai est alors sauté, et le dit), la perte du contexte devenant celle du
+// avec `--optional` : l'essai est alors sauté, et le dit ; de même quand son seul adaptateur est
+// logiciel, SwiftShader : sous Linux sans carte graphique, l'intégration continue en a un, sur lequel le
+// jeu ne démarrait pas en deux minutes), la perte du contexte devenant celle du
 // périphérique WebGPU. Les captures de chaque écran vont dans
 // artifacts/render-check/ (artifacts/render-check/webgpu/ sous WebGPU).
 //
 //   npm run render:check [-- --gpu] [-- --renderer=webgpu] [-- --no-build]
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { BOOTED, build, launchChrome, MATCH_STARTED, openGame, parseArgs, ROOT, SEED_RANDOM, serve, sleep } from "./chrome.mjs";
 
@@ -57,8 +59,20 @@ const chrome = await launchChrome({ width, height, software: !options.gpu, extra
 const { page } = chrome;
 const failures = [];
 let step = 0;
-/** WebGPU demandé avec `--optional`, et que le navigateur n'offre pas. */
+/** WebGPU demandé avec `--optional`, et que le navigateur n'offre pas (ou seulement par un adaptateur logiciel). */
 let skipped = false;
+
+/**
+ * L'adaptateur WebGPU du navigateur : son nom, et s'il est logiciel (adaptateur de repli, ou un
+ * rendu sur le processeur : SwiftShader, llvmpipe, WARP) ; null s'il n'y en a pas.
+ */
+const ADAPTER = `(async () => {
+  const a = await navigator.gpu?.requestAdapter();
+  if (!a) return null;
+  const i = a.info ?? {};
+  const text = [i.vendor, i.architecture, i.device, i.description].filter(Boolean).join(" ");
+  return { text, software: !!(i.isFallbackAdapter ?? a.isFallbackAdapter) || /swiftshader|llvmpipe|lavapipe|warp|basic render/i.test(text) };
+})()`;
 
 /**
  * Un écran : `open` l'ouvre, on attend `ready`, on laisse passer `settle` s, puis on vérifie qu'il
@@ -98,11 +112,26 @@ async function check(name, open, ready, { settle = 2, minColors = MIN_COLORS, af
 try {
   const gl = await page.evaluate(`(() => { const c = document.createElement("canvas").getContext("webgl2"); const d = c?.getExtension("WEBGL_debug_renderer_info"); return c ? (d ? c.getParameter(d.UNMASKED_RENDERER_WEBGL) : c.getParameter(c.RENDERER)) : "pas de WebGL 2"; })()`);
   console.log(`» ${chrome.version} · ${gl}`);
+  if (gpuRun) {
+    // L'adaptateur, lu sur une page de l'origine du jeu (navigator.gpu n'existe que dans un contexte
+    // sûr, pas sur about:blank) : la feuille de style construite, sans démarrer le jeu
+    const css = readdirSync(join(ROOT, "dist", "assets")).find((f) => f.endsWith(".css"));
+    await page.navigate(new URL(`assets/${css}`, server.url).href);
+    await page.waitFor(`location.pathname.endsWith(${JSON.stringify(css)})`, 30_000, "page de l'adaptateur WebGPU");
+    const adapter = await page.evaluate(ADAPTER);
+    console.log(`» adaptateur WebGPU : ${adapter ? `${adapter.text || "sans nom"}${adapter.software ? " (logiciel)" : ""}` : "aucun"}`);
+    if (options.optional && (!adapter || adapter.software)) {
+      console.log(`\n${adapter ? "WebGPU seulement par un adaptateur logiciel, bien trop lent pour juger le rendu" : "WebGPU indisponible dans ce navigateur"} : essai sauté.`);
+      skipped = true;
+    }
+  }
   await page.send("Page.addScriptToEvaluateOnNewDocument", { source: SEED_RANDOM });
-  await openGame(page, `${server.url}?renderer=${options.renderer}${options.query ? "&" + options.query : ""}`);
-  const backend = await page.evaluate(`(() => { const e = window.__casse.game.engine; return e.isWebGPU ? "WebGPU" : "WebGL " + e.webGLVersion; })()`);
-  console.log(`» rendu : ${backend}`);
-  if (gpuRun && backend !== "WebGPU") {
+  const backend = skipped
+    ? null
+    : (await openGame(page, `${server.url}?renderer=${options.renderer}${options.query ? "&" + options.query : ""}`),
+      await page.evaluate(`(() => { const e = window.__casse.game.engine; return e.isWebGPU ? "WebGPU" : "WebGL " + e.webGLVersion; })()`));
+  if (backend) console.log(`» rendu : ${backend}`);
+  if (gpuRun && backend && backend !== "WebGPU") {
     if (options.optional) {
       console.log(`\nWebGPU indisponible dans ce navigateur (le jeu dessine en ${backend}) : essai sauté.`);
       skipped = true;

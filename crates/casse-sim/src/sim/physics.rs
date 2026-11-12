@@ -3,10 +3,11 @@
 //! Rapier, bindings/typescript, étiquette v0.36.0). Chaque fonction refait ce que fait la liaison :
 //! `createRigidBody` (src/dynamics/rigid_body_set.rs) donne au corps tous les réglages de
 //! `RigidBodyDesc` (et des propriétés de masse additionnelles nulles), `createCollider`
-//! (src/geometry/collider_set.rs, `build_collider`) tous ceux de `ColliderDesc`, `castRayAndGetNormal`
-//! (src/geometry/broad_phase.rs) le même filtre. Les nombres de 8 octets du TypeScript passent en
-//! nombres de 4 octets à la frontière du WebAssembly (arrondis au plus proche, comme `as f32`), et
-//! reviennent tels quels : mêmes appels, mêmes arguments, même monde au bit près
+//! (src/geometry/collider_set.rs, `build_collider`) tous ceux de `ColliderDesc`, `castRayAndGetNormal`,
+//! `castRay` et `intersectionWithShape` (src/geometry/broad_phase.rs) le même filtre. Les nombres de
+//! 8 octets du TypeScript passent en nombres de 4 octets à la frontière du WebAssembly (arrondis au
+//! plus proche, comme `as f32`), et reviennent tels quels : mêmes appels, mêmes arguments, même monde
+//! au bit près
 //! (tests/nativePhysics.test.ts, tests/nativeSim.test.ts).
 
 use super::vec::{Q, V3, v3};
@@ -365,6 +366,46 @@ impl Physics {
         let pipeline = w.broad_phase.as_query_pipeline(w.narrow_phase.query_dispatcher(), &w.bodies, &w.colliders, filter);
         let ray = Ray::new(vector(origin), vector(dir));
         let (_, hit) = pipeline.cast_ray_and_get_normal(&ray, max_toi as f32, solid)?;
+        Some(RayHit { time_of_impact: hit.time_of_impact as f64, normal: back(hit.normal) })
+    }
+
+    /// `world.castRay(ray, maxToi, solid, undefined, groups)` (la liaison : `RawBroadPhase.castRay`,
+    /// `cast_ray` du pipeline de requêtes) : la distance du premier contact, en nombre de 4 octets.
+    pub fn cast_ray(&self, origin: V3, dir: V3, max_toi: f64, solid: bool, groups: u32) -> Option<f64> {
+        let w = &self.world;
+        let filter = QueryFilter {
+            flags: QueryFilterFlags::empty(),
+            groups: Some(unpack(groups)),
+            exclude_collider: None,
+            exclude_rigid_body: None,
+            predicate: None,
+        };
+        let pipeline = w.broad_phase.as_query_pipeline(w.narrow_phase.query_dispatcher(), &w.bodies, &w.colliders, filter);
+        let ray = Ray::new(vector(origin), vector(dir));
+        let (_, toi) = pipeline.cast_ray(&ray, max_toi as f32, solid)?;
+        Some(toi as f64)
+    }
+
+    /// `world.castRay(ray, maxToi, solid, undefined, undefined, undefined, undefined, predicate)` : ni
+    /// groupes ni drapeaux, seulement les colliders que retient `keep` (le filtre de la liaison,
+    /// comme `intersects_shape`) ; la distance du premier contact, en nombre de 4 octets.
+    pub fn cast_ray_where(&self, origin: V3, dir: V3, max_toi: f64, solid: bool, keep: &dyn Fn(ColliderHandle) -> bool) -> Option<f64> {
+        let w = &self.world;
+        let predicate = |h: ColliderHandle, _: &Collider| keep(h);
+        let filter = QueryFilter { flags: QueryFilterFlags::empty(), groups: None, exclude_collider: None, exclude_rigid_body: None, predicate: Some(&predicate) };
+        let pipeline = w.broad_phase.as_query_pipeline(w.narrow_phase.query_dispatcher(), &w.bodies, &w.colliders, filter);
+        let (_, toi) = pipeline.cast_ray(&Ray::new(vector(origin), vector(dir)), max_toi as f32, solid)?;
+        Some(toi as f64)
+    }
+
+    /// `world.castRayAndGetNormal(ray, maxToi, solid, undefined, undefined, undefined, undefined,
+    /// predicate)` : comme `cast_ray_where`, avec la normale au point touché.
+    pub fn cast_ray_and_get_normal_where(&self, origin: V3, dir: V3, max_toi: f64, solid: bool, keep: &dyn Fn(ColliderHandle) -> bool) -> Option<RayHit> {
+        let w = &self.world;
+        let predicate = |h: ColliderHandle, _: &Collider| keep(h);
+        let filter = QueryFilter { flags: QueryFilterFlags::empty(), groups: None, exclude_collider: None, exclude_rigid_body: None, predicate: Some(&predicate) };
+        let pipeline = w.broad_phase.as_query_pipeline(w.narrow_phase.query_dispatcher(), &w.bodies, &w.colliders, filter);
+        let (_, hit) = pipeline.cast_ray_and_get_normal(&Ray::new(vector(origin), vector(dir)), max_toi as f32, solid)?;
         Some(RayHit { time_of_impact: hit.time_of_impact as f64, normal: back(hit.normal) })
     }
 

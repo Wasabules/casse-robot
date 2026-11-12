@@ -3,11 +3,14 @@
 //! effet : roues arrachées, blocs détruits (débris), liaisons coupées, morceaux séparés, colliders
 //! refaits, robots hors de combat (la règle de structure : `WRECK_INTEGRITY`).
 //!
-//! Les dégâts infligés : ceux des chocs (collisions.rs), du feu (fire.rs) et des explosions
-//! (explosion.rs, qui appelle `resolve_damage` directement, comme le TypeScript). Un accessoire qui
-//! cède s'allume, fuit, bascule ou se brise (props.rs, `damage_prop`) ; une batterie détruite met le
-//! feu à ses voisins. Les tirs ne sont pas encore portés.
+//! Les dégâts infligés : ceux des chocs (collisions.rs), du feu et des flaques de feu (fire.rs) et
+//! des explosions (explosion.rs, qui appelle `resolve_damage` directement, comme le TypeScript). Un
+//! accessoire qui cède s'allume, fuit, bascule ou se brise (props.rs, `damage_prop`) ; une batterie
+//! détruite met le feu à ses voisins ; un bloc détruit est perdu (`Bot::lost`) jusqu'à ce qu'une
+//! réparation le fasse repousser (repair.rs), et un robot touché le note (`last_hit`) ; son IA réagit
+//! au coup, s'il vient de quelque part (brain.rs, `onHit`). Les tirs ne sont pas encore portés.
 
+use super::brain::react;
 use super::catalog::catalog;
 use super::colliders::rebuild_dirty_parts;
 use super::debris::{block_world_pos, spawn_debris};
@@ -206,6 +209,8 @@ pub fn resolve_damage(sim: &mut Sim, batch: &DamageBatch, dir: V3) -> Vec<usize>
             let cell = sim.bots[bot].blocks[b].cell();
             sim.bots[bot].blocks[b].alive = false;
             sim.bots[bot].cells.remove(&cell);
+            // (perdu, s'il n'est pas le cockpit : une réparation pourra le faire repousser, repair.rs)
+            sim.bots[bot].live.retain(|&k| k != b);
             sim.stats.destroyed += 1;
         }
         for (p, links) in &batch.cuts {
@@ -239,6 +244,11 @@ pub fn resolve_damage(sim: &mut Sim, batch: &DamageBatch, dir: V3) -> Vec<usize>
         if sim.bots[bot].blocks[b].alive {
             ignite(sim, bot, b, BURN_TIME);
         }
+    }
+    // (le dernier coup reçu : les modules de réparation attendent un moment sans coup ; le dernier
+    // attaquant ne sert qu'à créditer une destruction, que la simulation portée ne fait pas)
+    for &bot in &hit_bots {
+        sim.bots[bot].last_hit = sim.time;
     }
     // Cockpits détruits : ces robots sont hors de combat
     for &(bot, b) in &doomed {
@@ -274,9 +284,11 @@ pub fn resolve_damage(sim: &mut Sim, batch: &DamageBatch, dir: V3) -> Vec<usize>
 }
 
 /// Inflige un lot de dégâts préparé ailleurs (`inflict` : chocs, feu) : `dir`, la direction du coup
-/// (les débris partent de ce côté). La réaction de l'IA ne sert pas à des robots pilotés.
-pub fn inflict(sim: &mut Sim, batch: &DamageBatch, dir: V3) -> Vec<usize> {
+/// (les débris partent de ce côté) ; `source`, d'où il vient, pour la réaction de l'IA (rien : pas
+/// de réaction, comme pour le feu ou un choc contre un mur).
+pub fn inflict(sim: &mut Sim, batch: &DamageBatch, dir: V3, source: Option<V3>) -> Vec<usize> {
     let hit = resolve_damage(sim, batch, dir);
+    react(sim, &hit, source);
     sim.stats.damage += 1;
     hit
 }

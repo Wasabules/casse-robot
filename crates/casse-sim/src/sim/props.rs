@@ -260,7 +260,7 @@ fn detonate(sim: &mut Sim, i: usize) {
         }
     }
     if let Some(ex) = def.explosion {
-        explode(sim, at, &ex, UP);
+        explode(sim, at, &ex, UP, at, None);
     }
 }
 
