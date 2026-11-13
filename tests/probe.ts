@@ -14,3 +14,16 @@ export function probePath(needs?: string): string | null {
   builds.sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
   return builds.find((path) => !needs || WebAssembly.Module.exports(new WebAssembly.Module(readFileSync(path))).some((e) => e.name === needs)) ?? null;
 }
+
+/**
+ * La simulation compilée entière pour les essais de la session (tests/nativeSession.test.ts) : celle
+ * du dépôt (src/shared/native/casse-sim.wasm, faite par `npm run native`), ou une sonde plus récente
+ * (on itère sur crates/) ; null s'il n'y en a aucune qui ait la session.
+ */
+export function simWasmPath(): string | null {
+  const committed = join(process.cwd(), "src", "shared", "native", "casse-sim.wasm");
+  const probe = probePath("sim_take_events");
+  const candidates = [probe, existsSync(committed) ? committed : null].filter((p): p is string => p !== null);
+  candidates.sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
+  return candidates.find((path) => WebAssembly.Module.exports(new WebAssembly.Module(readFileSync(path))).some((e) => e.name === "sim_take_events")) ?? null;
+}

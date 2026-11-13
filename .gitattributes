@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# La simulation compilée (src/shared/native/casse-sim.wasm) : des octets, jamais du texte
+*.wasm binary

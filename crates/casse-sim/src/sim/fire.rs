@@ -16,6 +16,7 @@ use super::props::{prop, prop_distance, prop_mut, prop_nearest, present};
 use super::structure::linked_neighbors;
 use super::vec::{V3, len, v3};
 use super::world::{STEP, Sim};
+use super::events::{Writer, code};
 use crate::det::{dcos, dsin};
 use crate::jsmath;
 
@@ -56,6 +57,8 @@ pub const PUDDLE_REACH: f64 = 1.5;
 /// brûle, et le robot qui l'a allumée (ses flaques ne le brûlent pas).
 #[derive(Clone, Copy, Debug)]
 pub struct GroundFire {
+    /// Son numéro d'entité (`id`, `sim.nextId()`).
+    pub id: u64,
     pub pos: V3,
     pub radius: f64,
     pub until: f64,
@@ -63,7 +66,7 @@ pub struct GroundFire {
 }
 
 /// Sensibilité d'un bloc au feu : son facteur de dégâts `fire` (`flammability`).
-fn flammability(sim: &Sim, bot: usize, block: usize) -> f64 {
+pub fn flammability(sim: &Sim, bot: usize, block: usize) -> f64 {
     catalog().blocks[&sim.bots[bot].blocks[block].kind].resistance("fire")
 }
 
@@ -73,31 +76,33 @@ pub fn ignite(sim: &mut Sim, bot: usize, block: usize, duration: f64) {
         return;
     }
     let time = duration * jsmath::min(1.5, flammability(sim, bot, block));
-    let b = &mut sim.bots[bot].blocks[block];
-    if b.burn <= 0.0 {
+    if sim.bots[bot].blocks[block].burn <= 0.0 {
         // (un `Set` : un bloc détruit en brûlant, qui repousse éteint avant le prochain passage du
         // feu, y est encore)
         if !sim.fires.contains(&(bot, block)) {
             sim.fires.push((bot, block));
         }
         sim.stats.fires_started += 1;
+        sim.emit_block(code::FIRE_STARTED, bot, block);
     }
+    let b = &mut sim.bots[bot].blocks[block];
     b.burn = jsmath::max(b.burn, time);
 }
 
 /// Éteint le feu d'un bloc (`extinguish`).
-fn extinguish(sim: &mut Sim, bot: usize, block: usize) {
+pub fn extinguish(sim: &mut Sim, bot: usize, block: usize) {
     let Some(i) = sim.fires.iter().position(|&f| f == (bot, block)) else { return };
     sim.fires.remove(i);
     let b = &mut sim.bots[bot].blocks[block];
     b.burn = 0.0;
     if b.alive {
         sim.stats.fires_ended += 1;
+        sim.emit_block(code::FIRE_ENDED, bot, block);
     }
 }
 
 /// L'accessoire est-il en bois (`burnable`) ?
-fn burnable(sim: &Sim, i: usize) -> bool {
+pub fn burnable(sim: &Sim, i: usize) -> bool {
     prop(sim, i).def().burns.is_some()
 }
 
@@ -112,6 +117,15 @@ pub fn ignite_prop(sim: &mut Sim, i: usize) {
     }
     sim.prop_fires.push(i);
     sim.stats.prop_fire_events += 1;
+    emit_prop_fire(sim, i);
+}
+
+/// Le feu d'un accessoire change (`propFire`) : son numéro, s'il brûle, sa part noircie.
+pub fn emit_prop_fire(sim: &mut Sim, i: usize) {
+    sim.emit(code::PROP_FIRE, |s, w| {
+        let p = prop(s, i);
+        w.id(Some(p.id)).flag(p.burn > 0.0).num(p.charred);
+    });
 }
 
 /// Éteint le feu d'un accessoire, qui a fini de brûler (`extinguishProp`).
@@ -120,6 +134,7 @@ fn extinguish_prop(sim: &mut Sim, i: usize) {
     sim.prop_fires.remove(k);
     prop_mut(sim, i).burn = 0.0;
     sim.stats.prop_fire_events += 1;
+    emit_prop_fire(sim, i);
 }
 
 /// Un pas de vie des feux (`updateFires`) : dégâts, propagation, extinction, par tranches de TICK.
@@ -130,7 +145,7 @@ pub fn update_fires(sim: &mut Sim) {
     if sim.fires.is_empty() && sim.prop_fires.is_empty() && sim.ground_fires.is_empty() {
         return;
     }
-    let mut batch = DamageBatch::default();
+    let mut batch = DamageBatch { fiery: true, cause: Some("fire"), ..DamageBatch::default() };
     for (bot, block) in sim.fires.clone() {
         if !sim.bots[bot].blocks[block].alive {
             sim.fires.retain(|&f| f != (bot, block));
@@ -190,9 +205,23 @@ pub fn spawn_ground_fire(sim: &mut Sim, pos: V3, spec: Puddle, owner: Option<usi
     if sim.ground_fires.len() >= MAX_GROUND_FIRES {
         return false;
     }
-    sim.ground_fires.push(GroundFire { pos, radius: spec.radius, until: time + spec.life, owner });
+    let id = sim.next_id();
+    sim.ground_fires.push(GroundFire { id, pos, radius: spec.radius, until: time + spec.life, owner });
     sim.stats.ground_fires_added += 1;
+    sim.emit(code::GROUND_FIRE_ADDED, |s, w| write_ground_fire(w, s.ground_fires.last().expect("flaque")));
     true
+}
+
+/// Une flaque telle que l'encodeur la décrit : son numéro, son centre, son rayon, sa fin.
+pub fn write_ground_fire(w: &mut Writer, f: &GroundFire) {
+    w.id(Some(f.id)).vec(f.pos).num(f.radius).num(f.until);
+}
+
+/// Éteint une flaque de feu (`removeGroundFire`).
+pub fn remove_ground_fire(sim: &mut Sim, k: usize) {
+    let fire = sim.ground_fires.remove(k);
+    sim.stats.ground_fires_removed += 1;
+    sim.emit_gone(code::GROUND_FIRE_REMOVED, fire.id);
 }
 
 /// Ce point est-il dans la flaque : à moins de son rayon (dans le plan), et au plus `height` m
@@ -205,17 +234,22 @@ fn in_puddle(fire: &GroundFire, p: V3, height: f64) -> bool {
 /// Les flaques de feu (`burnGround`) : celles qui ont fait leur temps s'éteignent ; les autres
 /// brûlent les blocs et les roues qui s'y tiennent (sauf ceux du robot qui les a allumées), les
 /// enflamment parfois, et allument le bois qu'elles touchent. Un lot par flaque (chacune a son
-/// auteur, que la simulation portée ne crédite pas : elle ne compte pas les destructions par robot).
+/// auteur : le dernier attaquant de ceux qu'elle brûle).
 fn burn_ground(sim: &mut Sim) -> Vec<DamageBatch> {
     let time = sim.time;
-    let before = sim.ground_fires.len();
-    sim.ground_fires.retain(|f| time < f.until);
-    sim.stats.ground_fires_removed += (before - sim.ground_fires.len()) as u32;
+    let mut k = 0;
+    while k < sim.ground_fires.len() {
+        if time >= sim.ground_fires[k].until {
+            remove_ground_fire(sim, k);
+        } else {
+            k += 1;
+        }
+    }
     let mut out = Vec::new();
     for k in 0..sim.ground_fires.len() {
         let fire = sim.ground_fires[k];
-        let mut batch = DamageBatch::default();
-        for bot in 0..sim.bots.len() {
+        let mut batch = DamageBatch { attacker: fire.owner, fiery: true, cause: Some("fire"), ..DamageBatch::default() };
+        for bot in sim.roster.clone() {
             let b = &sim.bots[bot];
             if Some(bot) == fire.owner || !b.cockpit_alive() {
                 continue;
@@ -260,7 +294,7 @@ fn burn_ground(sim: &mut Sim) -> Vec<DamageBatch> {
 fn burn_props(sim: &mut Sim) -> Vec<(DamageBatch, V3)> {
     let mut out = Vec::new();
     for i in sim.prop_fires.clone() {
-        let mut batch = DamageBatch::default();
+        let mut batch = DamageBatch { fiery: true, cause: Some("fire"), ..DamageBatch::default() };
         batch.add(sim, Some(Target::Prop(i)), PROP_FIRE_DPS * TICK, "fire");
         let angle = sim.rng.rand(0.0, std::f64::consts::PI * 2.0);
         out.push((batch, v3(dcos(angle), 0.0, dsin(angle))));
@@ -269,6 +303,7 @@ fn burn_props(sim: &mut Sim) -> Vec<(DamageBatch, V3)> {
         p.charred = jsmath::min(1.0, p.charred + TICK / CHAR_TIME);
         if (p.charred * CHAR_STEPS).floor() != step {
             sim.stats.prop_fire_events += 1;
+            emit_prop_fire(sim, i);
         }
         spread_to_props(sim, i);
         scorch_robots(sim, i);
@@ -323,7 +358,7 @@ fn spread_to_props(sim: &mut Sim, i: usize) {
 fn scorch_robots(sim: &mut Sim, i: usize) {
     let center = sim.phys.translation(prop(sim, i).rb);
     let size = extent(sim, i) + 4.0;
-    for bot in 0..sim.bots.len() {
+    for bot in sim.roster.clone() {
         let b = &sim.bots[bot];
         if !b.cockpit_alive() {
             continue;

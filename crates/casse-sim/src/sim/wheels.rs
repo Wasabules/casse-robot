@@ -6,6 +6,7 @@
 //! à Rapier en une fois. Mêmes opérations, dans le même ordre, que le TypeScript.
 
 use super::catalog::WheelDef;
+use super::melee::vibration;
 use super::physics::{ColliderDesc, Physics, ShapeDesc, groups};
 use super::robot::Wheel;
 use super::vec::{NO_ROTATION, Q, V3, add, axis_angle, clamp, cross, dot, norm, qmul, qrot, qrot_inv, scale, sub, v3};
@@ -31,6 +32,8 @@ const SWIVEL_RATE: f64 = 14.0;
 const FREEWHEEL_DRAG: f64 = 0.5;
 const LOOSE_STEER_GRIP: f64 = 0.5;
 const CASTER_SIDE_GRIP: f64 = 0.1;
+/// Une vibration entière (balourd d'une arme de contact) retire cette part de l'adhérence des roues.
+const VIBRATION_GRIP: f64 = 0.3;
 /// Le cylindre de Rapier est vertical : on le couche sur l'essieu (x).
 const WHEEL_ROTATION: Q = Q { x: 0.0, y: 0.0, z: std::f64::consts::FRAC_1_SQRT_2, w: std::f64::consts::FRAC_1_SQRT_2 };
 const UP: V3 = v3(0.0, 1.0, 0.0);
@@ -168,6 +171,8 @@ pub fn step_wheels(sim: &mut Sim) {
     let gravity = sim.gravity;
     for (part, bot, wheels) in mounted_wheels(sim) {
         let rb = sim.part(part).rb;
+        // (le balourd d'une arme de contact secoue les pneus, melee.rs)
+        let grip = if sim.bots[bot].melee.is_empty() { 1.0 } else { 1.0 - VIBRATION_GRIP * vibration(sim, bot) };
         let phys = &mut sim.phys;
         let inv_inertia = phys.effective_world_inv_inertia(rb);
         let mut p = Pushed {
@@ -176,8 +181,7 @@ pub fn step_wheels(sim: &mut Sim) {
             inv_mass: phys.inv_mass(rb),
             lin: v3(0.0, 0.0, 0.0),
             torque: v3(0.0, 0.0, 0.0),
-            // (pas d'arme de contact : pas de balourd qui secoue les pneus)
-            grip: 1.0,
+            grip,
         };
         for w in wheels {
             step_wheel(phys, &mut sim.bots[bot].wheels[w], &mut p, gravity);

@@ -8,15 +8,21 @@
 //! s'est détaché ; il quitte alors ce morceau, qui se sépare à son tour (`splitPart`), ou disparaît
 //! s'il n'en reste rien. Le bloc revient avec 30 % de ses points de structure ; ses liaisons rompues se
 //! refont ; les colliders du robot sont refaits (Rapier les range dans l'ordre des appels, comme
-//! ailleurs).
+//! ailleurs). Un robot paralysé (emp.rs) ne se répare pas.
 //!
-//! Pas encore porté : le rayon réparateur et les nanites (des projectiles), qui réparent un allié ;
-//! la paralysie (IEM), qui arrête les modules.
+//! Les tirs réparateurs (projectiles.rs) font de même sur un allié : le rayon réparateur remet en
+//! état ses blocs et ses roues autour du point touché et fait repousser un bloc perdu voisin
+//! (`repairAt`) ; les nanites, ses blocs les plus abîmés, où qu'ils soient (`swarmOver`). Sur un
+//! ennemi, le rayon vole de la vie (`drainAt`) : la part de ce que le bloc touché a perdu répare le
+//! tireur, ses blocs les plus abîmés d'abord (`heal`).
 
-use super::catalog::catalog;
+use super::events::code;
+use super::catalog::{RepairShot, catalog};
 use super::colliders::rebuild_dirty_parts;
+use super::damage::{Target, strike};
 use super::debris::block_world_pos;
-use super::lifecycle::{attach_block, capture_part_motion, detach_block, refresh_wheels, split_part};
+use super::emp::is_stunned;
+use super::lifecycle::{capture_part_motion, detach_block, refresh_wheels, split_part};
 use super::physics::ShapeDesc;
 use super::robot::NEIGHBORS;
 use super::vec::{V3, add, qrot};
@@ -60,7 +66,7 @@ fn on_part(sim: &Sim, part: usize, local: V3) -> V3 {
 fn owner_bot(sim: &Sim, owner: Option<&Owner>) -> Option<usize> {
     match owner {
         Some(Owner::Part(p)) => sim.parts[*p].as_ref().map(|part| part.bot),
-        Some(Owner::Wheel(bot, _)) | Some(Owner::Head(bot, _)) => Some(*bot),
+        Some(Owner::Wheel(bot, _)) | Some(Owner::Head(bot, _)) | Some(Owner::Blade(bot, _)) => Some(*bot),
         _ => None,
     }
 }
@@ -71,9 +77,8 @@ pub fn update_repairs(sim: &mut Sim) {
         return;
     }
     let c = catalog();
-    for bot in 0..sim.bots.len() {
-        // (sans paralysie : l'IEM n'est pas porté)
-        if !sim.bots[bot].cockpit_alive() {
+    for bot in sim.roster.clone() {
+        if !sim.bots[bot].cockpit_alive() || is_stunned(sim, bot) {
             continue;
         }
         // Les blocs du morceau du cockpit, dans l'ordre de son `Set` : un bloc qui repousse y entre au
@@ -117,6 +122,7 @@ pub fn update_repairs(sim: &mut Sim) {
                         block.hp += gain;
                         budget -= gain;
                         sim.stats.repaired += 1;
+                        sim.emit_block(code::BLOCK_REPAIRED, bot, b);
                     }
                     Damaged::Wheel(w, _) => {
                         let wheel = &mut sim.bots[bot].wheels[w];
@@ -136,6 +142,127 @@ pub fn update_repairs(sim: &mut Sim) {
             }
         }
     }
+}
+
+/// Tir réparateur sur un allié (`repairAt`) : chaque bloc et chaque roue montée de `bot` à moins de
+/// `radius` m de `point` regagne `amount` points, sans dépasser son maximum, et un de ses blocs perdus
+/// voisins repousse ; des nanites (`swarm`) : ses blocs les plus abîmés, où qu'ils soient.
+pub fn repair_at(sim: &mut Sim, bot: usize, point: V3, shot: &RepairShot) {
+    if let Some(count) = shot.swarm {
+        swarm_over(sim, bot, point, shot.amount, count);
+        return;
+    }
+    let c = catalog();
+    for i in 0..sim.bots[bot].live.len() {
+        let b = sim.bots[bot].live[i];
+        let max = c.blocks[&sim.bots[bot].blocks[b].kind].hp;
+        if sim.bots[bot].blocks[b].hp >= max || distance(block_world_pos(sim, bot, b), point) > shot.radius {
+            continue;
+        }
+        let block = &mut sim.bots[bot].blocks[b];
+        block.hp = jsmath::min(max, block.hp + shot.amount);
+        sim.stats.repaired += 1;
+        sim.emit_block(code::BLOCK_REPAIRED, bot, b);
+    }
+    for w in sim.bots[bot].wheels.iter_mut() {
+        let max = w.def.hp;
+        if w.part.is_some() && w.hp < max && distance(w.rb.pos, point) <= shot.radius {
+            w.hp = jsmath::min(max, w.hp + shot.amount);
+        }
+    }
+    if sim.time < sim.bots[bot].rebuild_at {
+        return;
+    }
+    let Some(lost) = regrowable(sim, bot, point, shot.radius + 0.5) else { return };
+    let hp = c.blocks[&sim.bots[bot].blocks[lost].kind].hp * REBUILD_SHARE;
+    rebuild_block(sim, bot, lost, hp);
+    sim.bots[bot].rebuild_at = sim.time + REBUILD_GAP;
+}
+
+/// Nanites (`swarmOver`) : les `count` blocs les plus abîmés du robot regagnent `amount` points, et un
+/// bloc perdu repousse, où qu'ils soient.
+fn swarm_over(sim: &mut Sim, bot: usize, point: V3, amount: f64, count: f64) {
+    let c = catalog();
+    for (n, b) in damaged_blocks(sim, bot).into_iter().enumerate() {
+        // (`slice(0, count)`)
+        if n as f64 >= count {
+            break;
+        }
+        let block = &mut sim.bots[bot].blocks[b];
+        block.hp = jsmath::min(c.blocks[&block.kind].hp, block.hp + amount);
+        sim.stats.repaired += 1;
+        sim.emit_block(code::BLOCK_REPAIRED, bot, b);
+    }
+    let lost = if sim.time >= sim.bots[bot].rebuild_at { regrowable(sim, bot, point, f64::INFINITY) } else { None };
+    let Some(lost) = lost else { return };
+    let hp = c.blocks[&sim.bots[bot].blocks[lost].kind].hp * REBUILD_SHARE;
+    rebuild_block(sim, bot, lost, hp);
+    sim.bots[bot].rebuild_at = sim.time + REBUILD_GAP;
+}
+
+/// Tir réparateur sur un ennemi, le vol de vie (`drainAt`) : `drain` dégâts d'énergie au bloc touché
+/// (`block` du robot `bot`), dont la part `steal` de ce qu'il a vraiment perdu répare le tireur, ses
+/// blocs les plus abîmés d'abord ; `origin`, d'où vient le tir (l'IA touchée réagit).
+#[allow(clippy::too_many_arguments)]
+pub fn drain_at(sim: &mut Sim, bot: usize, block: usize, point: V3, dir: V3, shot: &RepairShot, shooter: usize, origin: V3, cause: &'static str) {
+    if shot.drain == 0.0 {
+        return;
+    }
+    let before = sim.bots[bot].blocks[block].hp;
+    strike(sim, Some(Target::Block(bot, block)), shot.drain, "energy", point, dir, 0.0, origin, Some(shooter), Some(cause));
+    let b = &sim.bots[bot].blocks[block];
+    let taken = if b.alive { before - b.hp } else { before };
+    heal(sim, shooter, taken * shot.steal);
+}
+
+/// Rend `amount` points au robot, à ses blocs les plus abîmés d'abord (`heal`).
+fn heal(sim: &mut Sim, bot: usize, mut amount: f64) {
+    if !sim.bots[bot].cockpit_alive() {
+        return;
+    }
+    let c = catalog();
+    for b in damaged_blocks(sim, bot) {
+        if amount <= 0.0 {
+            return;
+        }
+        let block = &mut sim.bots[bot].blocks[b];
+        let gain = jsmath::min(amount, c.blocks[&block.kind].hp - block.hp);
+        block.hp += gain;
+        amount -= gain;
+        sim.stats.repaired += 1;
+        sim.emit_block(code::BLOCK_REPAIRED, bot, b);
+    }
+}
+
+/// Ce qu'il manque à un robot pour être remis à neuf (`repairNeed`) : les points perdus par ses blocs
+/// vivants, ses blocs perdus (dans l'ordre où ils l'ont été) et ses roues montées.
+pub fn repair_need(sim: &Sim, bot: usize) -> f64 {
+    let c = catalog();
+    let b = &sim.bots[bot];
+    let mut need = 0.0;
+    for &k in &b.live {
+        need += c.blocks[&b.blocks[k].kind].hp - b.blocks[k].hp;
+    }
+    for &k in &b.lost_order {
+        need += c.blocks[&b.blocks[k].kind].hp;
+    }
+    for w in &b.wheels {
+        if w.part.is_some() {
+            need += w.def.hp - w.hp;
+        }
+    }
+    need
+}
+
+/// Ses blocs vivants abîmés, les plus abîmés d'abord (le plus de points à regagner ; un tri stable, à
+/// égalité dans l'ordre de `bot.blocks`) (`damagedBlocks`).
+pub fn damaged_blocks(sim: &Sim, bot: usize) -> Vec<usize> {
+    let c = catalog();
+    let b = &sim.bots[bot];
+    let missing = |k: usize| c.blocks[&b.blocks[k].kind].hp - b.blocks[k].hp;
+    let mut list: Vec<usize> = b.live.iter().copied().filter(|&k| missing(k) > 0.0).collect();
+    list.sort_by(|&x, &y| missing(y).partial_cmp(&missing(x)).expect("points manquants"));
+    list
 }
 
 /// Bloc perdu de `bot` qui peut repousser à moins de `radius` m de `point` (`regrowable`) : à sa place
@@ -203,14 +330,25 @@ pub fn rebuild_block(sim: &mut Sim, bot: usize, block: usize, hp: f64) {
         b.blocks[block].burn = 0.0;
         b.cells.insert(cell, block);
         b.live.push(block);
+        b.lost_order.retain(|&k| k != block);
     }
     let max = catalog().blocks[&sim.bots[bot].blocks[block].kind].hp;
     let b = &mut sim.bots[bot];
     b.blocks[block].hp = jsmath::max(1.0, jsmath::min(max, hp));
     let cell = b.blocks[block].cell();
     b.cuts.retain(|&(p, q)| p != cell && q != cell);
-    attach_block(sim, bot, block, core);
+    b.cut_order.retain(|&(p, q)| p != cell && q != cell);
+    // (sans `attachBlock` : pas d'événement `blockAttached`, mais `blockRebuilt`)
+    b.blocks[block].part = core;
+    let part = sim.part_mut(core);
+    part.blocks.push(block);
+    part.dirty = true;
+    part.links = None;
     sim.stats.rebuilt += 1;
+    sim.emit(code::BLOCK_REBUILT, |s, w| {
+        let k = &s.bots[bot].blocks[block];
+        w.id(Some(k.id)).id(Some(s.part(k.part).id)).num(k.x).num(k.y).num(k.z).num(k.hp).id(Some(s.bots[bot].id));
+    });
     refresh_wheels(sim, bot);
     rebuild_dirty_parts(sim, bot);
 }

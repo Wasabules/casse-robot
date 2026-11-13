@@ -120,6 +120,10 @@ pub enum ShapeDesc {
     Cylinder(f64, f64),
     /// Les sommets, déjà en nombres de 4 octets (un `Float32Array`).
     ConvexHull(Vec<f32>),
+    /// Un champ de hauteurs carré (`ColliderDesc.heightfield(cells, cells, heights, { x: size, y: 1,
+    /// z: size }, FIX_INTERNAL_EDGES)`) : ses cases par côté, son côté (m), ses hauteurs aux sommets
+    /// (colonne par colonne, un `Float32Array`).
+    HeightField(usize, f64, Vec<f32>),
 }
 
 /// Un collider à créer (`ColliderDesc`) : ce que le TypeScript règle ; le reste à ses valeurs par défaut.
@@ -152,10 +156,11 @@ impl ColliderDesc {
     }
 }
 
-/// Ce que rend un rayon : la distance (nombre de 4 octets) et la normale.
+/// Ce que rend un rayon : la distance (nombre de 4 octets), la normale et le collider touché.
 pub struct RayHit {
     pub time_of_impact: f64,
     pub normal: V3,
+    pub collider: ColliderHandle,
 }
 
 pub struct Physics {
@@ -217,6 +222,13 @@ impl Physics {
             ShapeDesc::ConvexHull(points) => {
                 let points: Vec<_> = points.chunks(3).map(Vector::from_slice).collect();
                 SharedShape::convex_hull(&points)?
+            }
+            // (la liaison : `RawShape.heightfield`, une matrice de nrows + 1 lignes et ncols + 1
+            // colonnes rangée colonne par colonne, son échelle, ses drapeaux)
+            ShapeDesc::HeightField(cells, size, heights) => {
+                let heights = rapier3d::parry::utils::Array2::new(cells + 1, cells + 1, heights.clone());
+                let scale = Vector::new(*size as f32, 1.0, *size as f32);
+                SharedShape::heightfield_with_flags(heights, scale, rapier3d::parry::shape::HeightFieldFlags::FIX_INTERNAL_EDGES)
             }
         };
         let pos = Pose::from_parts(vector(d.translation), rotation(d.rotation));
@@ -365,8 +377,8 @@ impl Physics {
         };
         let pipeline = w.broad_phase.as_query_pipeline(w.narrow_phase.query_dispatcher(), &w.bodies, &w.colliders, filter);
         let ray = Ray::new(vector(origin), vector(dir));
-        let (_, hit) = pipeline.cast_ray_and_get_normal(&ray, max_toi as f32, solid)?;
-        Some(RayHit { time_of_impact: hit.time_of_impact as f64, normal: back(hit.normal) })
+        let (collider, hit) = pipeline.cast_ray_and_get_normal(&ray, max_toi as f32, solid)?;
+        Some(RayHit { time_of_impact: hit.time_of_impact as f64, normal: back(hit.normal), collider })
     }
 
     /// `world.castRay(ray, maxToi, solid, undefined, groups)` (la liaison : `RawBroadPhase.castRay`,
@@ -398,6 +410,17 @@ impl Physics {
         Some(toi as f64)
     }
 
+    /// `world.castRay(ray, maxToi, solid, undefined, undefined, undefined, undefined, predicate)`,
+    /// comme `cast_ray_where`, avec le collider touché (`hit.collider`).
+    pub fn cast_ray_hit_where(&self, origin: V3, dir: V3, max_toi: f64, solid: bool, keep: &dyn Fn(ColliderHandle) -> bool) -> Option<(ColliderHandle, f64)> {
+        let w = &self.world;
+        let predicate = |h: ColliderHandle, _: &Collider| keep(h);
+        let filter = QueryFilter { flags: QueryFilterFlags::empty(), groups: None, exclude_collider: None, exclude_rigid_body: None, predicate: Some(&predicate) };
+        let pipeline = w.broad_phase.as_query_pipeline(w.narrow_phase.query_dispatcher(), &w.bodies, &w.colliders, filter);
+        let (h, toi) = pipeline.cast_ray(&Ray::new(vector(origin), vector(dir)), max_toi as f32, solid)?;
+        Some((h, toi as f64))
+    }
+
     /// `world.castRayAndGetNormal(ray, maxToi, solid, undefined, undefined, undefined, undefined,
     /// predicate)` : comme `cast_ray_where`, avec la normale au point touché.
     pub fn cast_ray_and_get_normal_where(&self, origin: V3, dir: V3, max_toi: f64, solid: bool, keep: &dyn Fn(ColliderHandle) -> bool) -> Option<RayHit> {
@@ -405,8 +428,8 @@ impl Physics {
         let predicate = |h: ColliderHandle, _: &Collider| keep(h);
         let filter = QueryFilter { flags: QueryFilterFlags::empty(), groups: None, exclude_collider: None, exclude_rigid_body: None, predicate: Some(&predicate) };
         let pipeline = w.broad_phase.as_query_pipeline(w.narrow_phase.query_dispatcher(), &w.bodies, &w.colliders, filter);
-        let (_, hit) = pipeline.cast_ray_and_get_normal(&Ray::new(vector(origin), vector(dir)), max_toi as f32, solid)?;
-        Some(RayHit { time_of_impact: hit.time_of_impact as f64, normal: back(hit.normal) })
+        let (collider, hit) = pipeline.cast_ray_and_get_normal(&Ray::new(vector(origin), vector(dir)), max_toi as f32, solid)?;
+        Some(RayHit { time_of_impact: hit.time_of_impact as f64, normal: back(hit.normal), collider })
     }
 
     fn body(&self, h: RigidBodyHandle) -> &RigidBody {
@@ -445,6 +468,13 @@ impl Physics {
     /// `rb.effectiveWorldInvInertia()` : m11, m12, m13, m22, m23, m33.
     pub fn effective_world_inv_inertia(&self, h: RigidBodyHandle) -> [f64; 6] {
         let m = self.body(h).mass_properties().effective_world_inv_inertia;
+        [m.m11 as f64, m.m12 as f64, m.m13 as f64, m.m22 as f64, m.m23 as f64, m.m33 as f64]
+    }
+
+    /// `rb.effectiveAngularInertia()` (la liaison : `rbEffectiveAngularInertia`, l'inverse de l'inertie
+    /// inverse effective du corps) : m11, m12, m13, m22, m23, m33.
+    pub fn effective_angular_inertia(&self, h: RigidBodyHandle) -> [f64; 6] {
+        let m = self.body(h).mass_properties().effective_angular_inertia();
         [m.m11 as f64, m.m12 as f64, m.m13 as f64, m.m22 as f64, m.m23 as f64, m.m33 as f64]
     }
 

@@ -15,6 +15,11 @@ impl Rng {
         Rng { state: seed, draws: 0 }
     }
 
+    /// L'état du tirage (pour qu'un autre poursuive la même suite, puis la rende : `Rng::new`).
+    pub fn state(&self) -> u32 {
+        self.state
+    }
+
     /// Un nombre de [0, 1[ (mulberry32, en arithmétique sur 32 bits comme `Math.imul` et `>>>`).
     pub fn random(&mut self) -> f64 {
         self.draws += 1;
@@ -28,6 +33,13 @@ impl Rng {
     /// `rand(a, b)` : uniforme dans [a, b[.
     pub fn rand(&mut self, a: f64, b: f64) -> f64 {
         a + self.random() * (b - a)
+    }
+
+    /// `randNormal()` : un tirage d'une loi normale centrée réduite (Box-Muller), les deux nombres
+    /// tirés dans l'ordre où le TypeScript les tire.
+    pub fn normal(&mut self) -> f64 {
+        let r = (-2.0 * crate::det::dlog(1.0 - self.random())).sqrt();
+        r * crate::det::dcos(2.0 * std::f64::consts::PI * self.random())
     }
 }
 

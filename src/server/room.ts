@@ -11,8 +11,9 @@ import { vec3, type Vec3 } from "../shared/math/vec";
 import { GAME_MODES, PILOTABLE, pickRoster } from "../shared/modes";
 import { describeWorld, NetEncoder } from "../shared/net/encoder";
 import {
-  encodeFrame, KNOWN_MAPS, PROTOCOL_VERSION, SNAPSHOT_EVERY, type ClientMessage, type NetEvent, type RobotChoice, type ServerMessage,
+  encodeFrame, KNOWN_MAPS, PROTOCOL_VERSION, SNAPSHOT_EVERY, type ClientMessage, type LockState, type NetEvent, type RobotChoice, type ServerMessage,
 } from "../shared/net/protocol";
+import type { MatchRules } from "../shared/sim/match";
 import { writeSnapshot } from "../shared/net/snapshot";
 import { lockProgress, pilotLock } from "../shared/combat/lock";
 import { removeBot } from "../shared/robot/lifecycle";
@@ -35,7 +36,7 @@ import { ProgressBook, TOKEN_PATTERN } from "./progressBook";
 const RESTART_DELAY = 8;
 /** Longueur maximale d'un nom de joueur. */
 const NAME_MAX = 20;
-const MODE = GAME_MODES.battle;
+export const MODE = GAME_MODES.battle;
 const TEAM_SIZE = MODE.size / 2;
 const TEAMS: readonly Team[] = ["blue", "red"];
 
@@ -44,7 +45,8 @@ export interface Connection {
   send(data: string | Uint8Array): void;
 }
 
-export interface Player {
+/** Un joueur ; `B` : son robot, tel que le désigne la simulation de la salle (un `Bot`, un rang du module Rust). */
+export interface Player<B = Bot> {
   readonly id: number;
   readonly conn: Connection;
   name: string;
@@ -53,7 +55,7 @@ export interface Player {
   team: Team;
   /** Ses commandes, que pilote son robot (`Bot.input`). */
   readonly input: PlayerInput;
-  bot: Bot | null;
+  bot: B | null;
   /** Il vient d'arriver : sa première image décrit tout le monde. */
   fresh: boolean;
   /** Son jeton : sa progression sur le serveur ; et les robots qu'il a détruits dans la partie en cours. */
@@ -76,12 +78,16 @@ export interface RoomOptions {
   readonly mapsOnly?: boolean;
 }
 
-export class Room {
-  readonly sim = new Simulation();
+/**
+ * Ce que fait une salle, quelle que soit sa simulation : les joueurs qui arrivent et partent, leurs
+ * commandes, la rotation des arènes, les parties qui se suivent, les crédits ; et la simulation, par
+ * ce que chaque sorte de salle en fait (celle du TypeScript : `Room` ; celle portée en Rust :
+ * `NativeRoom`, server/nativeRoom.ts). `B` : un robot, tel que la simulation le désigne.
+ */
+export abstract class RoomBase<B> {
   /** Progression des joueurs : crédits gagnés ici, pièces débloquées ici. */
   readonly book: ProgressBook;
-  private readonly encoder: NetEncoder;
-  private readonly players = new Set<Player>();
+  protected readonly players = new Set<Player<B>>();
   private nextPlayer = 1;
   private steps = 0;
   /** Temps simulé auquel la partie suivante commence (après la fin de celle en cours), ou null. */
@@ -93,7 +99,7 @@ export class Room {
   /** Les cartes communautaires de la salle, par identifiant : envoyées à qui ne les a pas. */
   private readonly maps = new Map<MapKey, MapFile>();
 
-  constructor(book = new ProgressBook(), options: RoomOptions = {}) {
+  constructor(book: ProgressBook, options: RoomOptions) {
     this.book = book;
     for (const map of options.maps ?? []) {
       const arena = registerMap(map);
@@ -101,14 +107,42 @@ export class Room {
     }
     const community = [...this.maps.keys()];
     this.rotation = options.mapsOnly && community.length ? community : [...(options.arenas ?? ARENA_IDS), ...community];
-    this.encoder = new NetEncoder(this.sim);
-    this.sim.combat = MODE.combat;
-    // Les destructions de chaque joueur (ses robots successifs portent ses commandes)
-    this.sim.on((e) => {
-      if (e.type !== "botKilled" || !e.killer || e.killer.team === e.bot.team) return;
-      for (const p of this.players) if (p.profile && e.killer.input === p.input) p.kills++;
-    });
-    this.newMatch();
+  }
+
+  // La simulation de la salle (chaque sorte la sienne)
+  /** Temps simulé, arène en place, vainqueur de la partie en cours (null : elle continue, ou pas de partie). */
+  protected abstract get time(): number;
+  protected abstract get arenaKey(): ArenaKey;
+  protected abstract get winner(): Team | "draw" | null;
+  /** Un pas de simulation (les destructions de chaque joueur comptées : `creditKill`). */
+  protected abstract stepWorld(): void;
+  /** Le robot qui porte les commandes du joueur (après une réapparition, un nouveau robot), ou null. */
+  protected abstract botOf(player: Player<B>): B | null;
+  protected abstract alive(bot: B): boolean;
+  protected abstract selfDestructBot(bot: B): void;
+  protected abstract releaseBot(bot: B): void;
+  /** Le robot du joueur remplace un robot de l'IA de son équipe (ce robot, ou null s'il n'y en a pas). */
+  protected abstract replaceAiBot(player: Player<B>, profile: BotProfile): B | null;
+  protected abstract endMatchWorld(): void;
+  protected abstract loadArenaWorld(key: ArenaKey): void;
+  /** Le hasard de la simulation, pour la composition des équipes (`pickRoster`). */
+  protected abstract drawRoster(): BotProfile[];
+  protected abstract spawnTeamsWorld(entries: WaveEntry[]): B[];
+  protected abstract takeControlWorld(bot: B, player: Player<B>): void;
+  /** Une partie commence (et l'événement `match` part avec la prochaine image). */
+  protected abstract startMatchWorld(rules: MatchRules): void;
+  /** Les événements depuis l'image précédente, l'instantané, et la description du monde (pour qui arrive). */
+  protected abstract takeEvents(): NetEvent[];
+  protected abstract snapshot(): Uint8Array;
+  protected abstract describeWorld(): NetEvent[];
+  /** Le numéro d'entité du robot, et le verrou à montrer à son pilote. */
+  protected abstract botId(bot: B): number;
+  protected abstract lockOf(bot: B): LockState | null;
+  abstract dispose(): void;
+
+  /** Un robot ennemi détruit par un robot aux commandes `input` : la destruction compte pour son joueur. */
+  protected creditKill(input: PlayerInput): void {
+    for (const p of this.players) if (p.profile && input === p.input) p.kills++;
   }
 
   /** Joueurs dans la partie. */
@@ -117,8 +151,8 @@ export class Room {
   }
 
   /** Un client se connecte ; il rejoint la partie avec son premier message (`join`). */
-  connect(conn: Connection): Player {
-    const player: Player = {
+  connect(conn: Connection): Player<B> {
+    const player: Player<B> = {
       id: this.nextPlayer++, conn, name: "", profile: null, team: "blue", input: newInput(), bot: null, fresh: true, token: "", kills: 0,
       known: new Set(),
     };
@@ -127,12 +161,12 @@ export class Room {
   }
 
   /** Le client s'en va : son robot repasse à l'IA. */
-  disconnect(player: Player): void {
-    if (player.bot) releaseControl(player.bot);
+  disconnect(player: Player<B>): void {
+    if (player.bot !== null) this.releaseBot(player.bot);
     this.players.delete(player);
   }
 
-  receive(player: Player, text: string): void {
+  receive(player: Player<B>, text: string): void {
     let msg: ClientMessage;
     try {
       msg = JSON.parse(text) as ClientMessage;
@@ -147,7 +181,7 @@ export class Room {
         readInput(player.input, msg.input);
         break;
       case "selfDestruct":
-        if (player.bot?.cockpit.alive) selfDestruct(this.sim, player.bot);
+        if (player.bot !== null && this.alive(player.bot)) this.selfDestructBot(player.bot);
         break;
       default:
         break;
@@ -156,28 +190,23 @@ export class Room {
 
   /** Un pas de simulation ; une image pour tous les joueurs tous les SNAPSHOT_EVERY pas. */
   tick(): void {
-    this.sim.step();
+    this.stepWorld();
     // Après une réapparition, le robot du joueur est un nouveau robot qui porte ses commandes
-    for (const p of this.players) if (p.profile) p.bot = this.sim.bots.find((b) => b.input === p.input) ?? null;
-    const match = this.sim.match;
-    if (match?.winner && this.restartAt === null) {
-      this.restartAt = this.sim.time + RESTART_DELAY;
-      this.reward(match.winner);
+    for (const p of this.players) if (p.profile) p.bot = this.botOf(p);
+    const winner = this.winner;
+    if (winner && this.restartAt === null) {
+      this.restartAt = this.time + RESTART_DELAY;
+      this.reward(winner);
     }
-    if (this.restartAt !== null && this.sim.time >= this.restartAt) this.newMatch();
+    if (this.restartAt !== null && this.time >= this.restartAt) this.newMatch();
     if (++this.steps % SNAPSHOT_EVERY === 0) this.broadcast();
   }
 
-  dispose(): void {
-    this.encoder.dispose();
-    this.sim.dispose();
-  }
-
-  private send(player: Player, msg: ServerMessage): void {
+  private send(player: Player<B>, msg: ServerMessage): void {
     player.conn.send(JSON.stringify(msg));
   }
 
-  private join(player: Player, msg: Extract<ClientMessage, { t: "join" }>): void {
+  private join(player: Player<B>, msg: Extract<ClientMessage, { t: "join" }>): void {
     if (msg.version !== PROTOCOL_VERSION) {
       this.send(player, { t: "refused", refusal: { code: "version" } });
       return;
@@ -224,12 +253,15 @@ export class Room {
     // La carte en place, s'il ne l'a pas : avant la première image, qui la met en place
     this.shareMap(player);
     // En pleine partie, il prend tout de suite la place d'un robot de l'IA de son équipe
-    if (this.restartAt === null) this.replaceAi(player);
+    if (this.restartAt === null) {
+      const bot = this.replaceAiBot(player, player.profile);
+      if (bot !== null) player.bot = bot;
+    }
   }
 
   /** Envoie au joueur la carte communautaire en place, s'il ne l'a pas déjà (une seule fois). */
-  private shareMap(player: Player): void {
-    const key = this.sim.arena.id;
+  private shareMap(player: Player<B>): void {
+    const key = this.arenaKey;
     if (!isMapKey(key) || player.known.has(key)) return;
     const map = this.maps.get(key);
     if (!map) return;
@@ -250,39 +282,21 @@ export class Room {
     this.book.changed();
   }
 
-  /** Le robot du joueur remplace un robot de l'IA de son équipe, de son côté de l'arène. */
-  private replaceAi(player: Player): void {
-    const i = this.sim.bots.findIndex((b) => b.team === player.team && b.controller === "ai");
-    if (i < 0 || !player.profile) return;
-    const old = this.sim.bots[i];
-    const match = this.sim.match;
-    if (match) {
-      const waiting = match.respawns.findIndex((r) => r.bot === old);
-      if (waiting >= 0) match.respawns.splice(waiting, 1);
-      match.stuck.delete(old);
-    }
-    removeBot(this.sim, old);
-    const bot = respawnBot(this.sim, player.profile, player.team);
-    takeControl(bot, player.input);
-    this.sim.bots[i] = bot;
-    player.bot = bot;
-  }
-
   /**
    * Nouvelle partie, dans l'arène suivante : les joueurs d'abord, puis l'IA complète les équipes,
    * du robot le plus cher au moins cher, chacun dans l'équipe qui coûte le moins jusque-là (voir
    * `matchEntries`) : les deux équipes sont de même force.
    */
-  private newMatch(): void {
-    endMatch(this.sim);
+  protected newMatch(): void {
+    this.endMatchWorld();
     for (const p of this.players) p.kills = 0;
     this.arenaIndex = (this.arenaIndex + 1) % this.rotation.length;
-    this.sim.loadArena(this.rotation[this.arenaIndex]);
+    this.loadArenaWorld(this.rotation[this.arenaIndex]);
     // Une carte communautaire : à ceux qui ne l'ont pas, avant l'image qui la met en place
     for (const p of this.players) if (p.profile) this.shareMap(p);
     const humans = [...this.players].filter((p) => p.profile);
     const cost = (profile: BotProfile): number => designCost(profile.design);
-    const teams: Record<Team, { entries: WaveEntry[]; owners: (Player | null)[]; cost: number }> = {
+    const teams: Record<Team, { entries: WaveEntry[]; owners: (Player<B> | null)[]; cost: number }> = {
       red: { entries: [], owners: [], cost: 0 },
       blue: { entries: [], owners: [], cost: 0 },
     };
@@ -294,7 +308,7 @@ export class Room {
       }
     }
     const free = (team: Team): number => TEAM_SIZE - teams[team].entries.length;
-    const pool = pickRoster(MODE);
+    const pool = this.drawRoster();
     const ai = Array.from({ length: free("red") + free("blue") }, (_, i) => pool[i % pool.length]).sort((a, b) => cost(b) - cost(a));
     for (const profile of ai) {
       const team: Team = free("blue") > 0 && (free("red") === 0 || teams.blue.cost <= teams.red.cost) ? "blue" : "red";
@@ -304,31 +318,147 @@ export class Room {
     }
     const entries = TEAMS.flatMap((team) => teams[team].entries);
     const owners = TEAMS.flatMap((team) => teams[team].owners);
-    const bots = spawnTeams(this.sim, entries);
+    const bots = this.spawnTeamsWorld(entries);
     bots.forEach((bot, k) => {
       const owner = owners[k];
       if (!owner) return;
-      takeControl(bot, owner.input);
+      this.takeControlWorld(bot, owner);
       owner.bot = bot;
     });
-    startMatch(this.sim, MODE.match);
-    this.encoder.push({ t: "match", rules: MODE.match });
+    this.startMatchWorld(MODE.match);
     this.restartAt = null;
   }
 
   /** Image pour chacun : les changements depuis la précédente, ou tout le monde pour qui arrive. */
   private broadcast(): void {
-    const events = this.encoder.take();
-    const snapshot = writeSnapshot(this.sim);
+    const events = this.takeEvents();
+    const snapshot = this.snapshot();
     let world: NetEvent[] | null = null;
     for (const p of this.players) {
       if (!p.profile) continue;
-      const locking = p.bot ? pilotLock(p.bot) : null;
-      const lock = locking?.lockOn ? { turret: locking.block.id, target: locking.lockOn.id, progress: lockProgress(locking) } : null;
-      const header = { events: p.fresh ? (world ??= describeWorld(this.sim)) : events, you: p.bot?.id ?? null, lock };
+      const lock = p.bot !== null ? this.lockOf(p.bot) : null;
+      const header = { events: p.fresh ? (world ??= this.describeWorld()) : events, you: p.bot !== null ? this.botId(p.bot) : null, lock };
       p.fresh = false;
       p.conn.send(encodeFrame(header, snapshot));
     }
+  }
+}
+
+/** La salle sur la simulation du TypeScript (`Simulation`). */
+export class Room extends RoomBase<Bot> {
+  readonly sim = new Simulation();
+  private readonly encoder: NetEncoder;
+
+  constructor(book = new ProgressBook(), options: RoomOptions = {}) {
+    super(book, options);
+    this.encoder = new NetEncoder(this.sim);
+    this.sim.combat = MODE.combat;
+    // Les destructions de chaque joueur (ses robots successifs portent ses commandes)
+    this.sim.on((e) => {
+      if (e.type !== "botKilled" || !e.killer || e.killer.team === e.bot.team || !e.killer.input) return;
+      this.creditKill(e.killer.input);
+    });
+    this.newMatch();
+  }
+
+  protected get time(): number {
+    return this.sim.time;
+  }
+
+  protected get arenaKey(): ArenaKey {
+    return this.sim.arena.id;
+  }
+
+  protected get winner(): Team | "draw" | null {
+    return this.sim.match?.winner ?? null;
+  }
+
+  protected stepWorld(): void {
+    this.sim.step();
+  }
+
+  protected botOf(player: Player<Bot>): Bot | null {
+    return this.sim.bots.find((b) => b.input === player.input) ?? null;
+  }
+
+  protected alive(bot: Bot): boolean {
+    return bot.cockpit.alive;
+  }
+
+  protected selfDestructBot(bot: Bot): void {
+    selfDestruct(this.sim, bot);
+  }
+
+  protected releaseBot(bot: Bot): void {
+    releaseControl(bot);
+  }
+
+  protected replaceAiBot(player: Player<Bot>, profile: BotProfile): Bot | null {
+    const i = this.sim.bots.findIndex((b) => b.team === player.team && b.controller === "ai");
+    if (i < 0) return null;
+    const old = this.sim.bots[i];
+    const match = this.sim.match;
+    if (match) {
+      const waiting = match.respawns.findIndex((r) => r.bot === old);
+      if (waiting >= 0) match.respawns.splice(waiting, 1);
+      match.stuck.delete(old);
+    }
+    removeBot(this.sim, old);
+    const bot = respawnBot(this.sim, profile, player.team);
+    takeControl(bot, player.input);
+    this.sim.bots[i] = bot;
+    return bot;
+  }
+
+  protected endMatchWorld(): void {
+    endMatch(this.sim);
+  }
+
+  protected loadArenaWorld(key: ArenaKey): void {
+    this.sim.loadArena(key);
+  }
+
+  protected drawRoster(): BotProfile[] {
+    return pickRoster(MODE);
+  }
+
+  protected spawnTeamsWorld(entries: WaveEntry[]): Bot[] {
+    return spawnTeams(this.sim, entries);
+  }
+
+  protected takeControlWorld(bot: Bot, player: Player<Bot>): void {
+    takeControl(bot, player.input);
+  }
+
+  protected startMatchWorld(rules: MatchRules): void {
+    startMatch(this.sim, rules);
+    this.encoder.push({ t: "match", rules });
+  }
+
+  protected takeEvents(): NetEvent[] {
+    return this.encoder.take();
+  }
+
+  protected snapshot(): Uint8Array {
+    return writeSnapshot(this.sim);
+  }
+
+  protected describeWorld(): NetEvent[] {
+    return describeWorld(this.sim);
+  }
+
+  protected botId(bot: Bot): number {
+    return bot.id;
+  }
+
+  protected lockOf(bot: Bot): LockState | null {
+    const locking = pilotLock(bot);
+    return locking?.lockOn ? { turret: locking.block.id, target: locking.lockOn.id, progress: lockProgress(locking) } : null;
+  }
+
+  dispose(): void {
+    this.encoder.dispose();
+    this.sim.dispose();
   }
 }
 

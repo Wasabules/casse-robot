@@ -12,8 +12,10 @@ import { readMapText } from "../shared/map/read";
 import { checkMap } from "../shared/map/validate";
 import { DEFAULT_PORT, MAP_ASSET_PATH } from "../shared/net/protocol";
 import { initPhysics } from "../shared/sim/simulation";
+import { loadSimModule } from "../shared/native/simModule";
+import { NativeRoom } from "./nativeRoom";
 import { ProgressBook } from "./progressBook";
-import { Room, type Player } from "./room";
+import { Room, type Player, type RoomBase, type RoomOptions } from "./room";
 import { cacheControl, contentType, IMMUTABLE, mapAssetHash, staticPath } from "./staticFiles";
 
 /*
@@ -183,8 +185,24 @@ async function loadMaps(dir: string): Promise<MapFile[]> {
   return maps;
 }
 
-const room = new Room(book, { arenas: rotationOf(loadGameArenas(ARENAS_DIR)), maps: await loadMaps(MAPS_DIR), mapsOnly: process.env.MAPS_ONLY === "1" });
-console.log(`Rotation des arènes : ${room.rotation.length}`);
+/**
+ * La simulation compilée entière (SIM=rust) : SIM_WASM, sinon celle des sources
+ * (src/shared/native/casse-sim.wasm, npm run native), sinon celle du client compilé (dist/assets/).
+ */
+function simWasm(): Uint8Array {
+  const candidates = [process.env.SIM_WASM, "src/shared/native/casse-sim.wasm"].filter((p): p is string => !!p).map((p) => resolve(p));
+  const assets = resolve(process.env.CLIENT_DIR || "dist", "assets");
+  if (existsSync(assets)) candidates.push(...readdirSync(assets).filter((f) => /^casse-sim-.*\.wasm$/.test(f)).map((f) => join(assets, f)));
+  const found = candidates.find((p) => existsSync(p));
+  if (!found) throw new Error("SIM=rust : la simulation compilée est introuvable (npm run native, ou SIM_WASM)");
+  return new Uint8Array(readFileSync(found));
+}
+
+const roomOptions: RoomOptions = { arenas: rotationOf(loadGameArenas(ARENAS_DIR)), maps: await loadMaps(MAPS_DIR), mapsOnly: process.env.MAPS_ONLY === "1" };
+/** La simulation de la salle : celle du TypeScript, ou celle portée en Rust (`SIM=rust`), qui rend les mêmes images. */
+const SIM = process.env.SIM === "rust" ? "rust" : "ts";
+const room: RoomBase<unknown> = SIM === "rust" ? new NativeRoom(await loadSimModule(simWasm()), book, roomOptions) : new Room(book, roomOptions);
+console.log(`Rotation des arènes : ${room.rotation.length}${SIM === "rust" ? " (simulation Rust)" : ""}`);
 const port = Number(process.env.PORT) || DEFAULT_PORT;
 
 /** Dossier du client compilé, servi à côté de la partie. */
@@ -275,7 +293,7 @@ function serveFile(req: IncomingMessage, res: ServerResponse, url: string): bool
 
 const sockets = new WebSocketServer({ server: http });
 sockets.on("connection", (socket: WebSocket, request) => {
-  const player: Player = room.connect({
+  const player: Player<unknown> = room.connect({
     send: (data) => {
       if (socket.readyState === socket.OPEN) socket.send(data);
     },

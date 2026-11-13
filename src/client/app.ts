@@ -43,7 +43,7 @@ import {
   DEADZONE_RANGE, defaultSettings, FOV_RANGE, GRAPHICS_PRESETS, graphicsPreset, loadSettings, saveSettings, SENSITIVITY_RANGE,
   TOUCH_OPACITY_RANGE, TOUCH_SIZE_RANGE,
   type GraphicsPreset, type MusicPlayerMode, type NumberSetting, type Settings,
-  requestedRenderer,
+  requestedRenderer, requestedSimulation,
 } from "./settings";
 import { arenaInfo, arenaName, botName, communityInfo, mapIssueText, modeInfo, modeName, partName, rewardLineText } from "./i18n/names";
 import { downloadMap, downloadPackage, pickFile } from "./maps/files";
@@ -95,6 +95,7 @@ export class App {
   private readonly settings: Settings = loadSettings();
   /** Le moteur de rendu demandé au chargement de la page (render/engine.ts : il ne change qu'en la rechargeant). */
   private readonly bootRenderer = requestedRenderer(this.settings.renderer);
+  private readonly bootSimulation = requestedSimulation(this.settings.simulation);
   private readonly fps: FpsBadge;
   private readonly soundLog: SoundLog;
   private readonly progress = new Progress();
@@ -1218,6 +1219,23 @@ export class App {
     return rows;
   }
 
+  /**
+   * La simulation de la partie solo (à l'essai) : celle du TypeScript, ou celle portée en Rust. Elle
+   * est prise au chargement de la page : un autre choix le dit, et propose de recharger.
+   */
+  private simulationRows(set: Setter): SettingRow[] {
+    const s = this.settings;
+    const now = this.game.simulationEngine;
+    const names = { ts: "TypeScript", rust: "Rust", page: t("menu.gfx.simulationPage") };
+    const pending = requestedSimulation(s.simulation) !== this.bootSimulation;
+    const detail = pending ? "menu.gfx.simulationPending" : "menu.gfx.simulationDetail";
+    const rows: SettingRow[] = [
+      choiceRow(t("menu.gfx.simulation"), [{ value: "ts", label: "TypeScript" }, { value: "rust", label: "Rust" }], s.simulation, set("simulation"), t(detail, { now: names[now] })),
+    ];
+    if (pending) rows.push({ kind: "button", label: t("menu.gfx.simulationReload"), action: t("menu.gfx.rendererReloadAction"), onSelect: () => location.reload() });
+    return rows;
+  }
+
   private graphicsRows(set: Setter, redraw: () => void): SettingRow[] {
     const s = this.settings;
     const preset = graphicsPreset(s);
@@ -1239,6 +1257,7 @@ export class App {
         redraw();
       }, t("menu.gfx.qualityDetail")),
       ...this.rendererRows(set),
+      ...this.simulationRows(set),
       { kind: "toggle", label: t("menu.gfx.shadows"), detail: t("menu.gfx.shadowsDetail"), value: s.shadows, onChange: set("shadows") },
       choiceRow(
         t("menu.gfx.shadowQuality"),

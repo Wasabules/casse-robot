@@ -12,6 +12,17 @@ export function requestedRenderer(chosen: Renderer, search = typeof location ===
   const forced = new URLSearchParams(search).get("renderer");
   return forced === "webgpu" || forced === "webgl" ? forced : chosen;
 }
+/**
+ * La simulation de la partie solo (client/sim/simWorker.ts) : celle du TypeScript, ou celle portée en
+ * Rust (à l'essai : les mêmes images). Prise au chargement de la page.
+ */
+export const SIMULATIONS = ["ts", "rust"] as const;
+export type SimulationEngine = (typeof SIMULATIONS)[number];
+/** La simulation demandée par l'adresse de la page (`?sim=rust`, `?sim=ts`), sinon celle des réglages. */
+export function requestedSimulation(chosen: SimulationEngine, search = typeof location === "undefined" ? "" : location.search): SimulationEngine {
+  const forced = new URLSearchParams(search).get("sim");
+  return forced === "rust" || forced === "ts" ? forced : chosen;
+}
 /** Qualité des ombres : taille de la carte d'ombre et finesse du filtrage. */
 export const SHADOW_QUALITIES = ["low", "medium", "high"] as const;
 export type ShadowQuality = (typeof SHADOW_QUALITIES)[number];
@@ -64,6 +75,8 @@ export interface Settings {
   // --- Graphismes ---
   /** Moteur de rendu (render/engine.ts) : pris au chargement de la page. */
   renderer: Renderer;
+  /** Simulation de la partie solo (à l'essai : celle portée en Rust) : prise au chargement de la page. */
+  simulation: SimulationEngine;
   /** Ombres portées (coûteuses sur les petites machines). */
   shadows: boolean;
   shadowQuality: ShadowQuality;
@@ -149,6 +162,7 @@ function browserLanguages(): readonly string[] {
 
 export const DEFAULT_SETTINGS: Readonly<Settings> = {
   renderer: "webgl",
+  simulation: "ts",
   shadows: true,
   shadowQuality: "medium",
   renderScale: 1,
@@ -320,6 +334,7 @@ export function parseSettings(json: string | null, device: DeviceInfo = deviceIn
   s.bindings = migrateBindings(saved.bindings, version);
   s.bindingsVersion = BINDINGS_VERSION;
   s.renderer = pick(RENDERERS, saved.renderer) ?? s.renderer;
+  s.simulation = pick(SIMULATIONS, saved.simulation) ?? s.simulation;
   s.shadowQuality = pick(SHADOW_QUALITIES, saved.shadowQuality) ?? s.shadowQuality;
   s.renderScale = pick(RENDER_SCALES, saved.renderScale) ?? s.renderScale;
   s.effects = pick(EFFECT_LEVELS, saved.effects) ?? s.effects;

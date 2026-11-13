@@ -11,6 +11,7 @@
 //!
 //! Pas encore porté : le robot projeté par un flipper (pas d'armes de contact).
 
+use super::events::code;
 use super::colliders::block_at;
 use super::damage::{DamageBatch, Target, inflict};
 use super::physics::ContactForce;
@@ -226,7 +227,7 @@ fn breach_of(sim: &Sim, clash: &Clash, owners: &[Option<Owner>; 2], motions: [Op
 fn owner_is_bot(sim: &Sim, owner: Option<Owner>) -> bool {
     match owner {
         Some(Owner::Part(p)) => sim.parts[p].is_some(),
-        Some(Owner::Wheel(..)) | Some(Owner::Head(..)) => true,
+        Some(Owner::Wheel(..)) | Some(Owner::Head(..)) | Some(Owner::Blade(..)) => true,
         _ => false,
     }
 }
@@ -248,6 +249,7 @@ fn still_there(sim: &Sim, owner: Owner) -> bool {
         Owner::Part(p) => sim.parts[p].as_ref().is_some_and(|part| sim.bots[part.bot].parts.contains(&p)),
         Owner::Wheel(bot, w) => sim.bots[bot].wheels[w].part.is_some(),
         Owner::Head(bot, t) => sim.bots[bot].blocks[sim.bots[bot].turrets[t].block].alive,
+        Owner::Blade(bot, a) => sim.bots[bot].blocks[sim.bots[bot].melee[a].block].alive,
         Owner::Debris | Owner::Prop(_) => true,
     }
 }
@@ -260,6 +262,10 @@ fn target_at(sim: &Sim, owner: Owner, p: V3, into: V3) -> Option<Target> {
             let b = sim.bots[bot].turrets[t].block;
             sim.bots[bot].blocks[b].alive.then_some(Target::Block(bot, b))
         }
+        Owner::Blade(bot, a) => {
+            let b = sim.bots[bot].melee[a].block;
+            sim.bots[bot].blocks[b].alive.then_some(Target::Block(bot, b))
+        }
         Owner::Wheel(bot, w) => Some(Target::Wheel(bot, w)),
         Owner::Prop(i) => Some(Target::Prop(i)),
         Owner::Debris => None,
@@ -269,7 +275,23 @@ fn target_at(sim: &Sim, owner: Owner, p: V3, into: V3) -> Option<Target> {
 /// Inflige un choc mesuré aux deux corps : chaque point de contact reçoit sa part des dégâts (`strikeImpact`).
 fn strike_impact(sim: &mut Sim, impact: &Impact) {
     let n = impact.normal;
-    let mut batch = DamageBatch::default();
+    let mut batch = DamageBatch { cause: Some("impact"), ..DamageBatch::default() };
+    // Un robot projeté par une arme (le plateau d'un flipper) qui retombe : sa chute est créditée à
+    // celle-ci (`ownerBot` : le robot d'un morceau, même retiré entre-temps)
+    let bot_of = |o: Option<Owner>| match o {
+        Some(Owner::Part(p)) => Some(sim.part_bots[p]),
+        Some(Owner::Wheel(bot, _)) | Some(Owner::Head(bot, _)) | Some(Owner::Blade(bot, _)) => Some(bot),
+        _ => None,
+    };
+    let thrown = impact.owners.iter().filter_map(|&o| bot_of(o).and_then(|b| sim.bots[b].thrown_by)).find(|t| t.2 > sim.time);
+    if let Some((by, weapon, _)) = thrown
+        && !impact.owners.iter().any(|&o| bot_of(o) == Some(by))
+    {
+        batch.attacker = Some(by);
+        // (sa cause est une arme de contact : chaque robot touché reçoit un retour de tir)
+        batch.armed = true;
+        batch.cause = Some(weapon);
+    }
     // Un robot qui passe au travers d'un obstacle n'encaisse que ce qu'il a cédé pour le briser
     let felt = |side: usize| match &impact.breach {
         Some(b) if b.side == side => (b.impulse, b.damage),
@@ -304,6 +326,7 @@ fn strike_impact(sim: &mut Sim, impact: &Impact) {
         }
     }
     sim.stats.collisions += 1;
+    sim.emit_point(code::COLLISION, impact.center, Some(impact.damage));
     // Un robot ne réagit (fuite, charge) qu'à un choc avec un autre robot, pas contre un mur ou une caisse
     inflict(sim, &batch, n, if impact.robots == 2 { Some(impact.center) } else { None });
     if let Some(breach) = &impact.breach {

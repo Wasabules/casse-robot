@@ -3,7 +3,7 @@ import { STEP } from "../../shared/config";
 import type { ClientMessage } from "../../shared/net/protocol";
 import { Replica } from "../../shared/net/replica";
 import type { SessionCommand } from "../../shared/net/session";
-import type { WorkerReply } from "./simWorker";
+import type { SimEngine, WorkerReply } from "./simWorker";
 
 /*
  * La partie solo dans un Worker (client/sim/simWorker.ts) : le jeu lui envoie des commandes
@@ -31,11 +31,16 @@ export class WorkerLink {
   /** Les arènes dont le Worker a déjà reçu le fichier (une grande arène du jeu, une carte communautaire) : il les garde. */
   private readonly given = new Set<string>();
 
-  constructor() {
+  /** La simulation du Worker : celle du TypeScript, ou celle portée en Rust (`?sim=rust`). */
+  readonly engine: SimEngine;
+
+  constructor(engine: SimEngine = "ts") {
+    this.engine = engine;
     this.replica.delay = LOCAL_DELAY;
     // Les cartes communautaires que le jeu a fait connaître (la bibliothèque, l'éditeur) : la réplique les y trouve
     this.replica.resolveArena = (key) => arenaById(key);
-    this.worker = new Worker(new URL("./simWorker.ts", import.meta.url), { type: "module" });
+    // (le nom du Worker lui dit quelle simulation faire tourner)
+    this.worker = new Worker(new URL("./simWorker.ts", import.meta.url), { type: "module", name: engine });
     this.worker.onmessage = (e: MessageEvent<WorkerReply>) => {
       if (e.data instanceof ArrayBuffer) this.replica.receive(new Uint8Array(e.data));
       else this.fail(e.data.error);

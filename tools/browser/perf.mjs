@@ -233,7 +233,9 @@ try {
   if (options.eval) await page.evaluate(`(() => { ${options.eval}; return 1; })()`);
   await page.evaluate(`(() => { const g = window.__casse.game; g.setFollow(0); g.rig.setZoom(16); return 1; })()`);
   const info = await page.evaluate(INSTRUMENT);
-  console.log(`» Bataille en cours (${info.render.join(" × ")}) ; ${options.warmup} s pour s'engager`);
+  // (la simulation mesurée : celle du Worker, du TypeScript ou portée en Rust, `--query="sim=rust"` ; ou celle de la page)
+  const simulation = await page.evaluate(`window.__casse.game.simulationEngine`);
+  console.log(`» Bataille en cours (${info.render.join(" × ")}, simulation ${simulation}) ; ${options.warmup} s pour s'engager`);
   await sleep(options.warmup * 1000);
   if (options.renderOnly) await page.evaluate(`window.__casse.game.hold()`);
   const windows = [];
@@ -258,7 +260,7 @@ try {
   const commit = spawnSync("git", ["rev-parse", "--short", "HEAD"], { cwd: ROOT, encoding: "utf8" }).stdout.trim();
   const result = {
     date: new Date().toISOString(), commit, browser: chrome.version, gpu: info.gpu, gpuName: info.gpu,
-    arena: options.arena, size: options.size, preset: options.preset, renderOnly: options.renderOnly,
+    arena: options.arena, size: options.size, preset: options.preset, renderOnly: options.renderOnly, simulation,
     summary: summarize(windows), windows: windows.length,
   };
   result.summary.size = options.size;

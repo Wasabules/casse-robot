@@ -53,7 +53,7 @@ import { Fx } from "./render/fx/fx";
 import { SceneLighting } from "./render/lighting";
 import { PoseInterpolation } from "./render/interpolation";
 import { firingTurret, recoilKick } from "./render/recoil";
-import type { FxLook, ShadowQuality } from "./settings";
+import { requestedSimulation, type FxLook, type ShadowQuality, type SimulationEngine } from "./settings";
 import { LocomotionView } from "./render/locomotionView";
 import { applyArenaLook, SHADOW_MAPS, type SceneKit } from "./render/scene";
 import { Assets } from "./render/materials";
@@ -334,7 +334,7 @@ export class ArenaGame {
   private renderScale = 1;
 
   /** Le jeu, sur le moteur de la page (WebGL ou WebGPU : render/engine.ts) et son canvas. */
-  constructor(engine: B.AbstractEngine) {
+  constructor(engine: B.AbstractEngine, simulation: SimulationEngine = "ts") {
     const canvas = engine.getRenderingCanvas()!;
     this.sim = new Simulation();
     const kit = createScene(engine);
@@ -377,7 +377,7 @@ export class ArenaGame {
     this.unbindWorld = this.sim.on((e) => this.onWorldEvent(e));
     // La langue change (depuis les paramètres) : le HUD se refait dans la nouvelle langue
     onLocaleChange(() => this.refreshTexts());
-    this.startLocal();
+    this.startLocal(simulation);
   }
 
   /**
@@ -386,10 +386,11 @@ export class ArenaGame {
    * `?sim=page` dans l'adresse), la simulation reste dans ce fil, comme avant. Si le Worker échoue,
    * la partie en cours reprend dans ce fil.
    */
-  private startLocal(): void {
+  private startLocal(simulation: SimulationEngine): void {
     if (typeof Worker === "undefined" || new URLSearchParams(location.search).get("sim") === "page") return;
     try {
-      const link = new WorkerLink();
+      // La simulation portée en Rust (le réglage, ou `?sim=rust` ; à l'essai : les mêmes images que celle du TypeScript)
+      const link = new WorkerLink(requestedSimulation(simulation));
       link.onFail = () => {
         if (this.local !== link) return;
         link.close();
@@ -406,6 +407,14 @@ export class ArenaGame {
     } catch (e) {
       console.warn("La simulation reste sur la page : pas de Worker", e);
     }
+  }
+
+  /**
+   * La simulation de la partie solo : celle du Worker (du TypeScript, ou portée en Rust), ou celle de
+   * la page (sans Worker, `?sim=page`, ou après un échec du Worker).
+   */
+  get simulationEngine(): SimulationEngine | "page" {
+    return this.local ? this.local.engine : "page";
   }
 
   /** La partie se joue dans le Worker (la partie solo hors du fil du rendu). */

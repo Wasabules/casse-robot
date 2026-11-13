@@ -41,7 +41,7 @@ async function start(): Promise<void> {
   // Le moteur : WebGPU ou WebGL 2, selon le réglage et le navigateur (render/engine.ts) ; son canvas peut être un neuf
   const engine = await createEngine(byId<HTMLCanvasElement>("c"), loadSettings().renderer);
   const canvas = engine.getRenderingCanvas()!;
-  const game = new ArenaGame(engine);
+  const game = new ArenaGame(engine, loadSettings().simulation);
   watchGpu(game.engine);
   const app = new App(game, canvas, loading);
   canvas.tabIndex = 0;

@@ -1,7 +1,8 @@
 //! Les catalogues du jeu, lus dans content/catalog.json (incorporé au module) : ce qu'il faut à la
 //! simulation portée des blocs (masse, forme, tourelle, réparation…), des roues, des robots
 //! préfabriqués (leurs plans), des accessoires (forme, masse, résistances, explosion, mèche, fuite,
-//! bois…) et des armes (l'explosion et la flaque de feu de leur projectile, seulement). Le
+//! bois…) et des armes (cadence, portée, chargeur, chaleur, et leur projectile : guidage, explosion,
+//! flaque de feu, impulsion électromagnétique, fumée, mine, tir réparateur, mur d'énergie…). Le
 //! catalogue est fait par `npm run schemas` depuis les catalogues du TypeScript
 //! (src/shared/catalog/) : ses nombres sont les leurs, au bit près (json.rs) ; seuls les sommets des
 //! formes y sont arrondis (ils sont recalculés, comme le fait shapes.ts, quand on les porte).
@@ -35,9 +36,16 @@ pub enum Fixed {
     Down,
 }
 
-/// Tourelle (`TurretSpec`) : ce qu'il faut pour ses zones touchables (colliders.ts, `addHeads`).
+/// Tourelle (`TurretSpec`) : son arme, ses vitesses de rotation en lacet et en site (rad/s), son
+/// débattement en site (rad), la hauteur de l'axe de sa tête au-dessus du centre de son bloc et la
+/// longueur de son canon (m), et ce qu'il faut pour ses zones touchables (colliders.ts, `addHeads`).
 #[derive(Clone, Debug)]
 pub struct TurretSpec {
+    pub weapon: String,
+    pub yaw_rate: f64,
+    pub pitch_rate: f64,
+    pub min_pitch: f64,
+    pub max_pitch: f64,
     pub height: f64,
     pub barrel: f64,
     pub head: [f64; 3],
@@ -51,12 +59,13 @@ pub struct BlockDef {
     pub hp: f64,
     pub shape: BlockShape,
     pub turret: Option<TurretSpec>,
-    /// Les organes que la simulation portée ne sait pas encore faire marcher : un robot qui en a
-    /// est refusé (robot.rs).
-    pub melee: bool,
-    pub thruster: bool,
-    pub support: bool,
-    pub aero: bool,
+    /// L'arme de contact que porte le bloc (son identifiant, `melee`), que la simulation portée ne
+    /// sait pas encore faire marcher : un robot qui en a une est refusé (robot.rs).
+    pub melee: Option<String>,
+    /// Moteur (`thruster`), appui sans roue (`support`), surface portante (`aero`).
+    pub thruster: Option<ThrusterSpec>,
+    pub support: Option<SupportSpec>,
+    pub aero: Option<AeroSpec>,
     pub battery: f64,
     /// Solidité de ses liaisons (`bond`, robot/structure.ts).
     pub bond: f64,
@@ -70,6 +79,65 @@ pub struct BlockDef {
     /// (`jammer.range` : au-delà, les radars ennemis ne repèrent plus son robot) (sim/detection.ts).
     pub radar: f64,
     pub jammer: Option<f64>,
+    /// Lance-leurres (`flares`) : salves qu'il tient, temps pour en regagner une (s).
+    pub flares: Option<(f64, f64)>,
+}
+
+/// Moteur (`ThrusterSpec`) : poussée maximale (N), temps de réponse (s), couple de réaction de
+/// l'hélice par newton de poussée (N·m/N), puissance à pleine poussée (kW), inclinaison d'un rotor
+/// orientable (`gimbal`, rad), son allure (`look` : rien, une flamme ; « rotor », « propeller »,
+/// « jet »), la vitesse à laquelle une hélice ne pousse plus (`topSpeed`, m/s), et son jet de flamme.
+#[derive(Clone, Debug)]
+pub struct ThrusterSpec {
+    pub max_thrust: f64,
+    pub spool_time: f64,
+    pub torque_ratio: f64,
+    pub power: f64,
+    pub gimbal: Option<f64>,
+    pub look: Option<String>,
+    pub top_speed: Option<f64>,
+    pub exhaust: Option<ExhaustSpec>,
+}
+
+/// Jet de flamme d'un moteur (`ExhaustSpec`, robot/exhaust.ts) : distance du centre du bloc au bout
+/// de la tuyère, longueur du jet à plein régime au-delà d'elle (m), dégâts par seconde à la tuyère,
+/// rayon du jet à la tuyère (m) et ce qu'il gagne par mètre, régime de la postcombustion.
+#[derive(Clone, Copy, Debug)]
+pub struct ExhaustSpec {
+    pub nozzle: f64,
+    pub reach: f64,
+    pub dps: f64,
+    pub radius: f64,
+    pub flare: f64,
+    pub afterburner: Option<f64>,
+}
+
+/// Appui sans roue (`SupportSpec`, robot/supports.ts) : un patin (`hover`) ou une patte ; hauteur de
+/// sustentation et portée de son rayon (m), charge nominale (kg), fréquence propre (Hz) et taux
+/// d'amortissement, adhérence (part de la force d'appui), puissance sous la charge nominale (kW).
+#[derive(Clone, Copy, Debug)]
+pub struct SupportSpec {
+    pub hover: bool,
+    pub height: f64,
+    pub reach: f64,
+    pub rated_load: f64,
+    pub frequency: f64,
+    pub damping_ratio: f64,
+    pub traction: f64,
+    pub power: f64,
+}
+
+/// Surface portante (`AeroSpec`, robot/aero.ts) : surface (m²), pente de portance (par rad),
+/// incidence de décrochage (rad), traînée à portance nulle, traînée induite, braquage maximal d'une
+/// gouverne (rad ; rien : une aile fixe).
+#[derive(Clone, Copy, Debug)]
+pub struct AeroSpec {
+    pub area: f64,
+    pub lift_slope: f64,
+    pub stall_angle: f64,
+    pub drag_min: f64,
+    pub induced_drag: f64,
+    pub max_deflection: Option<f64>,
 }
 
 /// Module de réparation (`RepairSpec`) : points rendus par seconde, rayon (m), et le temps sans
@@ -192,9 +260,11 @@ pub enum PropShape {
     Slab,
 }
 
-/// Explosion (`Explosion`, catalog/weapons.ts) : ce qu'il en faut à la simulation (pas son allure).
+/// Explosion (`Explosion`, catalog/weapons.ts) : ce qu'il en faut à la simulation, et son allure
+/// (`look`, que dit l'événement `explosion`).
 #[derive(Clone, Copy, Debug)]
 pub struct Explosion {
+    pub look: &'static str,
     pub radius: f64,
     pub damage: f64,
     pub blast_radius: f64,
@@ -213,13 +283,340 @@ pub struct Puddle {
     pub life: f64,
 }
 
-/// Arme (`Weapon`, catalog/weapons.ts) : ce qu'il en faut à la simulation portée, qui n'a pas encore
-/// de projectiles : l'explosion de son projectile (celle d'une mine qui saute) et la flaque de feu
-/// qu'il laisse parfois au sol (le jet du lance-flammes ; sans sa chance, que tire le projectile).
-#[derive(Clone, Copy, Debug)]
-pub struct WeaponDef {
+/// Guidage d'un projectile (`Guidance`) : son mode (« command », « homing », « piloted »), s'il ne
+/// vise que des robots en vol (`airOnly`), sa vitesse de virage (rad/s), le temps qu'il file droit
+/// au départ (s), son accélération latérale (m/s²), la vitesse qu'un virage lui coûte (par radian)
+/// et celle que son moteur lui rend (1/s) ; 0 : absent.
+#[derive(Clone, Debug)]
+pub struct Guidance {
+    pub mode: String,
+    pub air_only: bool,
+    pub turn_rate: f64,
+    pub launch: f64,
+    pub max_accel: f64,
+    pub bleed: f64,
+    pub recover: f64,
+}
+
+/// Ce que fait une mine déclenchée, au lieu d'éclater (`MineAction`) : bondir à cette hauteur (m),
+/// lancer le projectile d'une arme sur sa cible, se coller à elle et éclater au bout de sa mèche (s).
+#[derive(Clone, Debug, PartialEq)]
+pub enum MineAction {
+    Bounce(f64),
+    Launch(String),
+    Stick(f64),
+}
+
+/// Mine (`MineSpec`) : ce qui la déclenche (« ground », « air », « remote », « none »), le temps
+/// qu'elle met à s'armer (s), le rayon où elle se déclenche (m), celui où elle repère les ennemis (un
+/// capteur ; 0 : aucun), et ce qu'elle fait d'autre qu'éclater (`action`).
+#[derive(Clone, Debug)]
+pub struct MineSpec {
+    pub trigger: String,
+    pub arm_delay: f64,
+    pub radius: f64,
+    pub sense: f64,
+    pub action: Option<MineAction>,
+}
+
+/// Impulsion électromagnétique (`EmpPulse`) : son rayon (m), la durée de la paralysie à son centre (s).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct EmpPulse {
+    pub radius: f64,
+    pub duration: f64,
+}
+
+/// Fumigène (`SmokeSpec`) : le rayon final du nuage (m), sa durée (s).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SmokeSpec {
+    pub radius: f64,
+    pub duration: f64,
+}
+
+/// Tir réparateur (`RepairShot`) : points rendus à chaque bloc et roue d'un allié dans `radius` m du
+/// point touché ; sur un ennemi, les dégâts qu'il vole (`drain` ; 0 : aucun) et la part de ce qu'il a
+/// pris qui répare le tireur (`steal`) ; des nanites : le nombre de blocs les plus abîmés qu'elles
+/// réparent, où qu'ils soient (`swarm`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RepairShot {
+    pub amount: f64,
+    pub radius: f64,
+    pub drain: f64,
+    pub steal: f64,
+    pub swarm: Option<f64>,
+}
+
+/// Mur d'énergie (`BarrierSpec`) : sa largeur et sa hauteur (m), ses points, sa durée (s), et la
+/// distance au bout de laquelle le projectile qui le porte se déploie (m).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BarrierSpec {
+    pub width: f64,
+    pub height: f64,
+    pub hp: f64,
+    pub life: f64,
+    pub reach: f64,
+}
+
+/// Projectile d'une arme (`ProjectileSpec`) : vitesse (m/s), part de la gravité, durée de vol (s),
+/// dégâts et leur nature, perforant, impulsion (N·s), chance d'enflammer ce qu'il touche, et ce
+/// qu'il emporte : une explosion, une flaque de feu (et sa chance), une impulsion électromagnétique,
+/// de la fumée, un guidage, une mine, une coque qu'on peut abattre (rayon, points), une gerbe de
+/// plombs (nombre, écart), un éventail (écart), un leurre, un tir réparateur, un mur d'énergie, une
+/// fusée de proximité.
+#[derive(Clone, Debug)]
+pub struct ProjectileSpec {
+    pub speed: f64,
+    pub gravity: f64,
+    pub life: f64,
+    pub damage: f64,
+    pub damage_type: String,
+    pub penetrating: bool,
+    pub impulse: f64,
+    pub ignite: f64,
     pub explosion: Option<Explosion>,
     pub puddle: Option<Puddle>,
+    pub puddle_chance: f64,
+    pub emp: Option<EmpPulse>,
+    pub smoke: Option<SmokeSpec>,
+    pub guidance: Option<Guidance>,
+    pub mine: Option<MineSpec>,
+    pub hull: Option<(f64, f64)>,
+    pub pellets: Option<(f64, f64)>,
+    pub fan: Option<f64>,
+    pub decoy: bool,
+    pub repair: Option<RepairShot>,
+    pub barrier: Option<BarrierSpec>,
+    pub proximity: Option<f64>,
+}
+
+/// Arme (`Weapon`, catalog/weapons.ts) : cadence (s), automatique, dispersion au viseur (rad),
+/// recul (N·s), portée et portée préférée de l'IA (m), portée minimale, énergie tirée par coup (kJ ;
+/// 0 : aucune), maniement (sans viseur, en mouvement, en rotation), chaleur (par coup, refroidissement
+/// par seconde), chargeur (capacité, rechargement d'un coup en s ; jamais : ∞), larguée, à
+/// verrouillage, de soin automatique, et son projectile. `explosion` et `puddle` : ceux du projectile.
+#[derive(Clone, Debug)]
+pub struct WeaponDef {
+    pub cooldown: f64,
+    pub automatic: bool,
+    pub spread: f64,
+    pub recoil: f64,
+    pub range: f64,
+    pub engage: Option<f64>,
+    pub min_range: Option<f64>,
+    pub power: f64,
+    pub hip: f64,
+    /// Ce que la dispersion d'un tir du pilote gagne par m/s de vitesse et par rad/s de rotation du robot
+    /// (`handling.move`, `handling.turn`) ; une arme de précision ne tire qu'au viseur (`scopeOnly`).
+    pub sway: (f64, f64),
+    pub scope_only: bool,
+    pub heat: Option<(f64, f64)>,
+    pub ammo: Option<(f64, f64)>,
+    pub dropped: bool,
+    /// Verrouillage : le temps à tenir la cible (s), le cône (rad).
+    pub lock: Option<(f64, f64)>,
+    pub auto_support: bool,
+    pub projectile: ProjectileSpec,
+    pub explosion: Option<Explosion>,
+    pub puddle: Option<Puddle>,
+}
+
+/// Volume que balaie la lame d'un rotor (`SweptRing`) : ses rayons (m), sa demi-épaisseur le long de
+/// l'axe, ses bras (nombre, largeur) s'il en a, et la toile des rayons d'un anneau-coque (hauteur
+/// depuis le moyeu, demi-épaisseur : réservée, elle ne frappe pas).
+#[derive(Clone, Copy, Debug)]
+pub struct SweptRing {
+    pub inner: f64,
+    pub outer: f64,
+    pub half: f64,
+    pub arms: Option<(f64, f64)>,
+    pub web: Option<(f64, f64)>,
+}
+
+impl SweptRing {
+    /// Une lame plus longue le long de son axe que large : une mèche (`isBit`).
+    pub fn is_bit(&self) -> bool {
+        self.half > self.outer
+    }
+}
+
+/// Bras déclenché (`SwingSpec`) : portée et rayon de sa tête (m), angles de repos et de fin (rad),
+/// durées de la frappe et du retour (s), énergie de la tête au bout de l'arc (J), coût d'une frappe (kJ).
+#[derive(Clone, Copy, Debug)]
+pub struct SwingSpec {
+    pub reach: f64,
+    pub radius: f64,
+    pub rest: f64,
+    pub end: f64,
+    pub strike: f64,
+    pub recover: f64,
+    pub energy: f64,
+    pub cost: f64,
+}
+
+/// Pointe (`ThrustSpec`) : rentrée et sortie (m du moyeu), rayon de la pointe, durées de la sortie et
+/// du retour (s), énergie de la décharge (J), coût (kJ).
+#[derive(Clone, Copy, Debug)]
+pub struct ThrustSpec {
+    pub retracted: f64,
+    pub reach: f64,
+    pub radius: f64,
+    pub strike: f64,
+    pub recover: f64,
+    pub energy: f64,
+    pub cost: f64,
+}
+
+/// Plateau de flipper (`PlateSpec`) : longueur et demi-largeur (m), angles de repos et de fin (rad),
+/// durées de la levée, de la redescente et de la recharge (s), travail du vérin (J), coût (kJ).
+#[derive(Clone, Copy, Debug)]
+pub struct PlateSpec {
+    pub length: f64,
+    pub half: f64,
+    pub rest: f64,
+    pub end: f64,
+    pub strike: f64,
+    pub lower: f64,
+    pub reload: f64,
+    pub energy: f64,
+    pub cost: f64,
+}
+
+/// Champ broyeur (`FieldSpec`) : marge autour de la coque (m), rayon couvert depuis le projecteur (m),
+/// contacts par coup, part de l'énergie d'un rotor ennemi qu'il lui prend, impulsion qui repousse une
+/// arme ennemie (N·s).
+#[derive(Clone, Copy, Debug)]
+pub struct FieldSpec {
+    pub margin: f64,
+    pub radius: f64,
+    pub contacts: f64,
+    pub drain: f64,
+    pub repel: f64,
+}
+
+/// Fléau (`FlailSpec`) : rayon et inertie de la manivelle, régime (rad/s) et lancée (s), longueur de
+/// la chaîne, masse et rayon de la boule, restitution et frottement de ses rebonds, freinage de l'air.
+#[derive(Clone, Copy, Debug)]
+pub struct FlailSpec {
+    pub crank: f64,
+    pub inertia: f64,
+    pub speed: f64,
+    pub spin_up: f64,
+    pub chain: f64,
+    pub mass: f64,
+    pub radius: f64,
+    pub restitution: f64,
+    pub friction: f64,
+    pub drag: f64,
+}
+
+/// Mâchoire (`JawSpec`) : longueur et demi-largeur (m), angles ouvert et fermé (rad), durées de la
+/// fermeture, de la réouverture et du répit (s), sa gueule (m du pivot), ce qu'elle tient (N), son
+/// glissement toléré (s), l'écart qui l'arrache (m), l'écrasement (par s) et la morsure, le vérin
+/// (kW), la prise au plus (s).
+#[derive(Clone, Copy, Debug)]
+pub struct JawSpec {
+    pub length: f64,
+    pub half: f64,
+    pub open: f64,
+    pub shut: f64,
+    pub close: f64,
+    pub reopen: f64,
+    pub cooldown: f64,
+    pub mouth: (f64, f64),
+    pub strength: f64,
+    pub slip: f64,
+    pub tear: f64,
+    pub crush: f64,
+    pub bite: f64,
+    pub power: f64,
+    pub hold: f64,
+}
+
+/// Une lame qui mord en continu (`BiteSpec`) : puissance de coupe (kW), le long de son axe (une mèche)
+/// ou de son bord, entraînement, réducteur, profondeur (m).
+#[derive(Clone, Copy, Debug)]
+pub struct BiteSpec {
+    pub power: f64,
+    pub axial: bool,
+    pub grab: f64,
+    pub gear: f64,
+    pub depth: f64,
+}
+
+/// Régime d'un rotor (`SpinSpec`) : inertie (kg·m²), régime plein (rad/s), temps de lancée et de
+/// ralentissement (s), gyroscope, balourd, masse tournante, sens de rotation (1 par défaut), réaction
+/// de son moteur (1 par défaut).
+#[derive(Clone, Copy, Debug)]
+pub struct SpinSpec {
+    pub inertia: f64,
+    pub speed: f64,
+    pub spin_up: f64,
+    pub spin_down: f64,
+    pub gyro: f64,
+    pub unbalance: f64,
+    pub mass: f64,
+    pub direction: f64,
+    pub reaction: f64,
+}
+
+/// Le sens de l'impulsion d'un coup (`MeleeHit.push`) : le long du mouvement de la lame, vers
+/// l'extérieur, le long de l'axe, vers le haut.
+#[derive(Clone, Copy, Debug)]
+pub struct Push {
+    pub tangent: f64,
+    pub radial: f64,
+    pub axial: f64,
+    pub lift: f64,
+}
+
+/// Un coup d'arme de contact (`MeleeHit`) : nature et dégâts par kJ, part de l'énergie que prend un
+/// coup franc, part qui projette, sens de l'impulsion, réaction au moyeu, part des dégâts aux voisins,
+/// facteur sur une roue, usure par kJ, temps entre deux coups (s), régime au moins (part du plein),
+/// part que prend le sol.
+#[derive(Clone, Debug)]
+pub struct MeleeHit {
+    pub damage_type: String,
+    pub damage: f64,
+    pub bite: f64,
+    pub fling: f64,
+    pub push: Push,
+    pub recoil: f64,
+    pub spread: f64,
+    pub wheels: Option<f64>,
+    pub wear: f64,
+    pub gap: f64,
+    pub min_speed: f64,
+    pub ground: Option<f64>,
+    /// Le coup allume ce qu'il touche (chance) ; il paralyse les organes autour du point touché
+    /// (rayon, durée : `LocalStun`).
+    pub ignite: Option<f64>,
+    pub stun: Option<(f64, f64)>,
+}
+
+/// Arme de contact (`MeleeSpec`, catalog/melee.ts) : son allure, son mouvement (rotor, rotor mené,
+/// bras, pointe, champ, plateau, fléau, mâchoire), son axe, son moyeu, sa lame, son régime, le moteur
+/// qui la mène, sa morsure, son bras, sa pointe, son plateau, son champ, son fléau, sa mâchoire, ses
+/// coups, si elle s'éteint sans courant (`quench`), et la distance où l'IA combat avec elle.
+#[derive(Clone, Debug)]
+pub struct MeleeSpec {
+    pub look: String,
+    pub motion: String,
+    pub axis: String,
+    pub hub: [f64; 3],
+    pub blade: Option<SweptRing>,
+    pub spin: Option<SpinSpec>,
+    /// Mené par le moteur de son bloc : régime au ralenti, poussée sous laquelle il s'arrête.
+    pub drive: Option<(f64, f64)>,
+    pub bite: Option<BiteSpec>,
+    pub swing: Option<SwingSpec>,
+    pub thrust: Option<ThrustSpec>,
+    pub plate: Option<PlateSpec>,
+    pub field: Option<FieldSpec>,
+    pub flail: Option<FlailSpec>,
+    pub jaw: Option<JawSpec>,
+    pub hit: MeleeHit,
+    pub quench: bool,
+    pub engage: f64,
 }
 
 /// Type d'accessoire (`PropTypeDef`, src/shared/catalog/props.ts).
@@ -258,6 +655,7 @@ pub struct Catalog {
     pub robots: HashMap<String, Robot>,
     pub props: HashMap<String, PropDef>,
     pub weapons: HashMap<String, WeaponDef>,
+    pub melee: HashMap<String, MeleeSpec>,
 }
 
 /// Le catalogue, lu une fois.
@@ -287,6 +685,11 @@ fn read_block(j: &Json) -> Result<BlockDef, String> {
                 return Err("catalogue : tête de tourelle sans ses trois dimensions".into());
             }
             Some(TurretSpec {
+                weapon: t.get("weapon").and_then(Json::str).ok_or("catalogue : tourelle sans arme")?.to_string(),
+                yaw_rate: num(t, "yawRate")?,
+                pitch_rate: num(t, "pitchRate")?,
+                min_pitch: num(t, "minPitch")?,
+                max_pitch: num(t, "maxPitch")?,
                 height: num(t, "height")?,
                 barrel: num(t, "barrel")?,
                 head: [head[0].num().unwrap_or(0.0), head[1].num().unwrap_or(0.0), head[2].num().unwrap_or(0.0)],
@@ -305,10 +708,54 @@ fn read_block(j: &Json) -> Result<BlockDef, String> {
         hp: num(j, "hp")?,
         shape,
         turret,
-        melee: j.get("melee").is_some(),
-        thruster: j.get("thruster").is_some(),
-        support: j.get("support").is_some(),
-        aero: j.get("aero").is_some(),
+        melee: j.get("melee").and_then(Json::str).map(str::to_string),
+        thruster: match j.get("thruster") {
+            Some(t) => Some(ThrusterSpec {
+                max_thrust: num(t, "maxThrust")?,
+                spool_time: num(t, "spoolTime")?,
+                torque_ratio: num(t, "torqueRatio")?,
+                power: num(t, "power")?,
+                gimbal: opt(t, "gimbal"),
+                look: t.get("look").and_then(Json::str).map(str::to_string),
+                top_speed: opt(t, "topSpeed"),
+                exhaust: match t.get("exhaust") {
+                    Some(e) => Some(ExhaustSpec {
+                        nozzle: num(e, "nozzle")?,
+                        reach: num(e, "reach")?,
+                        dps: num(e, "dps")?,
+                        radius: num(e, "radius")?,
+                        flare: num(e, "flare")?,
+                        afterburner: opt(e, "afterburner"),
+                    }),
+                    None => None,
+                },
+            }),
+            None => None,
+        },
+        support: match j.get("support") {
+            Some(s) => Some(SupportSpec {
+                hover: s.get("kind").and_then(Json::str) == Some("hover"),
+                height: num(s, "height")?,
+                reach: num(s, "reach")?,
+                rated_load: num(s, "ratedLoad")?,
+                frequency: num(s, "frequency")?,
+                damping_ratio: num(s, "dampingRatio")?,
+                traction: num(s, "traction")?,
+                power: num(s, "power")?,
+            }),
+            None => None,
+        },
+        aero: match j.get("aero") {
+            Some(a) => Some(AeroSpec {
+                area: num(a, "area")?,
+                lift_slope: num(a, "liftSlope")?,
+                stall_angle: num(a, "stallAngle")?,
+                drag_min: num(a, "dragMin")?,
+                induced_drag: num(a, "inducedDrag")?,
+                max_deflection: opt(a, "maxDeflection"),
+            }),
+            None => None,
+        },
         battery: j.get("battery").and_then(|b| opt(b, "capacity")).unwrap_or(0.0),
         bond: num(j, "bond")?,
         resist: j.get("resist").map(Json::fields).unwrap_or(&[]).iter().filter_map(|(k, v)| Some((k.clone(), v.num()?))).collect(),
@@ -328,6 +775,7 @@ fn read_block(j: &Json) -> Result<BlockDef, String> {
             Some(r) => Some(num(r, "range")?),
             None => None,
         },
+        flares: pair(j, "flares", "charges", "reload")?,
     })
 }
 
@@ -360,7 +808,10 @@ fn read_wheel(j: &Json) -> Result<WheelDef, String> {
 }
 
 fn read_explosion(j: &Json) -> Result<Explosion, String> {
+    // (le catalogue est lu une fois, pour toute la vie du module : son texte peut y rester)
+    let look: &'static str = Box::leak(j.get("look").and_then(Json::str).unwrap_or("shell").to_string().into_boxed_str());
     Ok(Explosion {
+        look,
         radius: num(j, "radius")?,
         damage: num(j, "damage")?,
         blast_radius: num(j, "blastRadius")?,
@@ -379,14 +830,118 @@ fn read_puddle(j: &Json) -> Result<Option<Puddle>, String> {
     }
 }
 
-fn read_weapon(j: &Json) -> Result<WeaponDef, String> {
-    let p = j.get("projectile").ok_or("catalogue : arme sans projectile")?;
-    Ok(WeaponDef {
-        explosion: match p.get("explosion") {
-            Some(e) => Some(read_explosion(e)?),
+/// Une paire de nombres d'un objet (`key` : ses champs `a` et `b`), s'il y est.
+fn pair(j: &Json, key: &str, a: &str, b: &str) -> Result<Option<(f64, f64)>, String> {
+    match j.get(key) {
+        Some(o) => Ok(Some((num(o, a)?, num(o, b)?))),
+        None => Ok(None),
+    }
+}
+
+fn read_projectile(p: &Json) -> Result<ProjectileSpec, String> {
+    let explosion = match p.get("explosion") {
+        Some(e) => Some(read_explosion(e)?),
+        None => None,
+    };
+    Ok(ProjectileSpec {
+        speed: num(p, "speed")?,
+        gravity: num(p, "gravity")?,
+        life: num(p, "life")?,
+        damage: num(p, "damage")?,
+        damage_type: p.get("damageType").and_then(Json::str).ok_or("catalogue : projectile sans nature de dégâts")?.to_string(),
+        penetrating: p.get("penetrating").is_some_and(Json::is_true),
+        impulse: num(p, "impulse")?,
+        ignite: opt(p, "ignite").unwrap_or(0.0),
+        explosion,
+        puddle: read_puddle(p)?,
+        puddle_chance: p.get("puddle").and_then(|q| opt(q, "chance")).unwrap_or(0.0),
+        emp: match p.get("emp") {
+            Some(e) => Some(EmpPulse { radius: num(e, "radius")?, duration: num(e, "duration")? }),
             None => None,
         },
-        puddle: read_puddle(p)?,
+        smoke: match p.get("smoke") {
+            Some(e) => Some(SmokeSpec { radius: num(e, "radius")?, duration: num(e, "duration")? }),
+            None => None,
+        },
+        guidance: match p.get("guidance") {
+            Some(g) => Some(Guidance {
+                mode: g.get("mode").and_then(Json::str).unwrap_or("").to_string(),
+                air_only: g.get("airOnly").is_some_and(Json::is_true),
+                turn_rate: num(g, "turnRate")?,
+                launch: opt(g, "launch").unwrap_or(0.0),
+                max_accel: opt(g, "maxAccel").unwrap_or(0.0),
+                bleed: opt(g, "bleed").unwrap_or(0.0),
+                recover: opt(g, "recover").unwrap_or(0.0),
+            }),
+            None => None,
+        },
+        mine: match p.get("mine") {
+            Some(m) => Some(MineSpec {
+                trigger: m.get("trigger").and_then(Json::str).unwrap_or("").to_string(),
+                arm_delay: num(m, "armDelay")?,
+                radius: num(m, "radius")?,
+                sense: opt(m, "sense").unwrap_or(0.0),
+                action: match m.get("action") {
+                    Some(a) => Some(match a.get("kind").and_then(Json::str) {
+                        Some("bounce") => MineAction::Bounce(num(a, "height")?),
+                        Some("launch") => MineAction::Launch(a.get("weapon").and_then(Json::str).ok_or("catalogue : mine qui lance sans arme")?.to_string()),
+                        Some("stick") => MineAction::Stick(num(a, "fuse")?),
+                        _ => return Err("catalogue : action de mine inconnue".into()),
+                    }),
+                    None => None,
+                },
+            }),
+            None => None,
+        },
+        hull: pair(p, "hull", "radius", "hp")?,
+        pellets: pair(p, "pellets", "count", "spread")?,
+        fan: opt(p, "fan"),
+        decoy: p.get("decoy").is_some_and(Json::is_true),
+        repair: match p.get("repair") {
+            Some(r) => Some(RepairShot {
+                amount: num(r, "amount")?,
+                radius: num(r, "radius")?,
+                drain: opt(r, "drain").unwrap_or(0.0),
+                steal: opt(r, "steal").unwrap_or(0.0),
+                swarm: opt(r, "swarm"),
+            }),
+            None => None,
+        },
+        barrier: match p.get("barrier") {
+            Some(b) => Some(BarrierSpec { width: num(b, "width")?, height: num(b, "height")?, hp: num(b, "hp")?, life: num(b, "life")?, reach: num(b, "reach")? }),
+            None => None,
+        },
+        proximity: opt(p, "proximity"),
+    })
+}
+
+fn read_weapon(j: &Json) -> Result<WeaponDef, String> {
+    let projectile = read_projectile(j.get("projectile").ok_or("catalogue : arme sans projectile")?)?;
+    let handling = j.get("handling").ok_or("catalogue : arme sans maniement")?;
+    Ok(WeaponDef {
+        cooldown: num(j, "cooldown")?,
+        automatic: j.get("automatic").is_some_and(Json::is_true),
+        spread: num(j, "spread")?,
+        recoil: num(j, "recoil")?,
+        range: num(j, "range")?,
+        engage: opt(j, "engage"),
+        min_range: opt(j, "minRange"),
+        power: opt(j, "power").unwrap_or(0.0),
+        hip: num(handling, "hip")?,
+        sway: (num(handling, "move")?, num(handling, "turn")?),
+        scope_only: j.get("scopeOnly").is_some_and(Json::is_true),
+        heat: pair(j, "heat", "perShot", "cooling")?,
+        // (un chargeur qui ne se recharge jamais, l'ogive : `"reload": null`, ∞ dans le jeu)
+        ammo: match j.get("ammo") {
+            Some(a) => Some((num(a, "capacity")?, opt(a, "reload").unwrap_or(f64::INFINITY))),
+            None => None,
+        },
+        dropped: j.get("dropped").is_some_and(Json::is_true),
+        lock: pair(j, "lock", "time", "cone")?,
+        auto_support: j.get("autoSupport").is_some_and(Json::is_true),
+        explosion: projectile.explosion,
+        puddle: projectile.puddle,
+        projectile,
     })
 }
 
@@ -423,7 +978,166 @@ fn read_prop(j: &Json) -> Result<PropDef, String> {
     })
 }
 
-fn read_design(j: &Json) -> Result<Design, String> {
+fn read_melee(j: &Json) -> Result<MeleeSpec, String> {
+    let hub = j.get("hub").map(Json::arr).unwrap_or(&[]);
+    if hub.len() != 3 {
+        return Err("catalogue : moyeu d'arme de contact sans ses trois coordonnées".into());
+    }
+    let h = j.get("hit").ok_or("catalogue : arme de contact sans coup")?;
+    let p = h.get("push").ok_or("catalogue : coup sans sens")?;
+    let jaw = match j.get("jaw") {
+        Some(w) => {
+            let mouth = w.get("mouth").map(Json::arr).unwrap_or(&[]);
+            if mouth.len() != 2 {
+                return Err("catalogue : gueule de mâchoire sans ses deux bornes".into());
+            }
+            Some(JawSpec {
+                length: num(w, "length")?,
+                half: num(w, "half")?,
+                open: num(w, "open")?,
+                shut: num(w, "shut")?,
+                close: num(w, "close")?,
+                reopen: num(w, "reopen")?,
+                cooldown: num(w, "cooldown")?,
+                mouth: (mouth[0].num().unwrap_or(0.0), mouth[1].num().unwrap_or(0.0)),
+                strength: num(w, "strength")?,
+                slip: num(w, "slip")?,
+                tear: num(w, "tear")?,
+                crush: num(w, "crush")?,
+                bite: num(w, "bite")?,
+                power: num(w, "power")?,
+                hold: num(w, "hold")?,
+            })
+        }
+        None => None,
+    };
+    Ok(MeleeSpec {
+        look: j.get("look").and_then(Json::str).unwrap_or("").to_string(),
+        motion: j.get("motion").and_then(Json::str).unwrap_or("").to_string(),
+        axis: j.get("axis").and_then(Json::str).unwrap_or("up").to_string(),
+        hub: [hub[0].num().unwrap_or(0.0), hub[1].num().unwrap_or(0.0), hub[2].num().unwrap_or(0.0)],
+        blade: match j.get("blade") {
+            Some(b) => Some(SweptRing {
+                inner: num(b, "inner")?,
+                outer: num(b, "outer")?,
+                half: num(b, "half")?,
+                arms: pair(b, "arms", "count", "width")?,
+                web: pair(b, "web", "at", "half")?,
+            }),
+            None => None,
+        },
+        bite: match j.get("bite") {
+            Some(b) => Some(BiteSpec {
+                power: num(b, "power")?,
+                axial: b.get("feed").and_then(Json::str) == Some("axial"),
+                grab: num(b, "grab")?,
+                gear: num(b, "gear")?,
+                depth: num(b, "depth")?,
+            }),
+            None => None,
+        },
+        swing: match j.get("swing") {
+            Some(w) => Some(SwingSpec {
+                reach: num(w, "reach")?,
+                radius: num(w, "radius")?,
+                rest: num(w, "rest")?,
+                end: num(w, "end")?,
+                strike: num(w, "strike")?,
+                recover: num(w, "recover")?,
+                energy: num(w, "energy")?,
+                cost: num(w, "cost")?,
+            }),
+            None => None,
+        },
+        thrust: match j.get("thrust") {
+            Some(t) => Some(ThrustSpec {
+                retracted: num(t, "retracted")?,
+                reach: num(t, "reach")?,
+                radius: num(t, "radius")?,
+                strike: num(t, "strike")?,
+                recover: num(t, "recover")?,
+                energy: num(t, "energy")?,
+                cost: num(t, "cost")?,
+            }),
+            None => None,
+        },
+        plate: match j.get("plate") {
+            Some(t) => Some(PlateSpec {
+                length: num(t, "length")?,
+                half: num(t, "half")?,
+                rest: num(t, "rest")?,
+                end: num(t, "end")?,
+                strike: num(t, "strike")?,
+                lower: num(t, "lower")?,
+                reload: num(t, "reload")?,
+                energy: num(t, "energy")?,
+                cost: num(t, "cost")?,
+            }),
+            None => None,
+        },
+        field: match j.get("field") {
+            Some(f) => Some(FieldSpec {
+                margin: num(f, "margin")?,
+                radius: num(f, "radius")?,
+                contacts: num(f, "contacts")?,
+                drain: num(f, "drain")?,
+                repel: num(f, "repel")?,
+            }),
+            None => None,
+        },
+        flail: match j.get("flail") {
+            Some(f) => Some(FlailSpec {
+                crank: num(f, "crank")?,
+                inertia: num(f, "inertia")?,
+                speed: num(f, "speed")?,
+                spin_up: num(f, "spinUp")?,
+                chain: num(f, "chain")?,
+                mass: num(f, "mass")?,
+                radius: num(f, "radius")?,
+                restitution: num(f, "restitution")?,
+                friction: num(f, "friction")?,
+                drag: num(f, "drag")?,
+            }),
+            None => None,
+        },
+        jaw,
+        spin: match j.get("spin") {
+            Some(s) => Some(SpinSpec {
+                inertia: num(s, "inertia")?,
+                speed: num(s, "speed")?,
+                spin_up: num(s, "spinUp")?,
+                spin_down: num(s, "spinDown")?,
+                gyro: num(s, "gyro")?,
+                unbalance: num(s, "unbalance")?,
+                mass: num(s, "mass")?,
+                direction: opt(s, "direction").unwrap_or(1.0),
+                reaction: opt(s, "reaction").unwrap_or(1.0),
+            }),
+            None => None,
+        },
+        drive: pair(j, "drive", "idle", "stop")?,
+        hit: MeleeHit {
+            damage_type: h.get("damageType").and_then(Json::str).ok_or("catalogue : coup sans nature de dégâts")?.to_string(),
+            damage: num(h, "damage")?,
+            bite: num(h, "bite")?,
+            fling: num(h, "fling")?,
+            push: Push { tangent: num(p, "tangent")?, radial: num(p, "radial")?, axial: num(p, "axial")?, lift: num(p, "lift")? },
+            recoil: num(h, "recoil")?,
+            spread: num(h, "spread")?,
+            wheels: opt(h, "wheels"),
+            wear: num(h, "wear")?,
+            gap: num(h, "gap")?,
+            min_speed: num(h, "minSpeed")?,
+            ground: opt(h, "ground"),
+            ignite: opt(h, "ignite"),
+            stun: pair(h, "stun", "radius", "duration")?,
+        },
+        quench: j.get("quench").is_some_and(Json::is_true),
+        engage: num(j, "engage")?,
+    })
+}
+
+pub fn read_design(j: &Json) -> Result<Design, String> {
     let mut blocks = Vec::new();
     for b in j.get("blocks").map(Json::arr).unwrap_or(&[]) {
         let facing = b.get("facing");
@@ -488,7 +1202,11 @@ fn read(text: &str) -> Result<Catalog, String> {
     for (id, w) in root.get("weapons").map(Json::fields).unwrap_or(&[]) {
         weapons.insert(id.clone(), read_weapon(w)?);
     }
-    Ok(Catalog { constants, blocks, wheels, robots, props, weapons })
+    let mut melee = HashMap::new();
+    for (id, m) in root.get("melee").map(Json::fields).unwrap_or(&[]) {
+        melee.insert(id.clone(), read_melee(m)?);
+    }
+    Ok(Catalog { constants, blocks, wheels, robots, props, weapons, melee })
 }
 
 #[cfg(test)]
@@ -524,6 +1242,16 @@ mod tests {
         let napalm = c.weapons["fireMine"].explosion.expect("explosion de la mine incendiaire");
         assert_eq!(napalm.puddle, Some(Puddle { radius: 2.4, life: 7.0 }));
         assert_eq!(c.weapons["flamer"].puddle, Some(Puddle { radius: 0.9, life: 4.0 }));
+        assert_eq!(c.weapons["emp"].projectile.emp, Some(EmpPulse { radius: 4.5, duration: 4.0 }));
+        assert_eq!(c.weapons["smokeMine"].projectile.smoke, Some(SmokeSpec { radius: 7.0, duration: 14.0 }));
+        let action = |w: &str| c.weapons[w].projectile.mine.as_ref().and_then(|m| m.action.clone());
+        assert_eq!(action("bounceMine"), Some(MineAction::Bounce(1.6)));
+        assert_eq!(action("stickyMine"), Some(MineAction::Stick(2.0)));
+        assert_eq!(action("aaMine"), Some(MineAction::Launch("flak".into())));
+        let beam = c.weapons["repair"].projectile.repair.expect("rayon réparateur");
+        assert_eq!((beam.amount, beam.radius, beam.drain, beam.steal, beam.swarm), (7.0, 1.2, 6.0, 0.8, None));
+        assert_eq!(c.weapons["nanites"].projectile.repair.and_then(|r| r.swarm), Some(8.0));
+        assert_eq!(c.weapons["barrier"].projectile.barrier.map(|b| (b.width, b.hp, b.reach)), Some((4.5, 700.0, 5.0)));
         // (aucun accessoire ne laisse de flaque : c'est l'affaire des armes)
         assert!(c.props.values().all(|p| p.explosion.is_none_or(|e| e.puddle.is_none())));
     }

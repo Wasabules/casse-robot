@@ -9,7 +9,8 @@
 //! ordre que dans le TypeScript ; l'arène (ses emplacements) est donnée par l'appelant.
 
 use super::catalog::{PropDef, PropShape, catalog};
-use super::debris::spawn_fragment;
+use super::debris::{DebrisLook, spawn_fragment};
+use super::events::code;
 use super::explosion::explode;
 use super::fire::ignite_prop;
 use super::physics::{BodyDesc, CONTACT_FORCE_EVENTS, ColliderDesc, ShapeDesc, groups};
@@ -43,6 +44,8 @@ pub enum PropState {
 
 /// Un accessoire (`Prop`, src/shared/sim/entities.ts).
 pub struct Prop {
+    /// Son numéro d'entité (`id`, `sim.nextId()`).
+    pub id: u64,
     pub kind: String,
     pub rb: RigidBodyHandle,
     pub collider: ColliderHandle,
@@ -60,6 +63,8 @@ pub struct Prop {
     pub yielding: f64,
     /// Ce sur quoi il repose (`PropSpot.rests` : des emplacements).
     pub rests: Vec<usize>,
+    /// Sa place dans l'arène (`spot.pos`) : un accessoire ancré ne bouge pas, une lame l'écarte d'après elle.
+    pub spot: V3,
 }
 
 impl Prop {
@@ -147,8 +152,10 @@ pub fn add_prop(sim: &mut Sim, kind: &str, pos: V3, rot: Option<Q>, half: Option
         ..ColliderDesc::new(shape)
     };
     let collider = sim.phys.create_collider(&desc, rb).ok_or("collider d'accessoire refusé")?;
+    let id = sim.next_id();
     let i = sim.props.len();
     sim.props.push(Some(Prop {
+        id,
         kind: kind.to_string(),
         rb,
         collider,
@@ -161,8 +168,12 @@ pub fn add_prop(sim: &mut Sim, kind: &str, pos: V3, rot: Option<Q>, half: Option
         struck: None,
         yielding: 0.0,
         rests: Vec::new(),
+        spot: pos,
     }));
     sim.owners.insert(collider, Owner::Prop(i));
+    sim.emit(code::PROP_ADDED, |_, w| {
+        w.id(Some(id)).text(kind).num(i as f64).flag(fixed);
+    });
     Ok(i)
 }
 
@@ -175,14 +186,17 @@ pub fn prop_mut(sim: &mut Sim, i: usize) -> &mut Prop {
 }
 
 /// Retire un accessoire ; ce qui reposait sur lui tombe (`removeProp`).
-fn remove_prop(sim: &mut Sim, i: usize) {
+pub fn remove_prop(sim: &mut Sim, i: usize, collapse: bool) {
     // (retiré en brûlant : son feu disparaît avec lui, sans extinction)
     sim.prop_fires.retain(|&p| p != i);
     let p = sim.props[i].take().expect("accessoire retiré");
     sim.owners.remove(&p.collider);
     sim.phys.remove_body(p.rb);
     sim.stats.props_removed += 1;
-    drop_unsupported(sim, i);
+    sim.emit_gone(code::PROP_REMOVED, p.id);
+    if collapse {
+        drop_unsupported(sim, i);
+    }
 }
 
 /// Un pas de vie des accessoires qui ont cédé (`updateProps`) : la mèche d'un baril brûle ; une
@@ -230,7 +244,7 @@ fn robot_inside(sim: &Sim, i: usize) -> bool {
     let p = prop(sim, i);
     let (pos, rot) = (sim.phys.translation(p.rb), sim.phys.rotation(p.rb));
     let owners = &sim.owners;
-    let robot = |c: ColliderHandle| matches!(owners.get(&c), Some(Owner::Part(_) | Owner::Wheel(..) | Owner::Head(..)));
+    let robot = |c: ColliderHandle| matches!(owners.get(&c), Some(Owner::Part(_) | Owner::Wheel(..) | Owner::Head(..) | Owner::Blade(..)));
     sim.phys.intersects_shape(pos, rot, &p.shape(), &robot)
 }
 
@@ -243,7 +257,8 @@ fn detonate(sim: &mut Sim, i: usize) {
     let rot = sim.phys.rotation(rb);
     // Brisé par un robot qui passe au travers : ses éclats partent devant lui
     let vel = p.struck.unwrap_or_else(|| sim.phys.linvel(rb));
-    remove_prop(sim, i);
+    let kind = p.kind.clone();
+    remove_prop(sim, i, true);
     if def.shatters {
         let (a, b) = largest_two(h);
         let count = jsmath::round(clamp((4.0 * a * b) / SHARD_AREA, SHARDS, MAX_SHARDS)) as usize;
@@ -256,11 +271,12 @@ fn detonate(sim: &mut Sim, i: usize) {
             let offset = qrot(rot, v3(lx, ly, lz));
             // Une dalle ou un tronc part en gros morceaux ; une caisse, en petits éclats
             let size = if matches!(def.shape, PropShape::Box(_)) { None } else { Some(sim.rng.rand(0.3, 0.6)) };
-            spawn_fragment(sim, add(at, offset), rot, jsmath::min(density, 2000.0), size, vel, scale(norm(offset), 1.5));
+            let look = DebrisLook::Prop { kind: kind.clone(), size };
+            spawn_fragment(sim, look, add(at, offset), rot, jsmath::min(density, 2000.0), vel, scale(norm(offset), 1.5));
         }
     }
     if let Some(ex) = def.explosion {
-        explode(sim, at, &ex, UP, at, None);
+        explode(sim, at, &ex, UP, at, None, Some("blast"));
     }
 }
 
@@ -304,9 +320,10 @@ pub fn release_prop(sim: &mut Sim, i: usize) {
         return;
     }
     p.fixed = false;
-    let rb = p.rb;
+    let (rb, id) = (p.rb, p.id);
     sim.phys.set_dynamic(rb, true);
     sim.stats.props_released += 1;
+    sim.emit_gone(code::PROP_RELEASED, id);
 }
 
 /// Un arbre qui cède bascule du côté de `dir` (`toppleProp`) : libéré, il garde une part de ses

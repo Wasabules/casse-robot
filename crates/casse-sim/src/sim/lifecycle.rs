@@ -7,16 +7,24 @@
 //! TypeScript : Rapier range ses corps et ses colliders (et réutilise leurs places libérées) dans
 //! l'ordre des appels, et cet ordre compte pour le bit près.
 
-use super::catalog::{axis, catalog};
+use super::arsenal::new_arm_state;
+use super::catalog::{Mobility, axis, catalog};
 use super::colliders::rebuild_colliders;
 use super::physics::{BodyDesc, ColliderDesc, groups};
 use super::brain::AiState;
+use super::melee::MeleeArm;
+use super::propulsion::add_thrusters;
 use super::robot::{
-    Block, Bot, COCKPIT_BATTERY, Cell, Input, NEIGHBORS, Part, Turret, WHEEL_ANGULAR_DAMPING, Wheel, design_radius, link_key, part_damping, unsupported, wheel_local_pos,
+    Block, Bot, COCKPIT_BATTERY, Cell, Input, NEIGHBORS, Part, Support, Surface, Turret, WHEEL_ANGULAR_DAMPING, Wheel, design_radius, half_width, link_key, part_damping,
+    unported_weapon, unsupported,
+    wheel_local_pos,
 };
 use super::vec::{Q, V3, add, axis_angle, cross, qrot, quat_from_basis, scale, v3};
 use super::wheels::{WheelPose, place_wheel, wheel_collider};
 use super::world::{Owner, Sim};
+use super::catalog::Robot;
+use super::events::code;
+use super::robot::NO_PROFILE;
 use std::collections::{HashMap, HashSet};
 
 /// Part de ses points de structure que garde l'épave d'une roue arrachée, et sa durée sur le terrain (s).
@@ -60,10 +68,13 @@ pub fn energy_capacity(sim: &Sim, bot: usize) -> f64 {
 pub fn make_part(sim: &mut Sim, bot: usize, pos: V3, rot: Q) -> usize {
     let (linear, angular) = part_damping(sim.bots[bot].mobility);
     let rb = sim.phys.create_body(&BodyDesc { linear_damping: linear, angular_damping: angular, ..BodyDesc::dynamic(pos, rot) });
+    let id = sim.next_id();
     let p = sim.parts.len();
-    sim.parts.push(Some(Part { bot, rb, blocks: Vec::new(), colliders: Vec::new(), dirty: false, links: None }));
+    sim.parts.push(Some(Part { id, bot, rb, blocks: Vec::new(), colliders: Vec::new(), dirty: false, links: None, heads: Vec::new(), blades: Vec::new() }));
+    sim.part_bots.push(bot);
     sim.bots[bot].parts.push(p);
     sim.order.push(p);
+    sim.emit_part(code::PART_ADDED, id, bot);
     p
 }
 
@@ -82,6 +93,7 @@ pub fn remove_part(sim: &mut Sim, p: usize) {
     sim.phys.remove_body(part.rb);
     sim.bots[bot].parts.retain(|&x| x != p);
     sim.order.retain(|&x| x != p);
+    sim.emit_part(code::PART_REMOVED, part.id, bot);
 }
 
 /// Fixe un bloc sur un morceau (`attachBlock`) ; ses colliders seront refaits ensuite.
@@ -91,6 +103,7 @@ pub fn attach_block(sim: &mut Sim, bot: usize, block: usize, p: usize) {
     part.dirty = true;
     part.links = None;
     part.blocks.push(block);
+    sim.emit_attached(bot, block);
 }
 
 /// Retire un bloc de son morceau (`detachBlock`) ; le bloc garde le numéro du morceau.
@@ -182,14 +195,22 @@ pub fn discard_wheel(sim: &mut Sim, bot: usize, w: usize, broken: bool) {
     let still = v3(0.0, 0.0, 0.0);
     wheel.rb = WheelPose { pos: at, rot, vel: still, ang: still };
     sim.stats.wheels_removed += 1;
+    let id = sim.bots[bot].wheels[w].id;
+    sim.emit(code::WHEEL_REMOVED, |s, wr| {
+        wr.id(Some(id)).id(Some(s.bots[bot].id));
+    });
     if broken {
         sim.stats.collisions += 1;
+        sim.emit_point(code::COLLISION, at, Some(WHEEL_BREAK_STRENGTH));
     }
 }
 
+/// Force de l'éclat d'une épave qui cède (`WHEEL_BREAK_STRENGTH` : pour son effet et son bruit de choc).
+const WHEEL_BREAK_STRENGTH: f64 = 40.0;
+
 /// Les épaves de roues qui ont fait leur temps disparaissent (`expireWheelWrecks`).
 pub fn expire_wheel_wrecks(sim: &mut Sim) {
-    for b in 0..sim.bots.len() {
+    for b in sim.roster.clone() {
         for w in 0..sim.bots[b].wheels.len() {
             let wheel = &sim.bots[b].wheels[w];
             if wheel.body.is_some() && sim.time - wheel.released_at > WHEEL_WRECK_LIFE {
@@ -299,11 +320,18 @@ pub fn refresh_wheels(sim: &mut Sim, bot: usize) {
 /// Construit un robot d'un seul morceau à la position `pos`, tourné de `yaw` autour de la verticale
 /// (`spawnBot`), dans l'équipe `team`, aux commandes d'un pilote (`takeControl`) ou de l'IA ; son
 /// numéro. Le plan est supposé valide (`validateDesign` : les robots du catalogue le sont). Chaque
-/// tourelle tire au hasard sa cadence de départ (`registerOrgans`) : la simulation portée ne s'en
-/// sert pas, mais tire autant, pour garder la même suite de tirages.
+/// tourelle tire au hasard sa cadence de départ (`registerOrgans`), pour que les tourelles ne tirent
+/// pas toutes ensemble. Au combat, un robot de l'IA dont une arme n'est pas encore maniée est refusé.
 pub fn spawn_bot(sim: &mut Sim, id: &str, pos: V3, yaw: f64, team: usize, piloted: bool) -> Result<usize, String> {
+    let robot = catalog().robots.get(id).ok_or_else(|| format!("robot inconnu : {id}"))?;
+    spawn_robot(sim, robot, NO_PROFILE, id, pos, yaw, team, piloted)
+}
+
+/// `spawnBot` d'un robot (`robot` : son plan et sa conduite ; `profile`, le rang de son profil dans
+/// `Sim.profiles` ; `id`, son nom pour les messages).
+#[allow(clippy::too_many_arguments)]
+pub fn spawn_robot(sim: &mut Sim, robot: &Robot, profile: usize, id: &str, pos: V3, yaw: f64, team: usize, piloted: bool) -> Result<usize, String> {
     let c = catalog();
-    let robot = c.robots.get(id).ok_or_else(|| format!("robot inconnu : {id}"))?;
     for b in &robot.design.blocks {
         if !c.blocks.contains_key(&b.kind) {
             return Err(format!("bloc inconnu : {}", b.kind));
@@ -317,10 +345,29 @@ pub fn spawn_bot(sim: &mut Sim, id: &str, pos: V3, yaw: f64, team: usize, pilote
     if let Some(what) = unsupported(c, robot) {
         return Err(format!("{id} : pas encore porté ({what})"));
     }
+    // (au combat, l'IA se sert de ses armes : celles qu'elle ne sait pas encore manier ne sont pas portées)
+    if sim.combat
+        && !piloted
+        && let Some(what) = unported_weapon(c, robot)
+    {
+        return Err(format!("{id} : pas encore porté ({what})"));
+    }
     let bs = c.constants.block_size;
 
+    // (le numéro du robot : `sim.nextId()` ; l'altitude que vise en vol l'état de son IA,
+    // `createAiState`, tirée au hasard avant le reste du robot)
+    let bot_id = sim.next_id();
+    let alt = match robot.mobility {
+        Mobility::Hover => sim.rng.rand(4.5, 6.5),
+        Mobility::Plane => sim.rng.rand(10.0, 14.0),
+        Mobility::Ground => 0.0,
+    };
     let bot = sim.bots.len();
     sim.bots.push(Bot {
+        id: bot_id,
+        profile,
+        input_slot: None,
+        cut_order: Vec::new(),
         speed: robot.speed,
         turn: robot.turn,
         mobility: robot.mobility,
@@ -330,7 +377,17 @@ pub fn spawn_bot(sim: &mut Sim, id: &str, pos: V3, yaw: f64, team: usize, pilote
         cockpit: 0,
         parts: Vec::new(),
         wheels: Vec::new(),
+        thrusters: Vec::new(),
+        supports: Vec::new(),
+        surfaces: Vec::new(),
+        melee: Vec::new(),
         turrets: Vec::new(),
+        next_shot: Vec::new(),
+        top: robot.design.blocks.iter().fold(0.0, |m, b| crate::jsmath::max(m, b.y)) * bs,
+        last_attacker: None,
+        vulnerability: None,
+        flare_launchers: Vec::new(),
+        flares: Default::default(),
         shields: Vec::new(),
         cuts: HashSet::new(),
         total: robot.design.blocks.len(),
@@ -341,12 +398,22 @@ pub fn spawn_bot(sim: &mut Sim, id: &str, pos: V3, yaw: f64, team: usize, pilote
         righting: 0.0,
         last_hit: f64::NEG_INFINITY,
         rebuild_at: 0.0,
+        lost_order: Vec::new(),
+        stunned_until: 0.0,
+        thrown_by: None,
+        trigger_held: false,
         team,
         radius: design_radius(&robot.design),
+        half_width: half_width(&robot.design, design_radius(&robot.design)),
+        nav: Default::default(),
         charges: robot.charges,
         last_pos: pos,
         piloted,
-        ai: AiState::new(pos),
+        ai: AiState::new(pos, alt),
+    });
+
+    sim.emit(code::BOT_ADDED, |s, w| {
+        w.id(Some(bot_id)).num(s.time).num(profile as f64);
     });
 
     // Le morceau (`makePart`)
@@ -360,9 +427,11 @@ pub fn spawn_bot(sim: &mut Sim, id: &str, pos: V3, yaw: f64, team: usize, pilote
         let up = v3(up[0], up[1], up[2]);
         let forward = v3(forward[0], forward[1], forward[2]);
         let def = &c.blocks[&spec.kind];
+        let id = sim.next_id();
         let b = &mut sim.bots[bot];
         let index = b.blocks.len();
         b.blocks.push(Block {
+            id,
             kind: spec.kind.clone(),
             x: spec.x,
             y: spec.y,
@@ -375,6 +444,7 @@ pub fn spawn_bot(sim: &mut Sim, id: &str, pos: V3, yaw: f64, team: usize, pilote
             alive: true,
             part: main,
             burn: 0.0,
+            stunned_until: 0.0,
         });
         let cell = b.blocks[index].cell();
         b.cells.insert(cell, index);
@@ -383,17 +453,53 @@ pub fn spawn_bot(sim: &mut Sim, id: &str, pos: V3, yaw: f64, team: usize, pilote
             cockpit = Some(index);
         }
         attach_block(sim, bot, index, main);
+        // Ses organes (`registerOrgans`), dans l'ordre : arme de contact, surface portante, appui,
+        // bouclier, leurres, tourelle
+        if let Some(m) = &def.melee {
+            let weapon = c.melee.get_key_value(m).map(|(k, _)| k.as_str()).ok_or("arme de contact inconnue")?;
+            sim.bots[bot].melee.push(MeleeArm::new(index, weapon));
+        }
+        if def.aero.is_some() {
+            sim.bots[bot].surfaces.push(Surface { block: index, deflection: 0.0 });
+        }
+        if def.support.is_some() {
+            sim.bots[bot].supports.push(Support { block: index, contact: f64::INFINITY, force: 0.0, phase: 0.0 });
+        }
         if def.shield.is_some() {
             sim.bots[bot].shields.push(index);
         }
-        if def.turret.is_some() {
-            // (`arm.cooldown = rand(0, cooldown)`)
-            sim.rng.random();
-            sim.bots[bot].turrets.push(Turret { block: index, yaw: 0.0, pitch: 0.0 });
+        if let Some((charges, _)) = def.flares {
+            // (il apparaît chargé)
+            sim.bots[bot].flare_launchers.push(index);
+            sim.bots[bot].flares.charges += charges;
+        }
+        if let Some(spec) = &def.turret {
+            // Pour que les tourelles ne tirent pas toutes ensemble (`arm.cooldown = rand(0, cooldown)`)
+            let weapon = &c.weapons[&spec.weapon];
+            let mut arm = new_arm_state(weapon);
+            arm.cooldown = sim.rng.rand(0.0, weapon.cooldown);
+            sim.bots[bot].turrets.push(Turret {
+                block: index,
+                weapon: spec.weapon.as_str(),
+                yaw: 0.0,
+                pitch: 0.0,
+                arm,
+                target: None,
+                retarget: 0.0,
+                aim: None,
+                wobble: v3(0.0, 0.0, 0.0),
+                fired_at: f64::NEG_INFINITY,
+                lock_on: None,
+                lock_time: 0.0,
+                lock_hidden: 0.0,
+                repair_aim: None,
+                patient_at: f64::NEG_INFINITY,
+            });
         }
     }
     sim.bots[bot].cockpit = cockpit.ok_or("plan sans cockpit")?;
     rebuild_colliders(sim, main);
+    add_thrusters(sim, bot, &robot.design);
     sim.bots[bot].energy = energy_capacity(sim, bot);
 
     // Les roues (`createWheel`, `attachWheel`)
@@ -401,7 +507,9 @@ pub fn spawn_bot(sim: &mut Sim, id: &str, pos: V3, yaw: f64, team: usize, pilote
         let def = c.wheels[&m.kind].clone();
         let local = wheel_local_pos(m, &def, bs);
         let hp = def.hp;
+        let wheel_id = sim.next_id();
         sim.bots[bot].wheels.push(Wheel {
+            id: wheel_id,
             steerable: def.steering.is_some(),
             side: if local.x.abs() < 0.1 { 0.0 } else { crate::jsmath::sign(local.x) },
             local,
@@ -426,8 +534,12 @@ pub fn spawn_bot(sim: &mut Sim, id: &str, pos: V3, yaw: f64, team: usize, pilote
             load: 0.0,
             rb: WheelPose::default(),
             hub: Some(WheelPose::default()),
+            stunned_until: 0.0,
         });
         let w = sim.bots[bot].wheels.len() - 1;
+        sim.emit(code::WHEEL_ADDED, |_, wr| {
+            wr.id(Some(wheel_id)).id(Some(bot_id));
+        });
         attach_wheel(sim, bot, w, main);
     }
     Ok(bot)

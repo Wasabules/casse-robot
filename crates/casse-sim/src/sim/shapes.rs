@@ -24,11 +24,13 @@ struct Face {
     points: Vec<V3>,
 }
 
-/// Un morceau convexe d'une forme : ses sommets et son volume (cube de demi-côté 1 : 8).
+/// Un morceau convexe d'une forme : ses sommets, son volume (cube de demi-côté 1 : 8), et ses faces
+/// (normale sortante, aire : `shapeFaces`, combat/melee.ts).
 #[derive(Clone)]
 pub struct Piece {
     pub points: Vec<V3>,
     pub volume: f64,
+    pub faces: Vec<(V3, f64)>,
 }
 
 const ROUND_FACETS: usize = 6;
@@ -191,7 +193,7 @@ fn piece(planes: &[HalfSpace]) -> Piece {
         faces = clip(&faces, *h);
     }
     let all: Vec<V3> = faces.iter().flat_map(|f| f.points.iter().copied()).collect();
-    Piece { points: unique(&all), volume: volume(&faces) }
+    Piece { points: unique(&all), volume: volume(&faces), faces: faces.iter().map(|f| (f.normal, area(&f.points))).collect() }
 }
 
 /// Les morceaux convexes d'une forme, dans un cube de demi-côté 1 (`shapePieces`, calculés une fois).
@@ -206,6 +208,12 @@ pub fn shape_pieces(shape: &str) -> Option<&'static [Piece]> {
         map
     });
     cache.get(shape).map(Vec::as_slice)
+}
+
+/// Les faces de tous les morceaux d'une forme (`shapeFaces`, combat/melee.ts : une lame qui frappe un
+/// bloc de forme cherche la face qui lui fait face).
+pub fn shape_faces(shape: &str) -> Vec<(V3, f64)> {
+    shape_pieces(shape).map_or_else(Vec::new, |pieces| pieces.iter().flat_map(|p| p.faces.iter().copied()).collect())
 }
 
 /// Part du cube qu'occupe une forme (`shapeFraction`) : deux morceaux qui se recouvrent comptent

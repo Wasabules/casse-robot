@@ -3,9 +3,11 @@ import { ARENAS } from "../src/shared/arena/layout";
 import { approachPathTs, findPathTs, keepLargestRegionTs, nearestOpenCellTs, navGrid, type NavGrid } from "../src/shared/arena/navgrid";
 import { rayTerrain, terrainHeight, type Terrain } from "../src/shared/arena/terrain";
 import { initNative, MATH_OPS, nativeMath, NativeGrid, nativeKeepLargestRegion, NativeTerrain, type MathOp } from "../src/shared/native/native";
-import { NATIVE_SOURCE } from "../src/shared/native/wasm";
+import { NATIVE_SIM_DIGEST, NATIVE_SOURCE } from "../src/shared/native/wasm";
 import { dcos, dlog, dpow, dsin } from "../src/shared/math/det";
 import { sourceHash } from "../tools/native/source.mjs";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 /*
  * La simulation compilée (crates/casse-sim, temps 4) rend exactement ce que rend le TypeScript, au
@@ -30,6 +32,13 @@ beforeAll(async () => {
 describe("Simulation compilée", () => {
   it("le module embarqué est construit sur les sources du dépôt (npm run native)", () => {
     expect(NATIVE_SOURCE).toBe(sourceHash(process.cwd()));
+  });
+
+  it("la simulation entière (src/shared/native/casse-sim.wasm) est celle que ces sources ont construite avec lui", () => {
+    const file = readFileSync("src/shared/native/casse-sim.wasm");
+    expect(createHash("sha256").update(file).digest("hex")).toBe(NATIVE_SIM_DIGEST);
+    // (la session de la simulation portée s'en sert : elle a ses fonctions)
+    expect(WebAssembly.Module.exports(new WebAssembly.Module(file)).some((e) => e.name === "sim_take_events")).toBe(true);
   });
 
   it("relief : la hauteur et les rayons, au bit près", () => {

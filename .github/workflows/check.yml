@@ -23,8 +23,10 @@ jobs:
       - run: npm run check
       - run: npm run map:check
 
-  # La simulation compilée (crates/casse-sim, Rust) : ses tests, puis le module reconstruit ici,
-  # vérifié contre le TypeScript (tests/native.test.ts : mêmes entrées, mêmes sorties au bit près)
+  # La simulation compilée (crates/casse-sim, Rust) : ses tests, puis les deux modules reconstruits ici
+  # (le module embarqué, et la simulation entière, src/shared/native/casse-sim.wasm), vérifiés contre le
+  # TypeScript (tests/native.test.ts : mêmes entrées, mêmes sorties au bit près ; tests/nativeSession.test.ts :
+  # les mêmes images que la session et la salle du TypeScript)
   native:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -38,11 +40,10 @@ jobs:
       - run: rustup toolchain install 1.99.1 --profile minimal --target wasm32-unknown-unknown
       - run: npm ci
       - run: npm run native:test
+      # (la simulation entière est aussi la sonde, dans target/probe/ : Rapier 0.36 compilé ici contre
+      # celui du jeu, et la simulation portée, comparée à celle du TypeScript au bit près)
       - run: npm run native
-      # (et la sonde : Rapier 0.36 compilé ici contre celui du jeu, et la simulation portée qui fait
-      # rouler un robot contre celle du TypeScript, au bit près)
-      - run: npm run native -- --probe
-      - run: npx vitest run tests/native.test.ts tests/nativePhysics.test.ts tests/nativeSim.test.ts
+      - run: npx vitest run tests/native.test.ts tests/nativePhysics.test.ts tests/nativeSim.test.ts tests/nativeSession.test.ts
 
   # Le rendu : le jeu construit, dans Chrome sans carte graphique (SwiftShader) ; chaque écran se
   # dessine sans erreur ni shader qui ne compile pas, et survit à une perte du contexte WebGL

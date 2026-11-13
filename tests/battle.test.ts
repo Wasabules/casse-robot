@@ -10,6 +10,13 @@ import { initPhysics, Simulation } from "../src/shared/sim/simulation";
 import { spawnTeams } from "../src/shared/sim/wave";
 import { seedRandom } from "./seed";
 import { botName } from "../src/client/i18n/names";
+import { readFileSync } from "node:fs";
+import type { BotProfile } from "../src/shared/design/presets";
+import { CODE } from "../src/shared/native/events";
+import { loadSimModule } from "../src/shared/native/simModule";
+import { NativeWorld } from "../src/shared/native/world";
+import { MODES_BY_CODE } from "../src/shared/net/protocol";
+import { simWasmPath } from "./probe";
 
 /*
  * Batailles entre IA, sans affichage : le mode Bataille (six contre six, réapparitions) joué
@@ -21,6 +28,8 @@ import { botName } from "../src/client/i18n/names";
  * d'environnement BATTLE_ARENA (le Dépôt par défaut ; `BATTLE_ARENA=canyon npm run battle`).
  * BATTLE_RECORD=<fichier> garde aussi le bilan en JSON : les batailles de référence
  * (tests/reference/), auxquelles comparer une simulation déplacée ou réécrite (mêmes graines).
+ * SIM=rust : les mêmes batailles sur la simulation portée en Rust (src/shared/native/world.ts, le
+ * module de `npm run native` ou la sonde la plus récente) ; leur bilan doit être celui du TypeScript.
  */
 
 interface RobotStats {
@@ -62,6 +71,77 @@ function battleArena(name: string | undefined): ArenaKey {
   return check?.map && !check.issues.length ? registerMap(check.map).id : "depot";
 }
 const ARENA: ArenaKey = battleArena(env.BATTLE_ARENA);
+
+/** La simulation des batailles : celle du TypeScript, ou celle portée en Rust (SIM=rust). */
+const RUST = env.SIM === "rust";
+
+/**
+ * Les mêmes batailles sur la simulation portée en Rust : la même composition des équipes (tirée dans
+ * son hasard, à la même graine), le même bilan, lu dans son journal d'événements et dans l'état de
+ * ses robots (`roster`) aux mêmes pas.
+ */
+async function playBattlesRust(seeds: readonly number[], duration: number): Promise<Report> {
+  const path = simWasmPath();
+  if (!path) throw new Error("SIM=rust : pas de simulation compilée entière (npm run native)");
+  const module = await loadSimModule(readFileSync(path));
+  const report: Report = { matches: [], results: [], kills: 0, causes: new Map(), robots: new Map(), modes: new Map(), ground: 0, stuck: 0, cost: 0, steps: 0 };
+  const stats = (profile: BotProfile): RobotStats => {
+    const name = botName(profile);
+    let s = report.robots.get(name);
+    if (!s) report.robots.set(name, (s = { kills: 0, deaths: 0, life: 0, flipped: 0, stunned: 0, killedBy: new Map() }));
+    return s;
+  };
+  for (const seed of seeds) {
+    const world = new NativeWorld(module, seed);
+    if (ARENA !== "depot") world.loadArena(ARENA);
+    const mode = GAME_MODES.battle;
+    const profiles = new Map<number, BotProfile>();
+    const born = new Map<number, number>();
+    world.on((e) => {
+      if (e.code === CODE.botAdded) {
+        profiles.set(e.bot!, world.profiles[e.profile!]);
+        born.set(e.bot!, e.time!);
+      }
+      if (e.code !== CODE.botKilled) return;
+      report.kills++;
+      const cause = e.cause ?? "?";
+      report.causes.set(cause, (report.causes.get(cause) ?? 0) + 1);
+      const victim = stats(profiles.get(e.bot!)!);
+      victim.deaths++;
+      victim.killedBy.set(cause, (victim.killedBy.get(cause) ?? 0) + 1);
+      victim.life += e.time! - (born.get(e.bot!) ?? 0);
+      if (e.killer !== null && e.killer !== undefined) stats(profiles.get(e.killer)!).kills++;
+    });
+    const entries = world.draw(() => matchEntries(mode, PRESET_BOTS[seed % PRESET_BOTS.length]), seed);
+    world.spawnTeams(entries);
+    world.startMatch({ ...mode.match, timeLimit: duration });
+    const every = 30;
+    let state = world.matchState();
+    for (let i = 0; i < duration * 60 && !state.winner; i++) {
+      const t0 = performance.now();
+      world.step();
+      report.cost += performance.now() - t0;
+      report.steps++;
+      state = world.matchState();
+      if (i % every) continue;
+      for (const b of world.roster()) {
+        if (!b.alive) continue;
+        const m = MODES_BY_CODE[b.mode];
+        report.modes.set(m, (report.modes.get(m) ?? 0) + every / 60);
+        if (b.mobility === 0 && m !== "dead") {
+          report.ground += every / 60;
+          if (m === "reverse" || b.blockedT > 1) report.stuck += every / 60;
+        }
+        if (m === "flipped") stats(b.profile).flipped += every / 60;
+        if (m === "stunned") stats(b.profile).stunned += every / 60;
+      }
+    }
+    report.matches.push(`graine ${seed} : ${state.winner ?? "en cours"}, ${state.score.blue} à ${state.score.red} en ${state.elapsed.toFixed(0)} s`);
+    report.results.push({ seed, winner: state.winner ?? null, blue: state.score.blue, red: state.score.red, elapsed: Math.round(state.elapsed) });
+    world.dispose();
+  }
+  return report;
+}
 
 function playBattles(seeds: readonly number[], duration: number): Report {
   const report: Report = { matches: [], results: [], kills: 0, causes: new Map(), robots: new Map(), modes: new Map(), ground: 0, stuck: 0, cost: 0, steps: 0 };
@@ -161,14 +241,15 @@ beforeAll(async () => {
 /** `npm run battle` : l'environnement de npm nomme le script lancé. */
 const fullReport = env.npm_lifecycle_event === "battle";
 
-it("des batailles entre IA se jouent sans erreur, et des robots y sont détruits", { timeout: 120_000 }, () => {
-  const report = playBattles([1, 2], 40);
+it("des batailles entre IA se jouent sans erreur, et des robots y sont détruits", { timeout: 120_000 }, async () => {
+  const report = RUST ? await playBattlesRust([1, 2], 40) : playBattles([1, 2], 40);
   expect(report.kills).toBeGreaterThan(2);
   expect(report.causes.get("self") ?? 0).toBeLessThan(report.kills / 2);
 });
 
-it.runIf(fullReport)("bilan d'équilibrage sur huit batailles", { timeout: 1_800_000 }, () => {
-  const report = playBattles([1, 2, 3, 4, 5, 6, 7, 8], 240);
+it.runIf(fullReport)("bilan d'équilibrage sur huit batailles", { timeout: 1_800_000 }, async () => {
+  const seeds = [1, 2, 3, 4, 5, 6, 7, 8];
+  const report = RUST ? await playBattlesRust(seeds, 240) : playBattles(seeds, 240);
   printReport(report);
   if (env.BATTLE_RECORD) recordReport(report, env.BATTLE_RECORD, 240);
 });

@@ -61,7 +61,17 @@ export type SessionCommand =
 /** Au plus tant de pas par commande `advance` : une machine à la traîne ne s'enfonce pas. */
 const MAX_STEPS = 4;
 
-export class LocalSession {
+/**
+ * Une session : celle-ci, sur la simulation du TypeScript, ou celle de la simulation portée en Rust
+ * (src/shared/native/session.ts), qui rend les mêmes images.
+ */
+export interface SessionLike {
+  /** Fait une commande ; rend les images à envoyer au client (au plus une). */
+  handle(cmd: SessionCommand): Uint8Array[];
+  dispose(): void;
+}
+
+export class LocalSession implements SessionLike {
   readonly sim = new Simulation();
   private encoder: NetEncoder;
   private accumulator = 0;

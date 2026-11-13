@@ -1,13 +1,16 @@
 //! Les colliders d'un morceau (src/shared/robot/colliders.ts) : les cubes voisins de même type
 //! fusionnés en boîtes (fusion gloutonne, dans un ordre fixe), les plaques et les blocs de forme
-//! chacun les leurs, puis les zones touchables des têtes de tourelle ; refaits quand ses blocs
+//! chacun les leurs, puis les zones touchables des têtes de tourelle et des lames des rotors ; refaits quand ses blocs
 //! changent (`rebuildColliders`, `rebuildDirtyParts`). Et le bloc touché en un point (`blockAt`).
 
 use super::catalog::{BlockShape, Fixed, catalog};
 use super::physics::{CONTACT_FORCE_EVENTS, ColliderDesc, ShapeDesc, groups};
-use super::robot::{BLOCK_FRICTION, BLOCK_RESTITUTION, CONTACT_FORCE_THRESHOLD, Cell};
+use super::melee::melee_axes;
+use super::robot::{BLOCK_FRICTION, BLOCK_RESTITUTION, Blade, CONTACT_FORCE_THRESHOLD, Cell, Head};
+use super::turrets::place_head;
 use super::shapes::shape_pieces;
-use super::vec::{NO_ROTATION, Q, V3, add, axis_angle, qmul, qrot, qrot_inv, scale, sub, v3};
+use super::vec::{NO_ROTATION, Q, V3, add, cross, qmul, qrot, qrot_inv, quat_from_basis, scale, sub, v3};
+use crate::det::{dcos, dsin};
 use super::world::{Owner, Sim};
 use std::collections::{HashMap, HashSet};
 
@@ -24,6 +27,8 @@ pub fn rebuild_colliders(sim: &mut Sim, p: usize) {
         sim.phys.remove_collider(c, false);
     }
     sim.part_mut(p).dirty = false;
+    sim.part_mut(p).heads.clear();
+    sim.part_mut(p).blades.clear();
 
     let c = catalog();
     let bs = c.constants.block_size;
@@ -89,7 +94,112 @@ pub fn rebuild_colliders(sim: &mut Sim, p: usize) {
         add_box(sim, p, &kind, min, max, bs, block_half);
     }
     add_heads(sim, p);
+    add_blades(sim, p);
     sim.phys.recompute_mass(rb);
+}
+
+/// Épaisseur minimale (m, de part et d'autre) de la zone touchable d'une lame : une hélice est mince.
+const MIN_BLADE: f64 = 0.03;
+
+/// Pavés de la zone touchable d'un anneau (tout autour de son axe).
+const RING_SEGMENTS: usize = 16;
+
+/// Les zones touchables des armes de contact du morceau (`addBlades`) : un rotor à bras (une barre,
+/// une hélice) a un pavé par bras, qui tourne avec lui (un tir passe entre) ; un rotor plein (un
+/// disque, un tambour, une scie, une mèche) un cylindre ; un anneau (anneau-coque) des pavés tout
+/// autour ; un bras une boule à la place de sa tête. Sans masse ni contact ; rien pour une arme
+/// d'énergie (`quench`), une pointe, un plateau, un fléau, une mâchoire.
+fn add_blades(sim: &mut Sim, p: usize) {
+    use super::robot::Moves;
+    let bot = sim.part(p).bot;
+    let rb = sim.part(p).rb;
+    for a in 0..sim.bots[bot].melee.len() {
+        let arm = sim.bots[bot].melee[a];
+        if sim.bots[bot].blocks[arm.block].part != p || !sim.part(p).has(arm.block) {
+            continue;
+        }
+        let spec = arm.spec();
+        // (une arme d'énergie : son arc ou son filament n'a rien qu'une balle puisse toucher)
+        if spec.quench {
+            continue;
+        }
+        let mut shapes: Vec<ShapeDesc> = Vec::new();
+        let mut moves = Moves::Still;
+        if let Some(blade) = spec.blade {
+            let half = crate::jsmath::max(MIN_BLADE, blade.half);
+            let reach = (blade.outer - blade.inner) / 2.0;
+            if let Some((count, width)) = blade.arms {
+                moves = Moves::Rotor;
+                for _ in 0..count as usize {
+                    shapes.push(ShapeDesc::Cuboid(width / 2.0, half, reach));
+                }
+            } else if blade.inner > 0.0 {
+                let chord = blade.outer * dsin(std::f64::consts::PI / RING_SEGMENTS as f64);
+                for _ in 0..RING_SEGMENTS {
+                    shapes.push(ShapeDesc::Cuboid(chord, half, reach));
+                }
+            } else {
+                shapes.push(ShapeDesc::Cylinder(half, blade.outer));
+            }
+        } else if let Some(swing) = spec.swing {
+            moves = Moves::Swing;
+            shapes.push(ShapeDesc::Ball(swing.radius));
+        }
+        let mut colliders = Vec::new();
+        for shape in shapes {
+            let desc = ColliderDesc { density: 0.0, collision_groups: groups::HITBOX_GROUP, ..ColliderDesc::new(shape) };
+            let Some(c) = sim.phys.create_collider(&desc, rb) else { continue };
+            sim.owners.insert(c, Owner::Blade(bot, a));
+            sim.part_mut(p).colliders.push(c);
+            colliders.push(c);
+        }
+        if colliders.is_empty() {
+            continue;
+        }
+        let mut hitbox = Blade { arm: a, colliders, moves, angle: f64::NAN, swing: f64::NAN };
+        place_blade(sim, bot, &mut hitbox);
+        sim.part_mut(p).blades.push(hitbox);
+    }
+}
+
+/// Pose la zone touchable d'une arme de contact dans le repère du morceau (`placeBlade`) : les bras
+/// d'un rotor à l'angle du rotor (le bras k le long de cos a·e1 + sin a·e2, a = angle + 2πk/n), les
+/// pavés d'un anneau tout autour, le cylindre d'un rotor plein le long de son axe, la boule d'un bras
+/// à la place de sa tête.
+pub fn place_blade(sim: &mut Sim, bot: usize, h: &mut Blade) {
+    let arm = sim.bots[bot].melee[h.arm];
+    let spec = arm.spec();
+    let block = &sim.bots[bot].blocks[arm.block];
+    let (local, rot) = (block.local, block.rot);
+    let hub = v3(spec.hub[0], spec.hub[1], spec.hub[2]);
+    let (axis, e1, e2) = melee_axes(&spec.axis);
+    if let Some(blade) = spec.blade {
+        let along = |a: f64| add(scale(e1, dcos(a)), scale(e2, dsin(a)));
+        let middle = (blade.inner + blade.outer) / 2.0;
+        if blade.arms.is_some() || blade.inner > 0.0 {
+            let n = h.colliders.len() as f64;
+            let start = if blade.arms.is_some() { arm.angle } else { 0.0 };
+            for (k, &c) in h.colliders.iter().enumerate() {
+                let d = along(start + (2.0 * std::f64::consts::PI * k as f64) / n);
+                // Le pavé : sa largeur de travers (x), son épaisseur le long de l'axe (y), sa longueur le long du bras (z)
+                let at = add(hub, scale(d, middle));
+                sim.phys.set_translation_wrt_parent(c, add(local, qrot(rot, at)));
+                sim.phys.set_rotation_wrt_parent(c, qmul(rot, quat_from_basis(cross(axis, d), axis, d)));
+            }
+        } else {
+            // Le cylindre de Rapier est dressé selon y : le long de l'axe du rotor
+            let c = h.colliders[0];
+            sim.phys.set_translation_wrt_parent(c, add(local, qrot(rot, hub)));
+            sim.phys.set_rotation_wrt_parent(c, qmul(rot, quat_from_basis(e2, axis, e1)));
+        }
+    } else if let Some(swing) = spec.swing {
+        let c = h.colliders[0];
+        let at = add(hub, super::melee::head_offset(&spec.axis, &swing, arm.swing));
+        sim.phys.set_translation_wrt_parent(c, add(local, qrot(rot, at)));
+        sim.phys.set_rotation_wrt_parent(c, qmul(rot, NO_ROTATION));
+    }
+    h.angle = arm.angle;
+    h.swing = arm.swing;
 }
 
 /// Reconstruit les colliders des morceaux d'un robot qui ont changé (`rebuildDirtyParts`).
@@ -168,7 +278,8 @@ fn add_shape(sim: &mut Sim, p: usize, b: usize, shape: &str, block_half: f64) {
 }
 
 /// Les zones touchables des têtes de tourelle du morceau (`addHeads`) : un pavé pour la tête, une
-/// capsule pour le canon, sans masse ni contact, posés d'après le lacet et le site (`placeHead`).
+/// capsule pour le canon, sans masse ni contact, posés d'après le lacet et le site (`placeHead`), puis
+/// suivis par `syncHeads` (turrets.rs).
 fn add_heads(sim: &mut Sim, p: usize) {
     let c = catalog();
     let bot = sim.part(p).bot;
@@ -193,25 +304,9 @@ fn add_heads(sim: &mut Sim, p: usize) {
             sim.owners.insert(b, Owner::Head(bot, t));
             sim.part_mut(p).colliders.push(b);
         }
-        // `placeHead`
-        let turret = &sim.bots[bot].turrets[t];
-        let block = &sim.bots[bot].blocks[tb];
-        let turn = match spec.fixed {
-            Some(Fixed::Back) => axis_angle(v3(0.0, 1.0, 0.0), std::f64::consts::PI),
-            Some(Fixed::Down) => NO_ROTATION,
-            None => qmul(axis_angle(v3(0.0, 1.0, 0.0), turret.yaw), axis_angle(v3(1.0, 0.0, 0.0), -turret.pitch)),
-        };
-        let q = qmul(block.rot, turn);
-        let pivot = add(block.local, qrot(block.rot, v3(0.0, spec.height, 0.0)));
-        if let Some(h) = head {
-            sim.phys.set_translation_wrt_parent(h, pivot);
-            sim.phys.set_rotation_wrt_parent(h, q);
-        }
-        if let Some(b) = barrel {
-            let capsule_to_z = axis_angle(v3(1.0, 0.0, 0.0), std::f64::consts::PI / 2.0);
-            sim.phys.set_translation_wrt_parent(b, add(pivot, qrot(q, v3(0.0, 0.0, spec.barrel / 2.0))));
-            sim.phys.set_rotation_wrt_parent(b, qmul(q, capsule_to_z));
-        }
+        let mut hitbox = Head { turret: t, head, barrel, yaw: f64::NAN, pitch: f64::NAN };
+        place_head(sim, bot, &mut hitbox);
+        sim.part_mut(p).heads.push(hitbox);
     }
 }
 
