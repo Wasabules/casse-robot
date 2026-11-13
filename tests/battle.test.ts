@@ -12,6 +12,7 @@ import { seedRandom } from "./seed";
 import { botName } from "../src/client/i18n/names";
 import { readFileSync } from "node:fs";
 import type { BotProfile } from "../src/shared/design/presets";
+import { simulationNamed } from "../src/shared/native/choice";
 import { CODE } from "../src/shared/native/events";
 import { loadSimModule } from "../src/shared/native/simModule";
 import { NativeWorld } from "../src/shared/native/world";
@@ -72,8 +73,13 @@ function battleArena(name: string | undefined): ArenaKey {
 }
 const ARENA: ArenaKey = battleArena(env.BATTLE_ARENA);
 
-/** La simulation des batailles : celle du TypeScript, ou celle portée en Rust (SIM=rust). */
-const RUST = env.SIM === "rust";
+/**
+ * La simulation des batailles : celle du TypeScript, ou celle portée en Rust (SIM=rust). Le TypeScript
+ * par défaut, quelle que soit celle du jeu (`DEFAULT_SIMULATION`) : il est la référence des batailles
+ * de référence et des essais de parité ; `SIM=ts` le dit aussi.
+ */
+if (env.SIM && !simulationNamed(env.SIM)) throw new Error(`SIM : « ts » ou « rust », pas « ${env.SIM} »`);
+const RUST = simulationNamed(env.SIM) === "rust";
 
 /**
  * Les mêmes batailles sur la simulation portée en Rust : la même composition des équipes (tirée dans

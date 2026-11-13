@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { assignBinding, BINDINGS_VERSION, DEFAULT_BINDINGS } from "../src/client/input/bindings";
 import {
-  DEFAULT_SETTINGS, defaultMusicPlayer, defaultSettings, firstRunPreset, GRAPHICS_PRESETS, graphicsPreset, parseSettings, requestedRenderer,
+  DEFAULT_SETTINGS, defaultMusicPlayer, defaultSettings, firstRunPreset, GRAPHICS_PRESETS, graphicsPreset, parseSettings, requestedRenderer, requestedSimulation,
 } from "../src/client/settings";
+import { DEFAULT_SIMULATION, simulationNamed } from "../src/shared/native/choice";
 
 describe("Réglages du joueur", () => {
   it("sans réglages enregistrés, ou illisibles : les réglages par défaut", () => {
@@ -195,5 +196,25 @@ describe("Réglages du joueur", () => {
     expect(requestedRenderer("webgpu", "?sim=page&renderer=webgl")).toBe("webgl");
     expect(requestedRenderer("webgpu", "?renderer=metal")).toBe("webgpu");
     expect(requestedRenderer("webgl", "")).toBe("webgl");
+  });
+
+  it("la simulation : celle par défaut tant que le joueur ne l'a pas choisie, la sienne ensuite ; l'adresse l'impose", () => {
+    // (une seule constante décide de celle par défaut : src/shared/native/choice.ts)
+    expect(DEFAULT_SETTINGS.simulation).toBe(DEFAULT_SIMULATION);
+    expect(parseSettings(null)).toMatchObject({ simulation: DEFAULT_SIMULATION, simulationChosen: false });
+    // Pas choisie (des réglages enregistrés avant que la simulation par défaut ne change) : celle par défaut
+    const other = DEFAULT_SIMULATION === "ts" ? "rust" : "ts";
+    expect(parseSettings(JSON.stringify({ simulation: other, simulationChosen: false }))).toMatchObject({ simulation: DEFAULT_SIMULATION, simulationChosen: false });
+    // Choisie : la sienne, quelle que soit celle par défaut
+    expect(parseSettings(JSON.stringify({ simulation: other, simulationChosen: true }))).toMatchObject({ simulation: other, simulationChosen: true });
+    expect(parseSettings(JSON.stringify({ simulation: "fortran", simulationChosen: true })).simulation).toBe(DEFAULT_SIMULATION);
+    // D'avant `simulationChosen` : la Rust ne s'obtenait qu'en la choisissant
+    expect(parseSettings(JSON.stringify({ simulation: "rust" }))).toMatchObject({ simulation: "rust", simulationChosen: true });
+    expect(parseSettings(JSON.stringify({ simulation: "ts" }))).toMatchObject({ simulation: DEFAULT_SIMULATION, simulationChosen: false });
+    expect(requestedSimulation("ts", "?sim=rust")).toBe("rust");
+    expect(requestedSimulation("rust", "?sim=ts")).toBe("ts");
+    expect(requestedSimulation("rust", "?sim=page")).toBe("rust");
+    expect(simulationNamed("rust")).toBe("rust");
+    expect(simulationNamed("RUST")).toBeNull();
   });
 });

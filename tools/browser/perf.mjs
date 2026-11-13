@@ -13,6 +13,18 @@
 //   npm run perf -- --renderer=webgpu             sous WebGPU (WebGL par défaut)
 //   npm run perf -- --eval="__casse.game.setGlow(false)"   du code dans la page, une fois la bataille lancée
 //   npm run perf -- --cpuprofile=profil.cpuprofile   le profil du processeur (fil de la page), ses fonctions les plus coûteuses
+//   npm run perf -- --query="sim=ts"              la simulation du TypeScript dans le Worker (« sim=rust » : celle portée en Rust)
+//   npm run perf -- --phone --cpu-throttle=4      proche d'un téléphone : écran 412 × 915 au doigt, processeur 4 fois plus lent
+//   npm run perf -- --phone --cpu-throttle=6 --network=4g   … 6 fois plus lent, et un réseau mobile
+//
+// `--phone` : l'écran (412 × 915, 2,625 pixels par pixel CSS), le doigt, l'agent d'un téléphone
+// Android ; le préréglage graphique Bas, celui d'un premier lancement sur un téléphone. `--cpu-throttle`
+// ralentit le processeur de la page (Emulation.setCPUThrottlingRate ; Chrome ne le fait pas pour ses
+// Workers : le pas de la simulation du Worker, mesuré à pleine vitesse, est aussi donné rapporté à ce
+// ralentissement) ; `--network` (4g, 3g) le réseau. Le bilan dit aussi ce qu'ont coûté le démarrage du
+// Worker (le morceau de sa session, le module Rust téléchargé et instancié), ce qui a été téléchargé, et
+// la mémoire de la page et du Worker (tas JavaScript, tampons ; la mémoire du module Rust ; celle du
+// processus de rendu, WebAssembly compris).
 //
 // La machine doit être au repos : un autre calcul fausse tout (la mesure se fait par fenêtres de
 // quelques secondes, et en donne l'écart). La carte graphique utilisée est donnée en tête du bilan.
@@ -20,8 +32,20 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { build, launchChrome, MATCH_STARTED, openGame, parseArgs, ROOT, SEED_RANDOM, serve, sleep } from "./chrome.mjs";
 
-const options = parseArgs({ arena: "depot", size: "1920x1080", seconds: 30, window: 5, warmup: 8, preset: "medium", renderOnly: false, noBuild: false, json: "", compare: "", software: false, renderer: "webgl", query: "", eval: "", cpuprofile: "" });
+const options = parseArgs({
+  arena: "depot", size: "", seconds: 30, window: 5, warmup: 8, preset: "", renderOnly: false, noBuild: false, json: "", compare: "", software: false,
+  renderer: "webgl", query: "", eval: "", cpuprofile: "", phone: false, cpuThrottle: 1, network: "",
+});
 if (options.renderer !== "webgl" && options.renderer !== "webgpu") throw new Error(`--renderer : webgl ou webgpu, pas ${options.renderer}`);
+/** Un réseau mobile (latence en ms, débits en octets par seconde). */
+const NETWORKS = { "4g": { latency: 60, download: 9e6 / 8, upload: 1.5e6 / 8 }, "3g": { latency: 150, download: 1.6e6 / 8, upload: 0.75e6 / 8 } };
+const network = options.network ? NETWORKS[options.network] : null;
+if (options.network && !network) throw new Error(`--network : ${Object.keys(NETWORKS).join(" ou ")}, pas ${options.network}`);
+/** Un téléphone : son écran en pixels CSS, sa densité, son agent. */
+const PHONE = { size: "412x915", scale: 2.625, agent: "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36" };
+// (sans --size ni --preset : 1920 × 1080 au préréglage Moyenne ; au téléphone, son écran au préréglage Bas)
+options.size ||= options.phone ? PHONE.size : "1920x1080";
+options.preset ||= options.phone ? "low" : "medium";
 const [width, height] = options.size.split("x").map(Number);
 
 /**
@@ -196,6 +220,36 @@ function print(result) {
   console.log(lines.join("\n"));
 }
 
+/** Le démarrage, les téléchargements et la mémoire (voir plus haut : `--phone`, `--cpu-throttle`, `--network`). */
+function printLoad(result) {
+  const mb = (bytes) => `${fmt(bytes / 1048576, 2)} Mo`;
+  const w = result.boot.worker;
+  const steps = w ? Object.entries(w.boot).sort((a, b) => a[1] - b[1]).map(([k, t]) => `${k} ${fmt(t, 0)}`).join(", ") : "pas de Worker";
+  const kinds = {};
+  for (const d of result.downloads) {
+    const name = d.url.split("?")[0].split("/").pop();
+    const kind = /\.wasm$/.test(name) ? name.replace(/-[A-Za-z0-9_-]{8}\.wasm$/, ".wasm") : d.worker ? "code du Worker" : /\.js$/.test(name) ? "code de la page" : "autre (sons, arènes, images…)";
+    kinds[kind] = (kinds[kind] ?? 0) + d.bytes;
+  }
+  const heap = (h) => (h ? `tas JS ${fmt(h.js, 1)} Mo, tampons ${h.buffers === null ? "?" : `${fmt(h.buffers, 1)} Mo`}` : "-");
+  const lines = [
+    "",
+    `Démarrage${result.cpuThrottle > 1 ? ` (processeur ${result.cpuThrottle} fois plus lent)` : ""}${result.network ? ` (réseau ${result.network})` : ""} : jeu prêt en ${fmt(result.boot.page / 1000, 1)} s, bataille lancée en ${fmt(result.boot.match / 1000, 1)} s`,
+    `Worker (${w?.engine ?? "?"}${w?.fallback ? `, repli : ${w.fallback}` : ""}) : ${steps} ms après son lancement${w?.wasmMemory ? ` ; mémoire du module Rust ${mb(w.wasmMemory)}` : ""}`,
+    `Téléchargé : ${Object.entries(kinds).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${mb(n)}`).join(", ")}`,
+    `Mémoire : page ${heap(result.memory.page)} ; Worker ${heap(result.memory.worker)}${result.memory.renderer ? ` ; processus de rendu ${mb(result.memory.renderer)}` : ""}`,
+    ...result.notes.map((n) => `  (${n})`),
+  ];
+  // Chrome ne ralentit que la page, pas ses Workers : le pas du Worker, mesuré à pleine vitesse, est
+  // rapporté à un processeur `--cpu-throttle` fois plus lent (un pas doit tenir en 16,7 ms, 60 par seconde)
+  const step = result.summary.simStep;
+  if (result.cpuThrottle > 1 && result.summary.worker && step) {
+    const slow = step * result.cpuThrottle;
+    lines.push(`Pas de simulation sur un processeur ${result.cpuThrottle} fois plus lent (estimé : Chrome ne ralentit pas les Workers) : ${fmt(slow, 1)} ms, ${fmt((100 * slow) / (1000 / 60), 0)} % du temps d'un pas`);
+  }
+  console.log(lines.join("\n"));
+}
+
 function compare(before, after) {
   const a = before.summary, b = after.summary;
   const row = (label, x, y, lowerIsBetter = true, d = 2) => {
@@ -220,15 +274,48 @@ if (!options.noBuild) build();
 const server = await serve();
 const chrome = await launchChrome({ width, height, software: options.software, extraArgs: options.renderer === "webgpu" ? ["--enable-unsafe-webgpu"] : [] });
 const { page } = chrome;
+/** Ce que le ralentissement n'a pas pu faire (un Worker qui le refuse) : dit dans le bilan. */
+const notes = [];
+/** Ce qui a été téléchargé : chaque fichier, ses octets transférés, par la page ou par un Worker. */
+const downloads = new Map();
 try {
   await page.send("Page.addScriptToEvaluateOnNewDocument", { source: SEED_RANDOM });
-  console.log(`» ${chrome.version} : démarrage du jeu`);
+  // Le téléphone : le processeur ralenti (la page, et chaque Worker avant son premier code), le réseau, l'écran, le doigt
+  const slow = async (sessionId) => {
+    const who = sessionId ? "du Worker" : "de la page";
+    if (options.cpuThrottle > 1) await page.send("Emulation.setCPUThrottlingRate", { rate: options.cpuThrottle }, sessionId).catch((e) => notes.push(`processeur ${who} non ralenti : ${e.message}`));
+    if (network) {
+      const conditions = { offline: false, latency: network.latency, downloadThroughput: network.download, uploadThroughput: network.upload };
+      await page.send("Network.emulateNetworkConditions", conditions, sessionId).catch((e) => notes.push(`réseau ${who} non ralenti : ${e.message}`));
+    }
+  };
+  page.on("Network.responseReceived", (p, sessionId) => downloads.set(`${sessionId ?? ""}:${p.requestId}`, { url: p.response.url, bytes: 0, worker: !!sessionId }));
+  page.on("Network.loadingFinished", (p, sessionId) => {
+    const d = downloads.get(`${sessionId ?? ""}:${p.requestId}`);
+    if (d) d.bytes = p.encodedDataLength;
+  });
+  await page.attachWorkers(async (sessionId) => {
+    await page.send("Runtime.enable", {}, sessionId);
+    await page.send("Network.enable", {}, sessionId);
+    await slow(sessionId);
+  });
+  await slow(undefined);
+  if (options.phone) {
+    await page.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: PHONE.scale, mobile: true });
+    await page.send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
+    await page.send("Emulation.setUserAgentOverride", { userAgent: PHONE.agent, platform: "Linux armv8l" });
+  }
+  console.log(`» ${chrome.version} : démarrage du jeu${options.cpuThrottle > 1 ? ` (processeur ${options.cpuThrottle} fois plus lent)` : ""}`);
+  const opened = Date.now();
   await openGame(page, `${server.url}?renderer=${options.renderer}${options.query ? "&" + options.query : ""}`);
+  const booted = Date.now() - opened;
   if (options.renderer === "webgpu" && !(await page.evaluate(`window.__casse.game.engine.isWebGPU`))) throw new Error("WebGPU demandé : le navigateur ne l'offre pas");
   await page.evaluate(`window.__casse.graphics(${JSON.stringify(options.preset)})`);
   // (la graine du hasard de la partie dans le Worker : la bataille se rejoue presque pareil)
+  const asked = Date.now();
   await page.evaluate(`(window.__casse.game.seed = 7, window.__casse.screens.benchmark(${JSON.stringify(options.arena)}))`);
-  await page.waitFor(MATCH_STARTED, 120_000, "début de la bataille");
+  await page.waitFor(MATCH_STARTED, 120_000 * Math.max(1, options.cpuThrottle), "début de la bataille");
+  const started = Date.now() - asked;
   // (un réglage de plus pour la mesure, une fois la bataille lancée : `--eval="__casse.game.setGlow(false)"`)
   if (options.eval) await page.evaluate(`(() => { ${options.eval}; return 1; })()`);
   await page.evaluate(`(() => { const g = window.__casse.game; g.setFollow(0); g.rig.setZoom(16); return 1; })()`);
@@ -256,16 +343,28 @@ try {
     writeFileSync(options.cpuprofile, JSON.stringify(profile));
     printProfile(profile);
   }
+  // Le démarrage du Worker (ses étapes, la mémoire de la simulation Rust) et la mémoire de la page et
+  // du Worker : leur tas JavaScript, et leurs tampons (dont la mémoire du WebAssembly : Rapier ou le module Rust)
+  const worker = await page.evaluate(`window.__casse.game.local ? window.__casse.game.local.stats() : null`);
+  const heapOf = async (sessionId) => {
+    const h = await page.send("Runtime.getHeapUsage", {}, sessionId).catch(() => null);
+    return h && { js: h.usedSize / 1048576, buffers: h.backingStorageSize === undefined ? null : h.backingStorageSize / 1048576 };
+  };
+  const simWorker = [...(page.workers?.entries() ?? [])].find(([, t]) => /simWorker/.test(t.url))?.[0];
+  const memory = { page: await heapOf(undefined), worker: simWorker ? await heapOf(simWorker) : null, renderer: chrome.rendererMemory() };
   const errors = page.errors;
   const commit = spawnSync("git", ["rev-parse", "--short", "HEAD"], { cwd: ROOT, encoding: "utf8" }).stdout.trim();
   const result = {
     date: new Date().toISOString(), commit, browser: chrome.version, gpu: info.gpu, gpuName: info.gpu,
     arena: options.arena, size: options.size, preset: options.preset, renderOnly: options.renderOnly, simulation,
+    phone: options.phone, cpuThrottle: options.cpuThrottle, network: options.network || null,
+    boot: { page: booted, match: started, worker }, memory, downloads: [...downloads.values()].filter((d) => d.bytes > 0), notes,
     summary: summarize(windows), windows: windows.length,
   };
   result.summary.size = options.size;
   result.summary.gpuName = info.gpu;
   print(result);
+  printLoad(result);
   if (options.compare) compare(JSON.parse(readFileSync(options.compare, "utf8")), result);
   if (options.json) {
     writeFileSync(options.json, JSON.stringify(result, null, 2) + "\n");

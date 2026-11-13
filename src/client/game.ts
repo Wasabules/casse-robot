@@ -54,6 +54,7 @@ import { SceneLighting } from "./render/lighting";
 import { PoseInterpolation } from "./render/interpolation";
 import { firingTurret, recoilKick } from "./render/recoil";
 import { requestedSimulation, type FxLook, type ShadowQuality, type SimulationEngine } from "./settings";
+import { DEFAULT_SIMULATION } from "../shared/native/choice";
 import { LocomotionView } from "./render/locomotionView";
 import { applyArenaLook, SHADOW_MAPS, type SceneKit } from "./render/scene";
 import { Assets } from "./render/materials";
@@ -334,7 +335,7 @@ export class ArenaGame {
   private renderScale = 1;
 
   /** Le jeu, sur le moteur de la page (WebGL ou WebGPU : render/engine.ts) et son canvas. */
-  constructor(engine: B.AbstractEngine, simulation: SimulationEngine = "ts") {
+  constructor(engine: B.AbstractEngine, simulation: SimulationEngine = DEFAULT_SIMULATION) {
     const canvas = engine.getRenderingCanvas()!;
     this.sim = new Simulation();
     const kit = createScene(engine);
@@ -389,7 +390,7 @@ export class ArenaGame {
   private startLocal(simulation: SimulationEngine): void {
     if (typeof Worker === "undefined" || new URLSearchParams(location.search).get("sim") === "page") return;
     try {
-      // La simulation portée en Rust (le réglage, ou `?sim=rust` ; à l'essai : les mêmes images que celle du TypeScript)
+      // La simulation du TypeScript ou celle portée en Rust (le réglage, ou `?sim=` ; les mêmes images)
       const link = new WorkerLink(requestedSimulation(simulation));
       link.onFail = () => {
         if (this.local !== link) return;

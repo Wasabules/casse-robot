@@ -139,6 +139,21 @@ export class SimModule {
     }
   }
 
+  /**
+   * Une erreur venue du module, dite avec ce qu'il en sait : une panique l'arrête (`unreachable`),
+   * après avoir laissé son message et l'endroit du code d'où elle vient (crates/casse-sim/src/sim/mod.rs).
+   */
+  explain(e: unknown): string {
+    const text = e instanceof Error ? e.message : String(e);
+    let last = "";
+    try {
+      last = this.lastError();
+    } catch {
+      // (un module arrêté peut ne plus répondre)
+    }
+    return last.startsWith("panique") ? `${text} (${last})` : text;
+  }
+
   /** Lève l'erreur du module si `result` est négatif ; sinon le rend. */
   check(result: number, what: string): number {
     if (result < 0) throw new Error(`${what} : ${this.lastError()}`);

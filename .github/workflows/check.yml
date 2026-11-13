@@ -25,11 +25,14 @@ jobs:
 
   # La simulation compilée (crates/casse-sim, Rust) : ses tests, puis les deux modules reconstruits ici
   # (le module embarqué, et la simulation entière, src/shared/native/casse-sim.wasm), vérifiés contre le
-  # TypeScript (tests/native.test.ts : mêmes entrées, mêmes sorties au bit près ; tests/nativeSession.test.ts :
-  # les mêmes images que la session et la salle du TypeScript)
+  # TypeScript (tests/native.test.ts : mêmes entrées, mêmes sorties au bit près ; tests/nativeSim.test.ts,
+  # tous ses parcours (SIM_ALL), npm test n'en jouant qu'une partie ; tests/nativeSession.test.ts et
+  # tests/nativeParity.test.ts : les mêmes images que la session et la salle du TypeScript). La parité
+  # longue et aléatoire tourne chaque nuit (nightly.yml).
   native:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # (la construction des deux modules, puis tous les parcours de la parité module par module)
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -43,14 +46,16 @@ jobs:
       # (la simulation entière est aussi la sonde, dans target/probe/ : Rapier 0.36 compilé ici contre
       # celui du jeu, et la simulation portée, comparée à celle du TypeScript au bit près)
       - run: npm run native
-      - run: npx vitest run tests/native.test.ts tests/nativePhysics.test.ts tests/nativeSim.test.ts tests/nativeSession.test.ts
+      - run: npx vitest run tests/native.test.ts tests/nativePhysics.test.ts tests/nativeSim.test.ts tests/nativeSession.test.ts tests/nativeParity.test.ts
+        env:
+          SIM_ALL: "1"
 
   # Le rendu : le jeu construit, dans Chrome sans carte graphique (SwiftShader) ; chaque écran se
   # dessine sans erreur ni shader qui ne compile pas, et survit à une perte du contexte WebGL
   render:
     runs-on: ubuntu-latest
     # (sans carte graphique, chaque écran prend deux à trois minutes, et le passage WebGPU démarre aussi le jeu)
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -59,6 +64,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run render:check
+      # Le même parcours sur la simulation du TypeScript (le repli du Worker quand la Rust, celle par
+      # défaut, ne se charge pas)
+      - run: npm run render:check -- --no-build --query=sim=ts
       # Le même parcours sous WebGPU, si le Chrome de la machine d'intégration l'offre sans carte
       # graphique (sinon l'essai le dit et passe : il est fait sur une vraie carte avant chaque envoi)
       - run: npm run render:check -- --no-build --renderer=webgpu --optional

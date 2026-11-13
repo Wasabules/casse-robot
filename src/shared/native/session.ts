@@ -8,7 +8,7 @@ import { ENDLESS_MATCH, GAME_MODES, matchEntries, pickRoster, type GameModeId } 
 import { encodeFrame, type FrameHeader, type NetEvent } from "../net/protocol";
 import type { SessionCommand, SessionLike } from "../net/session";
 import type { ArmState } from "../sim/entities";
-import { newInput } from "../sim/player";
+import { newInput } from "../sim/input";
 import { NativeEncoder } from "./events";
 import type { SimModule } from "./simModule";
 import { NativeWorld } from "./world";

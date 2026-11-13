@@ -3,7 +3,7 @@ import { STEP } from "../../shared/config";
 import type { ClientMessage } from "../../shared/net/protocol";
 import { Replica } from "../../shared/net/replica";
 import type { SessionCommand } from "../../shared/net/session";
-import type { SimEngine, WorkerReply } from "./simWorker";
+import type { SimEngine, WorkerMessage, WorkerReply, WorkerStats } from "./simWorker";
 
 /*
  * La partie solo dans un Worker (client/sim/simWorker.ts) : le jeu lui envoie des commandes
@@ -31,10 +31,15 @@ export class WorkerLink {
   /** Les arènes dont le Worker a déjà reçu le fichier (une grande arène du jeu, une carte communautaire) : il les garde. */
   private readonly given = new Set<string>();
 
-  /** La simulation du Worker : celle du TypeScript, ou celle portée en Rust (`?sim=rust`). */
-  readonly engine: SimEngine;
+  /**
+   * La simulation du Worker : celle portée en Rust, ou celle du TypeScript (le réglage, `?sim=`) ; le
+   * Worker dit s'il a dû passer à celle du TypeScript (la Rust ne se chargeait pas).
+   */
+  engine: SimEngine;
+  /** Les mesures du Worker demandées (`stats`), en attente de sa réponse. */
+  private readonly asked: ((stats: WorkerStats) => void)[] = [];
 
-  constructor(engine: SimEngine = "ts") {
+  constructor(engine: SimEngine) {
     this.engine = engine;
     this.replica.delay = LOCAL_DELAY;
     // Les cartes communautaires que le jeu a fait connaître (la bibliothèque, l'éditeur) : la réplique les y trouve
@@ -42,8 +47,11 @@ export class WorkerLink {
     // (le nom du Worker lui dit quelle simulation faire tourner)
     this.worker = new Worker(new URL("./simWorker.ts", import.meta.url), { type: "module", name: engine });
     this.worker.onmessage = (e: MessageEvent<WorkerReply>) => {
-      if (e.data instanceof ArrayBuffer) this.replica.receive(new Uint8Array(e.data));
-      else this.fail(e.data.error);
+      const reply = e.data;
+      if (reply instanceof ArrayBuffer) this.replica.receive(new Uint8Array(reply));
+      else if ("engine" in reply) this.engine = reply.engine;
+      else if ("stats" in reply) this.asked.splice(0).forEach((f) => f(reply.stats));
+      else this.fail(reply.error);
     };
     this.worker.onerror = (e) => this.fail(e.message || "le Worker de la simulation ne démarre pas"); // i18n-ignore (pour la console)
   }
@@ -57,7 +65,19 @@ export class WorkerLink {
       if (this.given.has(cmd.arena)) cmd = { ...cmd, map: undefined };
       else this.given.add(cmd.arena);
     }
-    this.worker.postMessage(cmd);
+    this.post(cmd);
+  }
+
+  /** Ce qu'a coûté le démarrage du Worker, et la mémoire de la simulation compilée (la console, `npm run perf`). */
+  stats(): Promise<WorkerStats> {
+    return new Promise((resolve) => {
+      this.asked.push(resolve);
+      this.post({ t: "stats" });
+    });
+  }
+
+  private post(msg: WorkerMessage): void {
+    this.worker.postMessage(msg);
   }
 
   /** Le dernier monde demandé est arrivé dans la réplique. */

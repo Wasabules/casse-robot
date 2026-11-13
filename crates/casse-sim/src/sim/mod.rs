@@ -135,9 +135,27 @@ unsafe fn text<'a>(ptr: *const u8, len: usize) -> &'a str {
     std::str::from_utf8(unsafe { std::slice::from_raw_parts(ptr, len) }).unwrap_or("")
 }
 
+/// Une panique du module (un défaut : le module s'arrête, `unreachable` côté JavaScript) laisse son
+/// message et l'endroit du code où elle est née dans le dernier message d'erreur (`sim_error`) : qui
+/// l'appelle ensuite (src/shared/native/simModule.ts) sait ce qui s'est passé.
+fn keep_panics() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        std::panic::set_hook(Box::new(|info| {
+            let message = format!("panique : {info}");
+            ERROR.with(|e| {
+                if let Ok(mut e) = e.try_borrow_mut() {
+                    *e = message;
+                }
+            });
+        }));
+    });
+}
+
 /// Un monde, son sol ; son numéro (à partir de 1).
 #[unsafe(no_mangle)]
 pub extern "C" fn sim_new() -> u32 {
+    keep_panics();
     SIMS.with(|list| {
         let mut list = list.borrow_mut();
         if let Some(i) = list.iter().position(Option::is_none) {

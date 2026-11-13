@@ -1220,8 +1220,9 @@ export class App {
   }
 
   /**
-   * La simulation de la partie solo (à l'essai) : celle du TypeScript, ou celle portée en Rust. Elle
-   * est prise au chargement de la page : un autre choix le dit, et propose de recharger.
+   * La simulation de la partie solo : celle du TypeScript, ou celle portée en Rust. Elle est prise au
+   * chargement de la page : un autre choix le dit, et propose de recharger. Choisie ici, elle ne suit
+   * plus celle par défaut (`simulationChosen`).
    */
   private simulationRows(set: Setter): SettingRow[] {
     const s = this.settings;
@@ -1229,8 +1230,12 @@ export class App {
     const names = { ts: "TypeScript", rust: "Rust", page: t("menu.gfx.simulationPage") };
     const pending = requestedSimulation(s.simulation) !== this.bootSimulation;
     const detail = pending ? "menu.gfx.simulationPending" : "menu.gfx.simulationDetail";
+    const choose = (value: Settings["simulation"]): void => {
+      s.simulationChosen = true;
+      set("simulation")(value);
+    };
     const rows: SettingRow[] = [
-      choiceRow(t("menu.gfx.simulation"), [{ value: "ts", label: "TypeScript" }, { value: "rust", label: "Rust" }], s.simulation, set("simulation"), t(detail, { now: names[now] })),
+      choiceRow(t("menu.gfx.simulation"), [{ value: "rust", label: "Rust" }, { value: "ts", label: "TypeScript" }], s.simulation, choose, t(detail, { now: names[now] })),
     ];
     if (pending) rows.push({ kind: "button", label: t("menu.gfx.simulationReload"), action: t("menu.gfx.rendererReloadAction"), onSelect: () => location.reload() });
     return rows;

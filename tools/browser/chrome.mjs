@@ -128,6 +128,8 @@ export async function launchChrome({ width = 1280, height = 720, software = fals
   return {
     page,
     version: version.Browser,
+    /** La mémoire privée (octets) des processus de rendu de ce Chrome : la page et ses Workers, WebAssembly compris. */
+    rendererMemory: () => rendererMemory(child.pid),
     close: async () => {
       page.close();
       child.kill();
@@ -135,6 +137,22 @@ export async function launchChrome({ width = 1280, height = 720, software = fals
       rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
     },
   };
+}
+
+/**
+ * La mémoire des processus de rendu (« --type=renderer ») nés du Chrome `pid` : la plus grosse (celle
+ * de la page du jeu), en octets privés sous Windows, résidents ailleurs ; null si on ne sait pas la lire.
+ */
+function rendererMemory(pid) {
+  if (process.platform === "win32") {
+    const script = `Get-CimInstance Win32_Process -Filter "ParentProcessId=${pid}" | Where-Object { $_.CommandLine -like '*--type=renderer*' } | ForEach-Object { (Get-Process -Id $_.ProcessId).PrivateMemorySize64 }`;
+    const out = spawnSync("powershell", ["-NoProfile", "-Command", script], { encoding: "utf8" });
+    const sizes = out.stdout.split(/\s+/).map(Number).filter((n) => n > 0);
+    return sizes.length ? Math.max(...sizes) : null;
+  }
+  const out = spawnSync("ps", ["-A", "-o", "pid=,ppid=,rss=,args="], { encoding: "utf8" });
+  const sizes = out.stdout.split("\n").map((line) => line.trim().split(/\s+/)).filter((f) => Number(f[1]) === pid && f.slice(3).join(" ").includes("--type=renderer")).map((f) => Number(f[2]) * 1024);
+  return sizes.length ? Math.max(...sizes) : null;
 }
 
 /** Une page de Chrome, par le protocole des outils de développement. */
@@ -164,16 +182,40 @@ export class Page {
         if (msg.error) reject(new Error(`${msg.error.message} (${msg.error.code})`));
         else resolve(msg.result);
       }
-      for (const fn of this.listeners.get(msg.method) ?? []) fn(msg.params);
+      // (un événement d'une cible attachée, un Worker : sa session avec)
+      for (const fn of this.listeners.get(msg.method) ?? []) fn(msg.params, msg.sessionId);
     });
   }
 
-  send(method, params = {}) {
+  /** Une commande du protocole, à la page, ou à une cible attachée (`sessionId` : un Worker de la page). */
+  send(method, params = {}, sessionId = undefined) {
     return new Promise((resolve, reject) => {
       const n = ++this.id;
       this.pending.set(n, { resolve, reject });
-      this.ws.send(JSON.stringify({ id: n, method, params }));
+      this.ws.send(JSON.stringify(sessionId ? { id: n, method, params, sessionId } : { id: n, method, params }));
     });
+  }
+
+  /**
+   * Les Workers de la page (la simulation de la partie solo) : chacun, à sa naissance et avant son
+   * premier code, passe par `setup(sessionId, targetInfo)` (le ralentir comme la page, mesurer son tas),
+   * puis démarre. `this.workers` : les sessions des Workers en vie.
+   */
+  async attachWorkers(setup) {
+    this.workers = new Map();
+    this.on("Target.attachedToTarget", async ({ sessionId, targetInfo }) => {
+      if (targetInfo.type === "worker") {
+        this.workers.set(sessionId, targetInfo);
+        try {
+          await setup(sessionId, targetInfo);
+        } catch (e) {
+          this.warnings.push(`Worker ${targetInfo.url} : ${e.message}`);
+        }
+      }
+      await this.send("Runtime.runIfWaitingForDebugger", {}, sessionId).catch(() => {});
+    });
+    this.on("Target.detachedFromTarget", ({ sessionId }) => this.workers.delete(sessionId));
+    await this.send("Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: true, flatten: true });
   }
 
   on(method, fn) {

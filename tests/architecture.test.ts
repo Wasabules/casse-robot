@@ -73,13 +73,13 @@ describe("architecture", () => {
 
   it("le code des arènes n'entre ni dans le paquet du client ni dans celui du serveur : ils jouent leurs fichiers (content/arenas/)", () => {
     const sources: Record<string, string> = { ...sharedSources, ...serverSources, ...clientSources };
-    // Ce qu'importe un fichier (pas ses types : ils ne vont pas dans le paquet), y compris à la demande
-    const imports = (file: string): string[] => {
+    // Ce qu'importe un fichier (pas ses types : ils ne vont pas dans le paquet), y compris à la demande (`dynamic`)
+    const imports = (file: string, dynamic = true): string[] => {
       const code = sources[file].replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
       const specs = [
         ...code.matchAll(/^(?:import|export)\s+(?!type\b)[^;]*?from\s+["'](\.[^"']+)["']/gm),
         ...code.matchAll(/^import\s+["'](\.[^"']+)["']/gm),
-        ...code.matchAll(/import\(\s*["'](\.[^"']+)["']\s*\)/g),
+        ...(dynamic ? code.matchAll(/import\(\s*["'](\.[^"']+)["']\s*\)/g) : []),
       ].map((m) => m[1]);
       const dir = file.slice(0, file.lastIndexOf("/"));
       return specs.map((spec) => {
@@ -92,11 +92,11 @@ describe("architecture", () => {
         return [`${path}.ts`, `${path}/index.ts`].find((f) => f in sources) ?? path;
       }).filter((f) => f in sources);
     };
-    const reached = (entry: string): Set<string> => {
+    const reached = (entry: string, dynamic = true): Set<string> => {
       const seen = new Set<string>([entry]);
       const todo = [entry];
       while (todo.length) {
-        for (const next of imports(todo.pop()!)) {
+        for (const next of imports(todo.pop()!, dynamic)) {
           if (seen.has(next)) continue;
           seen.add(next);
           todo.push(next);
@@ -112,5 +112,19 @@ describe("architecture", () => {
       expect(all.has("../src/shared/map/build.ts"), entry).toBe(true);
       expect(arenaCode.filter((f) => all.has(f)), entry).toEqual([]);
     }
+
+    // La partie solo en Rust ne charge ni la simulation du TypeScript ni Rapier pour le JavaScript
+    // (~4,2 Mo) : le Worker n'importe chaque session qu'à la demande, et celle du Rust n'atteint aucun
+    // fichier qui importe Rapier (sauf pour ses types, qui ne vont pas dans le paquet)
+    const reachedStatically = (entry: string): Set<string> => reached(entry, false);
+    const rapier = (file: string): boolean => /^import\s+(?!type\b)[^;]*from\s+["']@dimforge\/rapier3d-compat["']/m.test(sources[file]);
+    const worker = reachedStatically("../src/client/sim/simWorker.ts");
+    expect([...worker].filter(rapier)).toEqual([]);
+    expect(worker.has("../src/client/sim/tsSession.ts")).toBe(false);
+    expect(worker.has("../src/client/sim/rustSession.ts")).toBe(false);
+    const rust = reachedStatically("../src/client/sim/rustSession.ts");
+    expect(rust.has("../src/shared/native/session.ts")).toBe(true);
+    expect([...rust].filter(rapier)).toEqual([]);
+    expect([...reachedStatically("../src/client/sim/tsSession.ts")].filter(rapier).length).toBeGreaterThan(0);
   });
 });

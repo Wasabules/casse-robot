@@ -1,0 +1,69 @@
+# Chaque nuit : la simulation portée en Rust (crates/casse-sim) contre celle du TypeScript, plus
+# longuement que sur chaque envoi. Les deux modules reconstruits ici comme dans le job `native` de
+# check.yml ; tous les parcours de la parité module par module (SIM_ALL=1) ; la parité longue et
+# aléatoire (tests/nativeParity.test.ts : des sessions solo et des salles du serveur tirées au hasard,
+# une nouvelle série chaque nuit) ; et les batailles de référence rejouées sur la simulation Rust, qui
+# doivent donner exactement celles du TypeScript. Un cas de parité qui échoue laisse ses commandes
+# (artifacts/parity/), de quoi le rejouer : PARITY_REPLAY=<fichier>.
+name: Parité de nuit
+
+on:
+  schedule:
+    - cron: "23 2 * * *"
+  workflow_dispatch:
+    inputs:
+      cases:
+        description: "Nombre de cas de la parité aléatoire (un sur quatre est une salle)"
+        default: "400"
+      seconds:
+        description: "Durée d'une session (s ; une salle dure le double)"
+        default: "60"
+      minutes:
+        description: "Pas de nouveau cas au-delà (min)"
+        default: "150"
+      seed:
+        description: "Graine de la série (vide : la date)"
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: rustup toolchain install 1.99.1 --profile minimal --target wasm32-unknown-unknown
+      - run: npm ci
+      # Les deux modules et la sonde, comme le job `native` (et le module livré doit être celui-là)
+      - run: npm run native
+      - name: Parité module par module, tous les parcours
+        run: npx vitest run tests/native.test.ts tests/nativePhysics.test.ts tests/nativeSim.test.ts tests/nativeSession.test.ts
+        env:
+          SIM_ALL: "1"
+      - name: Parité longue et aléatoire
+        run: npx vitest run tests/nativeParity.test.ts --silent=false
+        env:
+          PARITY_CASES: ${{ inputs.cases || '400' }}
+          PARITY_SECONDS: ${{ inputs.seconds || '60' }}
+          PARITY_MINUTES: ${{ inputs.minutes || '150' }}
+          PARITY_SEED: ${{ inputs.seed || github.run_id }}
+      - name: Batailles de référence sur la simulation Rust
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p artifacts
+          npm run battle
+          node tools/native/same-battles.mjs tests/reference/battles-depot.json artifacts/battles-rust.json
+        env:
+          SIM: rust
+          BATTLE_RECORD: artifacts/battles-rust.json
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity
+          path: artifacts/

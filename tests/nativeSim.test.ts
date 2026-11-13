@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { readFileSync, writeFileSync } from "node:fs";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { avoidMines, navigate, obstacles } from "../src/shared/ai/navigation";
 import { ARENAS, deepWaterAt, groundLevel, type ArenaId, type ArenaLayout, type PropSpot, type StaticBox } from "../src/shared/arena/layout";
 import { LAVA_HEIGHT, lavaAt } from "../src/shared/arena/features";
@@ -2583,11 +2583,107 @@ function firstDifference(a: Sample[], b: Sample[]): string | null {
   return null;
 }
 
+/**
+ * Le jeu complet (`SIM_ALL=1` : le job `native` de l'intégration continue, et la nuit) ou le jeu courant
+ * (`npm test`) : celui-ci ne joue, des familles de parcours les plus longues, que ceux de `CURRENT`,
+ * choisis pour couvrir chaque jalon et faire arriver tout ce que leurs bilans demandent (relevé par
+ * `SIM_COVERAGE=<fichier>` sur le jeu complet : ce que chaque parcours a fait arriver) ; les
+ * comparaisons qui rejouent une longue bataille pour voir un écart d'un micromètre sont raccourcies.
+ */
+const ALL = !!process.env.SIM_ALL;
+const CURRENT = {
+  // Un robot de chaque sorte : roues, chenilles, pattes, patins, volant, avion, arme de contact
+  patrouille: ["scarab", "ram", "sapper", "tank", "hovercraft", "spider", "drone", "fighter", "borer", "whirlwind"],
+  ia: ["chantier, quatre contre quatre", "le pilote d'un char tourne au milieu de l'IA", "une mine incendiaire au milieu de l'IA"],
+  // (toutes les armes de l'IA, missiles, leurres, ogive, mines et capteurs, flaques, détours)
+  batailles: [
+    "tranchées, l'éclaireur et le bélier", "chantier, missiles et ogive", "l'échassier contre le char", "l'IA tire sur le pilote d'un char qui tourne",
+    "le traqueur et un char derrière un muret", "le bélier sème ses mines devant un char piloté", "le bélier et un tricycle derrière un baril",
+  ],
+  spéciales: [
+    "dépôt, le mille-pattes et l'IEM", "des mines sous un char piloté", "le traqueur, un char piloté et un fumigène", "un mur d'énergie devant un tricycle piloté",
+    "le mécanicien soigne un char piloté", "des nanites et un rayon réparateur sur un mécanicien abîmé",
+  ],
+  vol: [
+    "le dragster piloté pousse contre le mur, des caisses derrière lui", "le dragster de l'IA, un char collé à son arrière", "la fusée de l'IA fuit au boost",
+    "un obus sur les turboréacteurs d'un dragster, puis il fonce", "le napalm sous l'aéroglisseur, la mante et l'araignée", "un aéroglisseur piloté paralysé",
+    "un drone piloté paralysé en vol", "des robots volants patrouillent et se posent pour recharger", "l'hélice d'un avion de l'IA contre un char arrêté",
+    "l'hélice d'un avion de l'IA dans des caisses", "une mine anti-aérienne sous un drone piloté", "forteresse, volants contre volants",
+  ],
+  contact: [
+    // (chaque arme de contact, pilotée)
+    ...MELEE.map((id) => `${id} piloté contre ${PREY[id]}`),
+    "crusher de l'IA contre trike", "whirlwind de l'IA contre bastion", "drummer de l'IA contre buggy", "duelist piloté contre rocket, de dos",
+    "duelist piloté contre le char de l'IA", "des patins, des pattes et un bouclier paralysés", "sawyer contre le mur sud", "le fléau du batteur autour d'un sapin",
+    "le marteau et le fouet contre des caisses", "le flipper sous un baril et une caisse", "la lame laser sous l'eau", "tranchées, armes de contact contre moteurs et réparation",
+  ],
+  arènes: [
+    "vallée, un camion piloté traverse le pont", "île, un char piloté entre dans la lave", "île, un char piloté se noie dans la mer", "île, un aéroglisseur piloté glisse sur la mer",
+    "ville, trois contre trois dans les rues", "ville, sous la voie express", "canyon, trois contre trois par le viaduc",
+  ],
+} satisfies Record<string, readonly string[]>;
+/**
+ * Ce que seuls des parcours longs du jeu complet font arriver : leurs bilans ne le demandent pas au jeu
+ * courant (le bombardier de l'IA, des avions au-dessus du plancher de la Vallée, le vol de vie et le
+ * mur qui s'éteint de lui-même, un missile qui perd sa cible après un leurre).
+ */
+const ONLY_ALL: Readonly<Record<keyof typeof CURRENT, readonly string[]>> = {
+  patrouille: [],
+  ia: [],
+  batailles: ["lost"],
+  spéciales: ["drained", "barrierGone"],
+  vol: ["bombs"],
+  contact: [],
+  arènes: ["aboveFloor"],
+};
+/** Les parcours d'une famille à jouer : tous (`SIM_ALL`), ou ceux du jeu courant. */
+const chosen = <T extends string>(family: keyof typeof CURRENT, names: readonly T[]): T[] =>
+  ALL ? [...names] : names.filter((n) => (CURRENT[family] as readonly string[]).includes(n));
+/** Ce qu'un bilan demande et qui n'est arrivé dans aucun parcours joué (sans ce que seul le jeu complet fait arriver). */
+const absent = (counters: Record<string, number>, family: keyof typeof CURRENT): string[] =>
+  Object.entries(counters).filter(([what, n]) => !(n > 0) && (ALL || !ONLY_ALL[family].includes(what))).map(([what]) => what);
+/** Ce que chaque parcours a fait arriver, par famille (`SIM_COVERAGE`) : les clés de ses bilans qui ont augmenté. */
+const coverage: Record<string, Record<string, string[]>> = {};
+const tally = (counters: readonly (Record<string, number> | Set<string>)[]): Map<string, number> => {
+  const m = new Map<string, number>();
+  for (const c of counters) {
+    if (c instanceof Set) for (const x of c) m.set(`arme ${x}`, 1);
+    else for (const [k, v] of Object.entries(c)) m.set(k, v);
+  }
+  return m;
+};
+/**
+ * Joue un parcours, et relève (`SIM_COVERAGE`) ce qu'il a fait arriver dans les bilans `counters` :
+ * les compteurs qui ont augmenté, et tout ce qu'il a mis dans un ensemble (les armes qui ont tiré),
+ * même si un parcours d'avant l'y avait déjà mis.
+ */
+const covered = (family: string, counters: readonly (Record<string, number> | Set<string>)[], name: string, run: () => void): void => {
+  const sets = counters.filter((c): c is Set<string> => c instanceof Set);
+  const kept = sets.map((s) => new Set(s));
+  if (process.env.SIM_COVERAGE) for (const s of sets) s.clear();
+  const before = tally(counters);
+  try {
+    run();
+  } finally {
+    const after = tally(counters);
+    if (process.env.SIM_COVERAGE) {
+      (coverage[family] ??= {})[name] = [...after].filter(([k, v]) => v > (before.get(k) ?? 0)).map(([k]) => k);
+      sets.forEach((s, i) => kept[i].forEach((x) => s.add(x)));
+    }
+  }
+};
+/** Une comparaison qui doit voir un écart : sur un parcours raccourci, et un seul, au jeu courant. */
+const sensed = (seconds: number): number => (ALL ? seconds : Math.min(seconds, 6));
+const few = <T>(list: readonly T[]): T[] => (ALL ? [...list] : list.slice(0, 1));
+
 describe.skipIf(!PROBE)("Simulation portée en Rust : des robots qui roulent et se heurtent, au bit près", () => {
   beforeAll(async () => {
     await initPhysics();
     const { instance } = await WebAssembly.instantiate(readFileSync(PROBE!), {});
     probe = instance.exports as unknown as SimProbe;
+  });
+  afterAll(() => {
+    if (process.env.SIM_COVERAGE) writeFileSync(process.env.SIM_COVERAGE, `${JSON.stringify(coverage, null, 1)}\n`);
   });
 
   it("le catalogue lu par le Rust donne les mêmes hauteurs de départ", () => {
@@ -2872,19 +2968,19 @@ describe.skipIf(!PROBE)("Simulation portée en Rust : des robots qui roulent et 
       );
     }
   };
-  it.each(PORTED)("%s patrouille seul au Dépôt : mêmes destinations, même chemin", (id) => {
-    aiCase(`${id} seul`, { bots: [{ id, x: 0, z: -27, yaw: 0, ai: "red" }], phases: [{ seconds: 25, throttle: 0, steer: 0 }] }, 7);
+  it.each(chosen("patrouille", PORTED))("%s patrouille seul au Dépôt : mêmes destinations, même chemin", (id) => {
+    covered("patrouille", [minds], id, () => aiCase(`${id} seul`, { bots: [{ id, x: 0, z: -27, yaw: 0, ai: "red" }], phases: [{ seconds: 25, throttle: 0, steer: 0 }] }, 7));
   });
   // (une minute de huit robots : plus d'une minute de calcul sur une machine chargée)
-  it.each(Object.keys(AI_RUNS))("%s : même IA, même détection, mêmes chocs", { timeout: 300_000 }, (name) => aiCase(name, AI_RUNS[name], 7));
+  it.each(chosen("ia", Object.keys(AI_RUNS)))("%s : même IA, même détection, mêmes chocs", { timeout: 300_000 }, (name) => covered("ia", [minds], name, () => aiCase(name, AI_RUNS[name], 7)));
 
   it("l'IA a patrouillé, contourné, pris les rampes, reculé, bondi, fui, foncé ; les équipes se sont repérées et cachées", () => {
     // (ce qui n'est arrivé dans aucun parcours)
-    expect(Object.entries(minds).filter(([, n]) => !(n > 0)).map(([what]) => what)).toEqual([]);
+    expect(absent(minds, "ia")).toEqual([]);
   });
 
   it("la comparaison voit un écart d'un micromètre sur un robot de l'IA, ou une autre graine", { timeout: 300_000 }, () => {
-    const run: Run = { ...AI_RUNS["dépôt, quatre contre quatre"], phases: [{ seconds: 20, throttle: 0, steer: 0 }] };
+    const run: Run = { ...AI_RUNS["dépôt, quatre contre quatre"], phases: [{ seconds: sensed(20), throttle: 0, steer: 0 }] };
     const ts = runTs(run, 7);
     expect(firstDifference(runRust(run, 7), ts.samples)).toBeNull();
     expect(firstDifference(runRust(run, 7, { bot: 1e-6 }), ts.samples)).not.toBeNull();
@@ -2970,13 +3066,14 @@ describe.skipIf(!PROBE)("Simulation portée en Rust : des robots qui roulent et 
       );
     }
   };
-  it.each(Object.keys(BATTLES))("%s : mêmes tirs, mêmes coups, même tactique", { timeout: 300_000 }, (name) => battleCase(name, BATTLES[name], 7));
+  it.each(chosen("batailles", Object.keys(BATTLES)))("%s : mêmes tirs, mêmes coups, même tactique", { timeout: 300_000 }, (name) =>
+    covered("batailles", [fights, weapons], name, () => battleCase(name, BATTLES[name], 7)));
 
   it("les batailles : toutes les armes ont tiré, touché, détruit, percé, allumé ; des robots ont engagé, chargé, fui, se sont mis à couvert, ont vidé leur chargeur, surchauffé ; des missiles ont été abattus, détournés, perdus de vue ; des mines posées, repérées, contournées, abattues", () => {
     // (ce qui n'est arrivé dans aucune bataille, et les armes qui n'ont pas tiré)
-    expect(Object.entries(fights).filter(([, n]) => !(n > 0)).map(([what]) => what)).toEqual([]);
+    expect(absent(fights, "batailles")).toEqual([]);
     const all = ["rifle", "cannon", "sniper", "laser", "rail", "shotgun", "plasma", "missile", "rockets", "lockon", "warhead", "flare", "flamer", "mine", "sensorMine"];
-    expect(all.filter((w) => !weapons.has(w))).toEqual([]);
+    expect(all.filter((w) => !weapons.has(w) && (ALL || !ONLY_ALL.batailles.includes(`arme ${w}`)))).toEqual([]);
   });
 
   // Ce que les armes spéciales ont fait, sur tous leurs parcours (côté TypeScript)
@@ -3025,16 +3122,17 @@ describe.skipIf(!PROBE)("Simulation portée en Rust : des robots qui roulent et 
       );
     }
   };
-  it.each(Object.keys(SPECIALS))("%s : mêmes paralysies, mêmes fumées, mêmes mines, mêmes soins, mêmes murs", { timeout: 300_000 }, (name) => specialCase(name, SPECIALS[name], 7));
+  it.each(chosen("spéciales", Object.keys(SPECIALS)))("%s : mêmes paralysies, mêmes fumées, mêmes mines, mêmes soins, mêmes murs", { timeout: 300_000 }, (name) =>
+    covered("spéciales", [specials], name, () => specialCase(name, SPECIALS[name], 7)));
 
   it("les armes spéciales : impulsions et paralysies (de l'IA, d'un pilote), fumées qui cachent et se dissipent, mines qui bondissent, se collent, sautent sur ordre ; soutien, réparations et vols de vie, blocs repoussés ; murs déployés, touchés, brisés, éteints", () => {
     // (ce qui n'est arrivé dans aucun parcours)
-    expect(Object.entries(specials).filter(([, n]) => !(n > 0)).map(([what]) => what)).toEqual([]);
+    expect(absent(specials, "spéciales")).toEqual([]);
   });
 
   it("la comparaison voit un écart d'un micromètre avec les armes spéciales, ou une autre graine", { timeout: 300_000 }, () => {
-    for (const name of ["dépôt, le mille-pattes et l'IEM", "chantier, le mécanicien et le gardien"]) {
-      const run: Run = { ...SPECIALS[name], phases: [{ seconds: 30, throttle: 0, steer: 0 }] };
+    for (const name of few(["dépôt, le mille-pattes et l'IEM", "chantier, le mécanicien et le gardien"])) {
+      const run: Run = { ...SPECIALS[name], phases: [{ seconds: sensed(30), throttle: 0, steer: 0 }] };
       const ts = runTs(run, 7);
       expect(firstDifference(runRust(run, 7), ts.samples), name).toBeNull();
       expect(firstDifference(runRust(run, 7, { bot: 1e-6 }), ts.samples), name).not.toBeNull();
@@ -3043,7 +3141,7 @@ describe.skipIf(!PROBE)("Simulation portée en Rust : des robots qui roulent et 
       expect(firstDifference(runRust(run, 7, { staged: true }), ts.samples), name).toBeNull();
     }
     // (les projectiles que l'essai fait partir, décalés d'un micromètre)
-    for (const name of ["des mines sous un char piloté", "des nanites et un rayon réparateur sur un mécanicien abîmé", "des fumigènes entre deux équipes"]) {
+    for (const name of few(["des mines sous un char piloté", "des nanites et un rayon réparateur sur un mécanicien abîmé", "des fumigènes entre deux équipes"])) {
       const run = SPECIALS[name];
       const ts = runTs(run, 7);
       expect(firstDifference(runRust(run, 7), ts.samples), name).toBeNull();
@@ -3052,8 +3150,8 @@ describe.skipIf(!PROBE)("Simulation portée en Rust : des robots qui roulent et 
   });
 
   it("la comparaison voit un écart d'un micromètre dans une bataille, ou une autre graine", { timeout: 300_000 }, () => {
-    for (const name of ["dépôt, trois contre trois", "dépôt, missiles contre leurres"]) {
-      const run: Run = { ...BATTLES[name], phases: [{ seconds: 30, throttle: 0, steer: 0 }] };
+    for (const name of few(["dépôt, trois contre trois", "dépôt, missiles contre leurres"])) {
+      const run: Run = { ...BATTLES[name], phases: [{ seconds: sensed(30), throttle: 0, steer: 0 }] };
       const ts = runTs(run, 7);
       expect(firstDifference(runRust(run, 7), ts.samples), name).toBeNull();
       expect(firstDifference(runRust(run, 7, { bot: 1e-6 }), ts.samples), name).not.toBeNull();
@@ -3108,13 +3206,15 @@ describe.skipIf(!PROBE)("Simulation portée en Rust : des robots qui roulent et 
       );
     }
   };
-  it.each(Object.keys(ENGINES))("%s : mêmes moteurs, mêmes appuis, mêmes jets", { timeout: 300_000 }, (name) => flightCase(name, ENGINES[name], 7));
-  it.each(Object.keys(FLYERS))("%s : même vol, mêmes moteurs, mêmes tirs", { timeout: 300_000 }, (name) => flightCase(name, FLYERS[name], 7));
+  it.each(chosen("vol", Object.keys(ENGINES)))("%s : mêmes moteurs, mêmes appuis, mêmes jets", { timeout: 300_000 }, (name) =>
+    covered("vol", [flown], name, () => flightCase(name, ENGINES[name], 7)));
+  it.each(chosen("vol", Object.keys(FLYERS)))("%s : même vol, mêmes moteurs, mêmes tirs", { timeout: 300_000 }, (name) =>
+    covered("vol", [flown], name, () => flightCase(name, FLYERS[name], 7)));
 
   it("les moteurs, les appuis et le vol : jets qui brûlent et allument, moteurs usés, ratés, en feu ; propulseurs de l'IA ; appuis, vol, atterrissages, chutes, fuites, paralysies ; tirs, coups, couverts", () => {
     if (process.env.SIM_REPORT) console.log(`les moteurs, les appuis et le vol, sur tous leurs parcours : ${JSON.stringify(flown)}`);
     // (ce qui n'est arrivé dans aucun parcours)
-    expect(Object.entries(flown).filter(([, n]) => !(n > 0)).map(([what]) => what)).toEqual([]);
+    expect(absent(flown, "vol")).toEqual([]);
   });
 
   it("la comparaison voit un écart d'un micromètre sur un robot à moteurs, volant ou avion, ou une autre graine", { timeout: 300_000 }, () => {
@@ -3123,8 +3223,8 @@ describe.skipIf(!PROBE)("Simulation portée en Rust : des robots qui roulent et 
       ["des robots volants patrouillent et se posent pour recharger", FLYERS["des robots volants patrouillent et se posent pour recharger"]],
       ["dépôt, des avions contre des robots au sol", FLYERS["dépôt, des avions contre des robots au sol"]],
     ];
-    for (const [name, base] of runs) {
-      const run: Run = { ...base, phases: [{ seconds: 20, throttle: 0, steer: 0 }] };
+    for (const [name, base] of few(runs)) {
+      const run: Run = { ...base, phases: [{ seconds: sensed(20), throttle: 0, steer: 0 }] };
       const ts = runTs(run, 7);
       expect(firstDifference(runRust(run, 7), ts.samples), name).toBeNull();
       expect(firstDifference(runRust(run, 7, { bot: 1e-6 }), ts.samples), name).not.toBeNull();
@@ -3181,17 +3281,18 @@ describe.skipIf(!PROBE)("Simulation portée en Rust : des robots qui roulent et 
       );
     }
   };
-  it.each(Object.keys(MELEE_RUNS))("%s : mêmes armes de contact, mêmes coups", { timeout: 300_000 }, (name) => meleeCase(name, MELEE_RUNS[name], 7));
+  it.each(chosen("contact", Object.keys(MELEE_RUNS)))("%s : mêmes armes de contact, mêmes coups", { timeout: 300_000 }, (name) =>
+    covered("contact", [struck], name, () => meleeCase(name, MELEE_RUNS[name], 7)));
 
   it("les armes de contact : coups sur des robots, des accessoires, le décor, qui glissent ; blocs détruits, roues arrachées, robots détruits ; feu, paralysies ; morsures, prises, chaînes enroulées, balourd, frappes, robots soulevés, charges", () => {
     if (process.env.SIM_REPORT) console.log(`les armes de contact, sur tous leurs parcours : ${JSON.stringify(struck)}`);
     // (ce qui n'est arrivé dans aucun parcours)
-    expect(Object.entries(struck).filter(([, n]) => !(n > 0)).map(([what]) => what)).toEqual([]);
+    expect(absent(struck, "contact")).toEqual([]);
   });
 
   it("la comparaison voit un écart d'un micromètre avec les armes de contact, ou une autre graine", { timeout: 300_000 }, () => {
-    for (const name of ["dépôt, armes de contact, trois contre trois", "forteresse, armes de contact, trois contre trois"]) {
-      const run: Run = { ...MELEE_RUNS[name], phases: [{ seconds: 20, throttle: 0, steer: 0 }] };
+    for (const name of few(["dépôt, armes de contact, trois contre trois", "forteresse, armes de contact, trois contre trois"])) {
+      const run: Run = { ...MELEE_RUNS[name], phases: [{ seconds: sensed(20), throttle: 0, steer: 0 }] };
       const ts = runTs(run, 7);
       expect(firstDifference(runRust(run, 7), ts.samples), name).toBeNull();
       expect(firstDifference(runRust(run, 7, { bot: 1e-6 }), ts.samples), name).not.toBeNull();
@@ -3275,17 +3376,18 @@ describe.skipIf(!PROBE)("Simulation portée en Rust : des robots qui roulent et 
       console.log(`${name} : ${seen || "rien de particulier"} ; ${c.shot ?? 0} tirs, ${c.hit ?? 0} robots touchés, ${c.botKilled ?? 0} détruits (${Object.entries(c).filter(([k]) => k.startsWith("killed:")).map(([k, n]) => `${k.slice(7)} ${n}`).join(", ") || "aucun"}) ; ${ts.samples[ts.samples.length - 1].stats[8]} tirages`);
     }
   };
-  it.each(Object.keys(ARENA_RUNS))("%s : même relief, même navigation, mêmes dangers", { timeout: 600_000 }, (name) => arenaCase(name, ARENA_RUNS[name], 7));
+  it.each(chosen("arènes", Object.keys(ARENA_RUNS)))("%s : même relief, même navigation, mêmes dangers", { timeout: 600_000 }, (name) =>
+    covered("arènes", [terrain], name, () => arenaCase(name, ARENA_RUNS[name], 7)));
 
   it("les grandes arènes : des robots sur les ponts, sous la voie express, sur les rampes et les plateformes, dans les bâtiments, dans la lave et la mer, sur l'eau, au-dessus du plancher ; des blocs dans la lave, des robots noyés ; des tirs, des détours", () => {
     if (process.env.SIM_REPORT) console.log(`les grandes arènes, sur tous leurs parcours : ${JSON.stringify(terrain)}`);
     // (ce qui n'est arrivé dans aucun parcours)
-    expect(Object.entries(terrain).filter(([, n]) => !(n > 0)).map(([what]) => what)).toEqual([]);
+    expect(absent(terrain, "arènes")).toEqual([]);
   });
 
   it("la comparaison voit un écart de dix micromètres dans une grande arène, ou une autre graine", { timeout: 600_000 }, () => {
-    for (const name of ["île, trois contre trois sur la piste", "ville, trois contre trois dans les rues", "canyon, trois contre trois par le viaduc"]) {
-      const run: Run = { ...ARENA_RUNS[name], phases: [{ seconds: 10, throttle: 0, steer: 0 }] };
+    for (const name of few(["île, trois contre trois sur la piste", "ville, trois contre trois dans les rues", "canyon, trois contre trois par le viaduc"])) {
+      const run: Run = { ...ARENA_RUNS[name], phases: [{ seconds: sensed(10), throttle: 0, steer: 0 }] };
       const ts = runTs(run, 7);
       expect(firstDifference(runRust(run, 7), ts.samples), name).toBeNull();
       // (dix micromètres : à 50 m du centre, un micromètre se perd dans les nombres de 4 octets de Rapier)

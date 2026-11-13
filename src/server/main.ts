@@ -13,6 +13,7 @@ import { checkMap } from "../shared/map/validate";
 import { DEFAULT_PORT, MAP_ASSET_PATH } from "../shared/net/protocol";
 import { initPhysics } from "../shared/sim/simulation";
 import { loadSimModule } from "../shared/native/simModule";
+import { DEFAULT_SIMULATION, simulationNamed, type SimulationEngine } from "../shared/native/choice";
 import { NativeRoom } from "./nativeRoom";
 import { ProgressBook } from "./progressBook";
 import { Room, type Player, type RoomBase, type RoomOptions } from "./room";
@@ -186,23 +187,38 @@ async function loadMaps(dir: string): Promise<MapFile[]> {
 }
 
 /**
- * La simulation compilée entière (SIM=rust) : SIM_WASM, sinon celle des sources
- * (src/shared/native/casse-sim.wasm, npm run native), sinon celle du client compilé (dist/assets/).
+ * La simulation compilée entière (la simulation Rust) : SIM_WASM, sinon celle des sources
+ * (src/shared/native/casse-sim.wasm, npm run native), sinon celle du client compilé (dist/assets/) ;
+ * null si aucune n'est là.
  */
-function simWasm(): Uint8Array {
+function simWasm(): Uint8Array | null {
   const candidates = [process.env.SIM_WASM, "src/shared/native/casse-sim.wasm"].filter((p): p is string => !!p).map((p) => resolve(p));
   const assets = resolve(process.env.CLIENT_DIR || "dist", "assets");
   if (existsSync(assets)) candidates.push(...readdirSync(assets).filter((f) => /^casse-sim-.*\.wasm$/.test(f)).map((f) => join(assets, f)));
   const found = candidates.find((p) => existsSync(p));
-  if (!found) throw new Error("SIM=rust : la simulation compilée est introuvable (npm run native, ou SIM_WASM)");
-  return new Uint8Array(readFileSync(found));
+  return found ? new Uint8Array(readFileSync(found)) : null;
+}
+
+/**
+ * La salle, sur la simulation choisie : `SIM=ts` ou `SIM=rust`, sinon celle par défaut
+ * (`DEFAULT_SIMULATION`, src/shared/native/choice.ts) ; les mêmes images. La simulation Rust demandée
+ * (`SIM=rust`) dont le module manque arrête le serveur ; celle par défaut laisse la place au TypeScript.
+ */
+async function openRoom(options: RoomOptions): Promise<{ room: RoomBase<unknown>; sim: SimulationEngine }> {
+  const asked = simulationNamed(process.env.SIM);
+  if (process.env.SIM && !asked) throw new Error(`SIM : « ts » ou « rust », pas « ${process.env.SIM} »`);
+  if ((asked ?? DEFAULT_SIMULATION) === "rust") {
+    const bytes = simWasm();
+    if (bytes) return { room: new NativeRoom(await loadSimModule(bytes), book, options), sim: "rust" };
+    if (asked) throw new Error("SIM=rust : la simulation compilée est introuvable (npm run native, ou SIM_WASM)");
+    console.warn("Simulation Rust introuvable (npm run native, ou SIM_WASM) : la salle tourne sur celle du TypeScript");
+  }
+  return { room: new Room(book, options), sim: "ts" };
 }
 
 const roomOptions: RoomOptions = { arenas: rotationOf(loadGameArenas(ARENAS_DIR)), maps: await loadMaps(MAPS_DIR), mapsOnly: process.env.MAPS_ONLY === "1" };
-/** La simulation de la salle : celle du TypeScript, ou celle portée en Rust (`SIM=rust`), qui rend les mêmes images. */
-const SIM = process.env.SIM === "rust" ? "rust" : "ts";
-const room: RoomBase<unknown> = SIM === "rust" ? new NativeRoom(await loadSimModule(simWasm()), book, roomOptions) : new Room(book, roomOptions);
-console.log(`Rotation des arènes : ${room.rotation.length}${SIM === "rust" ? " (simulation Rust)" : ""}`);
+const { room, sim: SIM } = await openRoom(roomOptions);
+console.log(`Rotation des arènes : ${room.rotation.length} (simulation ${SIM === "rust" ? "Rust" : "TypeScript"})`);
 const port = Number(process.env.PORT) || DEFAULT_PORT;
 
 /** Dossier du client compilé, servi à côté de la partie. */
@@ -217,7 +233,7 @@ const http = createServer((req, res) => {
   if (url === "/status" || url.startsWith("/status?")) {
     res.writeHead(200, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-cache" });
     // Pour l'hébergeur, pas pour le joueur : en français, comme les journaux du serveur
-    res.end(`Casse-Robot : serveur de jeu, ${room.playerCount} joueur(s)\n`); // i18n-ignore
+    res.end(`Casse-Robot : serveur de jeu, ${room.playerCount} joueur(s), simulation ${SIM}\n`); // i18n-ignore
     return;
   }
   const asset = mapAssetHash(url, MAP_ASSET_PATH);

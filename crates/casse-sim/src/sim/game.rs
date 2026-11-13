@@ -253,6 +253,11 @@ pub fn clear_arena(sim: &mut Sim) -> Result<(), String> {
         remove_barrier(sim, 0, false);
     }
     reset_props(sim)?;
+    // Les blocs en feu des robots retirés : le TypeScript les garde dans `sim.fires` jusqu'à la
+    // prochaine tranche des feux, qui les ôte sans rien faire (des blocs détruits) ; ils partent dès
+    // maintenant, avant que leur robot ne rende ses blocs (une tranche lisait sinon un bloc qui n'est plus)
+    let bots = &sim.bots;
+    sim.fires.retain(|&(b, k)| bots[b].blocks.get(k).is_some_and(|block| block.alive));
     // Plus rien ne tient les robots retirés (projectiles, flaques, feux, débris : partis avec eux) : ils
     // ne gardent que leur numéro et leur cockpit éteint (ce que la détection d'avant, jusqu'à sa
     // prochaine tranche, en lit), et rendent le reste. Sans cela, un serveur qui enchaîne les parties

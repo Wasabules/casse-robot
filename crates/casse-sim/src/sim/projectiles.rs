@@ -497,8 +497,13 @@ fn steer(sim: &mut Sim, i: usize) {
         && let Some(bot) = p.shooter
         && sim.bots[bot].piloted
     {
-        // L'ogive d'un pilote : elle tourne vers le point qu'il vise
-        target = sim.bots[bot].input.aim;
+        // L'ogive d'un pilote : elle tourne vers le point qu'il vise ; ses commandes du moment, même si
+        // le robot qui l'a tirée n'est plus là (le TypeScript : `shooter.input`, l'objet des commandes du
+        // joueur, que son robot réapparu porte aussi ; `read_inputs` ne recopie que dans les robots présents)
+        target = match sim.bots[bot].input_slot {
+            Some(slot) => sim.inputs[slot].aim,
+            None => sim.bots[bot].input.aim,
+        };
     } else if guidance.mode == "command"
         && let Some(t) = p.commander
         && let Some(bot) = p.shooter
@@ -510,10 +515,11 @@ fn steer(sim: &mut Sim, i: usize) {
         target = Some(add(frame.muzzle, scale(frame.dir, along + LINE_LEAD)));
     } else if guidance.mode == "command" || guidance.mode == "piloted" {
         // (une ogive tirée par l'IA, ou un missile dont le lance-missiles est détruit : le point que
-        // visait sa tourelle)
+        // visait sa tourelle ; tiré de la caméra libre, sans tourelle : le point qu'elle vise, `playerAim`)
         target = match (p.commander, p.shooter) {
             (Some(t), Some(bot)) => sim.bots[bot].turrets[t].aim,
-            _ => None,
+            (Some(_), None) => None,
+            (None, _) => sim.player_aim,
         };
     } else if let Some(h) = p.homing
         && sim.bots[h].cockpit_alive()
