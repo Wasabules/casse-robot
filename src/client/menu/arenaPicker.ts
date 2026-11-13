@@ -62,13 +62,13 @@ export function rememberArena(key: ArenaKey): void {
   }
 }
 
-/** Quelques faits sur une arène : sa taille, ses zones, le jour ou la nuit. */
-function factLines(facts: ArenaFacts): string[] {
+/** Quelques faits sur une arène : sa taille, ses zones, le jour ou la nuit (une étiquette chacun ; la nuit, sur de l'huile). */
+function factLines(facts: ArenaFacts): { text: string; night?: boolean }[] {
   return [
-    facts.half >= LARGE_HALF ? t("menu.arena.large") : t("menu.arena.small"),
-    t("menu.arena.side", { side: measure(facts.half * 2, "m", 0) }),
-    t("menu.arena.zones", { n: facts.zones }),
-    facts.night ? t("menu.arena.night") : t("menu.arena.day"),
+    { text: facts.half >= LARGE_HALF ? t("menu.arena.large") : t("menu.arena.small") },
+    { text: t("menu.arena.side", { side: measure(facts.half * 2, "m", 0) }) },
+    { text: t("menu.arena.zones", { n: facts.zones }) },
+    facts.night ? { text: t("menu.arena.night"), night: true } : { text: t("menu.arena.day") },
   ];
 }
 
@@ -145,7 +145,7 @@ export class ArenaPicker {
     if (tags.childElementCount) figure.append(tags);
     void factsOf(arena).then((facts) => {
       if (!facts?.night || this.disposed) return;
-      tags.append(el("span", "rp-tag", t("menu.arena.night")));
+      tags.append(el("span", "rp-tag night", t("menu.arena.night")));
       if (!tags.parentElement) figure.append(tags);
     });
     button.append(figure, el("span", "picker-name", arena.name), el("span", "picker-sub", arena.info));
@@ -196,7 +196,7 @@ export class ArenaPicker {
     const chips = el("div", "picker-chips");
     void factsOf(choice).then((facts) => {
       if (!facts || this.shown !== choice || this.disposed) return;
-      for (const fact of factLines(facts)) chips.append(el("span", "picker-chip", fact));
+      for (const fact of factLines(facts)) chips.append(el("span", fact.night ? "picker-chip night" : "picker-chip", fact.text));
     });
     const parts: HTMLElement[] = [view, el("h2", "picker-title", choice.name)];
     const meta = choice.community;

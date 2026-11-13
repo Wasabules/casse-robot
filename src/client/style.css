@@ -11,8 +11,39 @@
     --ok: #6fcf8f;
     --warn: #f0a03c;
     --bad: #ff7a6b;
-    --display: "Chakra Petch", "Arial Narrow", system-ui, sans-serif;
-    --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    /*
+     * « La Casse » (les menus) : les matières de la ferraille. L'acier brut des plaques (il ne porte
+     * que du grand texte : 3,85:1), l'apprêt des fonds de menu, l'huile (l'encre, le ruban), la
+     * peinture blanche (le texte, le pochoir), le carton des étiquettes, la rouille (le danger,
+     * quitter), le jaune chantier (la sélection, et rien d'autre), le bleu et le rouge des équipes.
+     */
+    --steel: #6f766f;
+    --steel-edge: #4d534c;
+    --steel-rivet: #a3aaa2;
+    --primer: #2c302b;
+    --primer-edge: #1f221e;
+    --primer-rivet: #5b615a;
+    --primer-line: #4b5049;
+    --oil: #171614;
+    --paint: #efe9d8;
+    /* (sur l'apprêt : 5,07:1 ; sur l'huile et le fond creusé, plus encore) */
+    --paint-dim: #9aa19a;
+    --card: #d9c9a3;
+    --card-ink: #4d4535;
+    --rust: #9c4426;
+    --rust-text: #f08a70;
+    --hazard: #e9b824;
+    --team-blue: #3d6fce;
+    --team-red: #c8473a;
+    --drop: 0 6px 0 rgba(23, 22, 20, 0.38);
+    --stripes: repeating-linear-gradient(-45deg, var(--oil) 0 8px, var(--hazard) 8px 16px);
+    /* Le pochoir (titres, entrées, chiffres du score), l'étroite (tout ce qui se lit), le marqueur (une note par écran) */
+    --stencil: "Big Shoulders Stencil", Impact, "Arial Narrow", sans-serif;
+    --sans: "Archivo Narrow", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+    --marker: "Permanent Marker", "Segoe Print", "Comic Sans MS", cursive;
+    /* Le HUD, le garage et l'éditeur de cartes : l'étroite, et les chiffres en chasse fixe du système */
+    --display: var(--sans);
+    --mono: ui-monospace, "Cascadia Mono", "SFMono-Regular", Menlo, Consolas, monospace;
   }
   [hidden] { display: none !important; }
   html, body { height: 100%; }
@@ -207,41 +238,48 @@
   }
   .overlay.err p { color: #8a1f12; }
 
-  /* La carte graphique réinitialisée (client/hud/gpuNotice.ts) : un bandeau au-dessus de tout, sauf de l'écran de chargement */
+  /*
+   * Les bandeaux (la carte graphique réinitialisée, client/hud/gpuNotice.ts ; la simulation relancée,
+   * client/hud/notice.ts) : une plaque d'apprêt bordée d'une bande de chantier, en haut, au-dessus de
+   * tout sauf de l'écran de chargement
+   */
   .gpu-notice {
     position: fixed; z-index: 35; left: 50%; top: 16px; transform: translateX(-50%);
-    width: min(520px, calc(100% - 32px));
+    width: min(520px, calc(100% - 32px)); box-sizing: border-box;
     display: grid; gap: 10px; justify-items: center;
-    padding: 12px 16px; border-radius: 10px;
-    background: rgba(12, 16, 22, 0.92); border: 1px solid rgba(240, 189, 44, 0.5);
+    padding: 20px 18px 14px; background: var(--primer); border: 3px solid var(--primer-edge); box-shadow: var(--drop);
   }
-  .gpu-notice p { margin: 0; font: 500 13px/1.5 var(--mono); color: #e9edf1; text-align: center; }
-  /* La simulation relancée après une erreur (client/hud/notice.ts) : le même bandeau, qui ne retient pas la souris */
+  .gpu-notice::before, .touch-note::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 8px; background: var(--stripes); }
+  .gpu-notice p { margin: 0; font: 600 15px/1.45 var(--sans); color: var(--paint); text-align: center; }
+  .gpu-notice .menu-entry { align-self: stretch; }
+  /* (la simulation relancée : le même bandeau, qui ne retient pas la souris) */
   .sim-notice { pointer-events: none; }
 
-  /* Écran de chargement (client/menu/loading.ts) : opaque, au-dessus de tout ; la scène qu'on prépare derrière ne se voit pas */
+  /*
+   * Écran de chargement (client/menu/loading.ts) : opaque, au-dessus de tout ; la scène qu'on prépare
+   * derrière ne se voit pas. Le nom du jeu sur sa plaque, puis une plaque d'apprêt : ce qu'on charge,
+   * une barre qui se remplit de bandes de chantier, l'étape en cours
+   */
   .loading {
     position: fixed; inset: 0; z-index: 40;
     display: grid; place-items: center;
-    padding-inline: 16px;
-    background:
-      radial-gradient(ellipse 80% 60% at 50% 40%, rgba(40, 52, 62, 0.9) 0%, rgba(10, 14, 20, 0) 70%),
-      #0b0f14;
+    padding-inline: 16px; font-family: var(--sans); color: var(--paint);
+    background: #26292a;
   }
-  .loading-panel { width: min(460px, 100%); display: grid; gap: 12px; }
-  .loading-title { font-size: clamp(36px, 6vw, 60px); letter-spacing: 0.05em; white-space: nowrap; }
-  .loading-title span { color: var(--signal); }
-  .loading-subtitle { margin: 0; font: 500 14px/1.45 var(--mono); color: var(--muted); }
-  .loading-bar {
-    height: 6px; margin-top: 6px; overflow: hidden;
-    background: rgba(206, 220, 230, 0.1); border: 1px solid var(--line); border-radius: 3px;
+  .loading-panel { width: min(520px, 100%); display: grid; justify-items: start; }
+  .loading-plate { margin-left: 8px; transform: rotate(-2.5deg); }
+  .loading-title { font-size: clamp(44px, 8vw, 84px); white-space: nowrap; }
+  .loading-sheet {
+    position: relative; justify-self: stretch; display: grid; gap: 12px; margin-top: 14px; padding: 18px 26px 22px;
+    background: var(--primer); border: 3px solid var(--primer-edge); box-shadow: var(--drop);
   }
-  .loading-fill { height: 100%; width: 0; background: var(--signal); transition: width 0.25s ease-out; }
-  .loading-step { margin: 0; min-height: 1.4em; font: 400 12.5px/1.4 var(--mono); color: var(--muted); }
+  .loading-sheet > .menu-slip { margin: 0; }
+  .loading-bar { height: 22px; overflow: hidden; background: var(--oil); border: 3px solid var(--primer-line); }
+  .loading-fill { height: 100%; width: 0; background: var(--stripes); transition: width 0.25s ease-out; }
+  .loading-step { margin: 0; min-height: 1.4em; font: 500 15px/1.4 var(--sans); color: var(--paint-dim); }
   .loading.await-click .loading-bar, .loading.await-click .loading-step { display: none; }
   .loading.await-click { cursor: pointer; }
-  .loading-go { margin-top: 6px; justify-self: start; padding: 14px 18px; }
-  .loading-go .menu-label { font-size: 20px; }
+  .loading-go { margin: 0 -26px; }
   /* Pendant un chargement, le HUD et les menus de la partie n'apparaissent pas par-dessus */
   body.loading-open .menu, body.loading-open .hint { visibility: hidden; }
   @media (prefers-reduced-motion: reduce) { .loading-fill { transition: none; } }
@@ -643,12 +681,11 @@
   .touch-note {
     position: fixed; z-index: 21; left: 50%; transform: translateX(-50%);
     bottom: calc(50% - 40px); width: min(460px, calc(100% - 32px)); box-sizing: border-box;
-    display: flex; gap: 10px; align-items: flex-start; padding: 10px 10px 10px 14px;
-    background: rgba(17, 22, 28, 0.92); border: 1px solid var(--signal); border-radius: 8px;
-    box-shadow: 0 10px 30px rgba(10, 14, 20, 0.45);
+    display: flex; gap: 10px; align-items: flex-start; padding: 18px 10px 10px 16px;
+    background: var(--primer); border: 3px solid var(--primer-edge); box-shadow: var(--drop);
   }
-  .touch-note p { margin: 0; flex: 1; font: 500 12.5px/1.45 var(--mono); color: var(--text); }
-  .touch-note .th-btn { flex: 0 0 36px; width: 36px; height: 36px; }
+  .touch-note p { margin: 0; flex: 1; font: 600 15px/1.4 var(--sans); color: var(--paint); }
+  .touch-note .th-btn { flex: 0 0 44px; }
   body.menu-open .touch-note { display: none; }
   .crosshair {
     position: fixed; left: 50%; top: 45%; z-index: 6; pointer-events: none; width: 0; height: 0;
@@ -906,191 +943,478 @@
     body.touch-pilot:has(.touchpad.aim-stick.lefty) .bottom-dock { left: calc(50% + 70px); }
   }
 
-  /* Menu : écran titre, pause, commandes. Panneau à gauche, l'arène reste visible à droite. */
+  /*
+   * Menus (menu/menu.ts) : « La Casse ». Pas de voile sur la bataille de démonstration : des plaques
+   * opaques posées dessus, avec une ombre portée franche. Le nom de l'écran au pochoir sur une plaque
+   * d'acier rivetée, de travers ; le reste sur une plaque d'apprêt : l'en-tête du bon (capitales
+   * espacées, pointillé), les entrées (numéro de lot frappé, libellé au pochoir), la note du pied.
+   * L'entrée choisie (survol, focus du clavier ou de la manette, toucher) : jaune chantier, bande de
+   * rayures à gauche, flèche. Un écran « de scène » (l'accueil, la pause, la fin de partie) pose ses
+   * plaques aux coins de l'écran ; les autres les empilent à gauche (en bas sur un téléphone).
+   */
   .menu {
+    --pad-x: clamp(16px, 3.2vw, 48px); --pad-y: clamp(16px, 4vh, 40px);
     position: fixed; inset: 0; z-index: 20;
     display: flex; align-items: center;
-    padding: 24px clamp(16px, 6vw, 72px);
-    background: linear-gradient(90deg, rgba(10, 14, 20, 0.9) 0%, rgba(10, 14, 20, 0.7) 38%, rgba(10, 14, 20, 0) 70%);
-    overflow-y: auto;
+    padding: var(--pad-y) var(--pad-x) calc(var(--pad-y) + env(safe-area-inset-bottom, 0px));
+    overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain;
+    font-family: var(--sans); color: var(--paint);
   }
   .menu[hidden] { display: none; }
-  .menu { overscroll-behavior: contain; }
-  /* Écran bas (téléphone à l'horizontale) : moins de marge, un titre plus petit */
-  @media (max-height: 500px) {
-    .menu { padding-block: 12px; }
-    .menu-title { font-size: 30px; }
+  /* La partie figée (la pause) ou qui continue sans le joueur (la fin de partie) s'assombrit d'un aplat ; les choix sur toute la largeur aussi (le garage derrière) */
+  .menu:has(> .menu-panel.dim) { background: rgba(23, 22, 20, 0.52); }
+  .menu:has(> .menu-panel.custom) { background: rgba(23, 22, 20, 0.6); }
+  /* Centré quand il tient dans l'écran, en haut sinon (centré par la boîte, son haut débordait hors de portée du défilement) */
+  .menu-panel {
+    position: relative; width: min(480px, 100%); display: flex; flex-direction: column; align-items: flex-start;
+    align-self: flex-start; margin-block: auto;
   }
-  /* Centré quand il tient dans l'écran, en haut sinon : centré par la boîte, son haut débordait hors de portée du défilement (un téléphone à l'horizontale) */
-  .menu-panel { width: min(420px, 100%); display: grid; gap: 14px; align-self: flex-start; margin-block: auto; }
-  .menu-panel.wide { width: min(720px, 100%); }
-  .menu-panel.wide .menu-entries { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  @media (max-width: 760px) { .menu-panel.wide .menu-entries { grid-template-columns: 1fr; } }
+  /* (le titre d'un écran sous un ruban : pour les lecteurs d'écran seulement) */
+  .menu-unseen { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  /* Rivets : quatre têtes aux coins d'une plaque, dessinées (--head : leurs anneaux de couleur) */
+  .menu-plate::before, .menu-nameplate::before, .loading-sheet::before, .picker-detail::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(circle 6px at 11px 11px, var(--head)),
+      radial-gradient(circle 6px at calc(100% - 11px) 11px, var(--head)),
+      radial-gradient(circle 6px at 11px calc(100% - 11px), var(--head)),
+      radial-gradient(circle 6px at calc(100% - 11px) calc(100% - 11px), var(--head));
+  }
+  .menu-plate, .loading-sheet, .picker-detail { --head: var(--primer-rivet) 4.2px, transparent 4.8px; }
+
+  /* Le nom de l'écran : une plaque d'acier rivetée, de travers (l'acier ne porte que du grand texte) */
+  .menu-nameplate {
+    position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+    margin: 0 0 -8px 12px; padding: 14px 30px 14px;
+    background: var(--steel); border: 3px solid var(--steel-edge); box-shadow: var(--drop);
+    transform: rotate(-1.5deg); transform-origin: 0 100%;
+    --head: var(--steel-rivet) 2.6px, var(--steel-edge) 3px 4.6px, transparent 5.2px;
+  }
+  /* Une défaite : la plaque rouillée */
+  .menu-nameplate.rusted { background: var(--rust); border-color: #6e2f1a; --head: #c98a6e 2.6px, #6e2f1a 3px 4.6px, transparent 5.2px; }
   .menu-title {
-    margin: 0;
-    font: 700 clamp(34px, 5vw, 52px)/1 var(--display);
-    letter-spacing: 0.04em; text-transform: uppercase;
-    color: var(--text);
+    margin: 0; font: 900 clamp(36px, 4.6vw, 58px)/0.9 var(--stencil); letter-spacing: 0.01em;
+    text-transform: uppercase; color: var(--paint); overflow-wrap: break-word;
   }
-  .menu-subtitle { margin: 0 0 6px; font: 500 14px/1.45 var(--mono); color: var(--muted); }
-  .menu-entries { display: grid; gap: 8px; }
+  /* La bande jaune sous le nom du jeu */
+  .menu-tagline {
+    margin: 0; padding: 4px 12px; background: var(--hazard); color: var(--oil);
+    font: 700 15px/1.3 var(--sans); letter-spacing: 0.18em; text-transform: uppercase; transform: rotate(1deg);
+  }
+
+  /* La plaque d'apprêt : ce que porte l'écran */
+  .menu-plate {
+    position: relative; align-self: stretch; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box;
+    padding: 18px 0 20px; background: var(--primer); border: 3px solid var(--primer-edge); box-shadow: var(--drop);
+  }
+  .menu-plate > * { margin-inline: 26px; }
+  .menu-plate > .menu-entries { margin-inline: 0; }
+  /* L'en-tête du bon : capitales espacées au-dessus d'un pointillé */
+  .menu-slip {
+    margin-block: 0; padding-bottom: 8px; border-bottom: 2px dashed var(--primer-line);
+    font: 700 12px/1.35 var(--sans); letter-spacing: 0.22em; text-transform: uppercase; color: var(--paint-dim); overflow-wrap: anywhere;
+  }
+  .menu-subtitle { margin-block: 0; font: 500 15px/1.45 var(--sans); color: var(--paint-dim); }
+  .menu-foot { margin-block: 0; font: 500 13.5px/1.45 var(--sans); color: var(--paint-dim); }
+
+  /* Les entrées : un numéro de lot frappé dans son cadre, le libellé au pochoir */
+  .menu-entries { display: flex; flex-direction: column; }
   .menu-entry {
-    display: grid; gap: 3px;
-    padding: 12px 14px;
-    text-align: left; font: inherit; color: var(--text);
-    background: var(--panel);
-    border: 1px solid var(--line); border-radius: 6px;
-    cursor: pointer;
+    position: relative; display: flex; align-items: center; gap: 16px; min-height: 52px; box-sizing: border-box;
+    margin: 0; padding: 6px 26px 6px 40px; border: 0; border-radius: 0; background: none;
+    font: inherit; color: var(--paint); text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent;
   }
-  .menu-entry:hover:not(:disabled), .menu-entry:focus-visible {
-    border-color: var(--line-strong); background: rgba(40, 48, 56, 0.92); outline: none;
+  .menu-label { font: 800 34px/0.95 var(--stencil); letter-spacing: 0.02em; text-transform: uppercase; overflow-wrap: break-word; min-width: 0; }
+  .menu-lot {
+    flex: none; padding: 3px 6px 2px; border: 1.5px solid var(--primer-rivet);
+    font: 700 14px/1 var(--sans); letter-spacing: 0.04em; color: var(--paint-dim); font-variant-numeric: tabular-nums;
   }
-  .menu-field { display: grid; gap: 4px; font: 500 12px/1.3 var(--mono); color: var(--muted); }
-  .menu-field input {
-    font: 500 14px/1.3 var(--mono); color: var(--text); background: var(--panel); border: 1px solid var(--line);
-    border-radius: 6px; padding: 9px 11px; min-width: 0;
+  .menu-entry.danger .menu-label { color: var(--rust-text); }
+  /* L'entrée choisie : survolée, au focus (du clavier, de la manette, ou que la souris lui a donné), touchée */
+  .menu-entry:not(:disabled):is(:hover, :focus, :active) { background: var(--hazard); color: var(--oil); outline: none; }
+  .menu-entry:not(:disabled):is(:hover, :focus, :active) .menu-label { color: var(--oil); font-weight: 900; }
+  .menu-entry:not(:disabled):is(:hover, :focus, :active) .menu-lot { border-color: var(--oil); color: var(--oil); }
+  .menu-entry:not(:disabled):is(:hover, :focus, :active)::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 18px; background: var(--stripes);
   }
-  .menu-field input:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
-  .menu-entry.primary { border-color: var(--signal); box-shadow: inset 3px 0 0 var(--signal); }
-  .menu-entry:disabled { opacity: 0.45; cursor: default; }
-  .menu-label { font: 600 17px/1.2 var(--display); letter-spacing: 0.02em; }
-  .menu-detail { font: 400 12px/1.4 var(--mono); color: var(--muted); }
-  .menu-keys {
-    display: grid; grid-template-columns: auto 1fr; gap: 6px 14px;
-    margin: 0; padding: 12px 14px;
-    font: 400 12.5px/1.35 var(--mono);
-    background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  .menu-entry:not(:disabled):is(:hover, :focus, :active)::after {
+    content: ""; flex: none; width: 30px; height: 20px; margin-left: auto;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 20'%3E%3Cpath d='M0 10h24M16 2l9 8-9 8' fill='none' stroke='%23171614' stroke-width='3.5'/%3E%3C/svg%3E") center / contain no-repeat;
   }
-  .menu-keys dt { color: var(--signal); }
-  .menu-keys dd { margin: 0; color: var(--text); }
-  .menu-foot { margin: 4px 0 0; font: 400 11px/1.4 var(--mono); color: var(--muted); }
+  /* Hors service : grisée, barrée d'un ruban noir */
+  .menu-entry:disabled { cursor: default; }
+  .menu-entry:disabled .menu-label { color: #7f857e; }
+  .menu-entry:disabled .menu-lot { color: #7f857e; border-color: var(--primer-line); }
+  .menu-entry:disabled[data-out]::after {
+    content: attr(data-out); position: absolute; left: 22px; right: 40px; top: 70%; height: 14px; margin-top: -7px;
+    transform: rotate(-3deg); background: var(--oil); color: var(--hazard);
+    font: 700 10.5px/14px var(--sans); letter-spacing: 0.3em; text-transform: uppercase; text-align: center; white-space: nowrap; overflow: hidden;
+  }
+  /* La note du pied : ce que fait l'entrée choisie (deux lignes gardées : la plaque ne bouge pas sous la souris), ou une note fixe */
+  .menu-plate > .menu-note { margin: 0 26px 0 40px; font: 500 15px/1.35 var(--sans); color: var(--paint-dim); }
+  /* (trois lignes gardées, et au plus : la plaque garde sa hauteur, la souris ne voit pas les entrées bouger) */
+  .menu-plate > .menu-note.live { min-height: 4.05em; display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  /* La note au marqueur (l'accueil : une seule par écran) */
+  .menu-plate > .menu-note.hand { min-height: 2.7em; font: 400 16px/1.35 var(--marker); color: #d8d2c1; transform: rotate(-1deg); transform-origin: 0 50%; }
+
+  /* Champs de saisie : sur l'huile, cadre d'apprêt, jaune au focus */
+  .menu-field { display: grid; gap: 6px; font: 700 12px/1.2 var(--sans); letter-spacing: 0.16em; text-transform: uppercase; color: var(--paint-dim); }
+  .menu-field input, .menu-row.text input {
+    min-width: 0; min-height: 44px; box-sizing: border-box; padding: 9px 12px; border-radius: 0;
+    font: 600 16px/1.2 var(--sans); letter-spacing: 0.02em; text-transform: none; color: var(--paint);
+    background: var(--oil); border: 2px solid var(--primer-line);
+  }
+  .menu-field input::placeholder, .menu-row.text input::placeholder { color: #7f857e; }
+  .menu-field input:focus, .menu-row.text input:focus { outline: none; border-color: var(--hazard); box-shadow: 0 0 0 2px var(--hazard); }
+  /* Liste de touches (les commandes) */
+  .menu-keys { display: grid; grid-template-columns: fit-content(15em) minmax(0, 1fr); gap: 6px 18px; margin-block: 0; font: 500 15px/1.35 var(--sans); }
+  /* (l'écran des commandes : une longue liste de touches, sur une plaque plus large) */
+  .menu-panel.listing { width: min(720px, 100%); }
+  .menu-keys dt { font-weight: 700; color: var(--paint); font-variant-numeric: tabular-nums; }
+  .menu-keys dd { margin: 0; color: var(--paint-dim); }
+
+  /* Le focus d'une commande autre qu'une entrée (réglages, cases, onglets) : un cadre jaune ; à la manette, il se voit toujours */
+  .menu :is(button, input, select):focus-visible { outline: 3px solid var(--hazard); outline-offset: 2px; }
+  body.pad-nav .menu :focus { outline: 3px solid var(--hazard); outline-offset: 2px; }
+  /* (l'entrée choisie se voit à son fond jaune : pas de cadre en plus, même à la manette) */
+  body .menu .menu-entry:is(:focus, :focus-visible) { outline: none; }
+
+  /* Écran de scène : les plaques aux coins (l'accueil, la pause, la fin de partie) */
+  .menu:has(> .menu-panel.stage) { align-items: stretch; }
+  .menu-panel.stage {
+    width: 100%; min-height: 100%; margin: 0; align-self: stretch; box-sizing: border-box;
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas: "name corner" "plate aside"; gap: 28px 36px; align-items: start;
+  }
+  .stage > .menu-nameplate { grid-area: name; justify-self: start; margin: 0; transform: rotate(-2.5deg); transform-origin: 0 0; }
+  .stage > .menu-corner { grid-area: corner; justify-self: end; }
+  .stage > .menu-plate { grid-area: plate; width: min(480px, 100%); justify-self: start; align-self: start; }
+  .stage > .menu-aside { grid-area: aside; justify-self: end; }
+  .stage > :not(.menu-tape) { position: relative; z-index: 1; }
+  .stage:not(.hero) > .menu-nameplate .menu-title { font-size: clamp(56px, min(7.4vw, 13vh), 108px); }
+  /* L'accueil : le nom du jeu en grand, le bon de sortie en bas à gauche */
+  .hero > .menu-nameplate { padding: 20px 30px 18px; }
+  .hero .menu-title { font-size: clamp(56px, min(8.2vw, 15vh), 128px); white-space: nowrap; }
+  .hero > .menu-plate { align-self: end; }
+  /* La pause : un ruban de chantier en travers de l'écran, sous les plaques */
+  .menu-panel.taped { row-gap: clamp(56px, 18vh, 140px); }
+  .menu-tape {
+    position: absolute; z-index: 0; top: clamp(48px, 12vh, 96px); left: calc(-1 * var(--pad-x) - 80px); right: calc(-1 * var(--pad-x) - 80px);
+    height: 56px; display: flex; align-items: center; gap: 34px; overflow: hidden; white-space: nowrap; pointer-events: none;
+    background: var(--hazard); border-block: 5px solid var(--oil); transform: rotate(-4deg);
+    font: 900 34px/1 var(--stencil); letter-spacing: 0.12em; text-transform: uppercase; color: var(--oil);
+  }
+  .menu-tape .menu-tape-x { font-family: var(--sans); font-size: 26px; }
+
+  /* Pièces des coins (menu/plates.ts) : bouton carré d'acier, étiquette de carton, plaque du score */
+  .menu-cluster { display: flex; align-items: flex-start; justify-content: flex-end; flex-wrap: wrap; gap: 14px; }
+  .menu-tool {
+    flex: none; width: 48px; height: 48px; display: grid; place-items: center; padding: 0; cursor: pointer;
+    background: var(--steel); border: 3px solid var(--steel-edge); border-radius: 0; box-shadow: var(--drop); color: var(--paint);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .menu-tool svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.6; }
+  .menu-tool:is(:hover, :focus, :active) { background: var(--hazard); border-color: var(--oil); color: var(--oil); }
+  .menu-tag {
+    position: relative; min-width: 168px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px;
+    padding: 10px 18px 12px 34px; background: var(--card); color: var(--oil);
+    clip-path: polygon(14px 0, 100% 0, 100% 100%, 14px 100%, 0 50%);
+  }
+  .menu-tag::after { content: ""; position: absolute; left: 16px; top: 50%; width: 9px; height: 9px; margin-top: -5px; border-radius: 50%; background: #8a7a58; }
+  .menu-tag-label { font: 700 12px/1.2 var(--sans); letter-spacing: 0.2em; text-transform: uppercase; color: var(--card-ink); }
+  .menu-tag-value { font: 900 34px/0.95 var(--stencil); text-transform: uppercase; }
+  .menu-tag-line { max-width: 14em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 14px/1.2 var(--sans); color: var(--card-ink); }
+  .menu-score {
+    display: flex; align-items: center; gap: 14px; padding: 8px 18px 10px;
+    background: var(--steel); border: 3px solid var(--steel-edge); box-shadow: var(--drop);
+    font: 900 44px/1 var(--stencil); color: var(--paint);
+  }
+  .menu-score b { font-weight: 900; font-variant-numeric: tabular-nums; }
+  .menu-team { padding: 5px 8px 4px; font: 900 20px/1 var(--stencil); letter-spacing: 0.12em; text-transform: uppercase; color: #fff; }
+  .menu-team.blue { background: var(--team-blue); }
+  .menu-team.red { background: var(--team-red); }
+  .menu-score-dot { font-size: 28px; color: #c7cbc5; }
+  .menu-clock { margin-left: 6px; font: 700 22px/1 var(--sans); font-variant-numeric: tabular-nums; }
+
+  /* Le constat de la pause, sur son porte-bloc ; le reçu des crédits de la fin de partie, sur du carton */
+  .menu-clipboard {
+    position: relative; width: min(360px, 100%); box-sizing: border-box; margin-top: 14px; padding: 34px 18px 18px;
+    background: #a77b4c; border: 3px solid #7e5a35; box-shadow: var(--drop); transform: rotate(1.5deg);
+  }
+  .menu-clipboard::before {
+    content: ""; position: absolute; left: 50%; top: -14px; width: 120px; height: 34px; margin-left: -60px; box-sizing: border-box;
+    background: var(--paint-dim); border: 3px solid var(--primer-rivet);
+  }
+  .menu-sheet { display: flex; flex-direction: column; gap: 12px; padding: 18px 20px 20px; background: var(--paint); color: var(--oil); }
+  .menu-sheet-title { margin: 0; font: 900 30px/1 var(--stencil); text-transform: uppercase; overflow-wrap: anywhere; }
+  .menu-sheet-bar { display: grid; gap: 5px; }
+  .menu-sheet-line { display: flex; justify-content: space-between; gap: 12px; font: 700 15px/1 var(--sans); letter-spacing: 0.06em; text-transform: uppercase; }
+  .menu-gauge { height: 14px; box-sizing: border-box; background: #d6cfbb; border: 2px solid var(--oil); }
+  .menu-gauge i { display: block; height: 100%; background: var(--team-blue); }
+  .menu-gauge.red i { background: var(--team-red); }
+  .menu-sheet-facts { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 16px; margin: 0; font: 500 15px/1.2 var(--sans); }
+  .menu-sheet-facts dd { margin: 0; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+  .menu-sheet-note { margin: 2px 0 0; font: 400 17px/1.25 var(--marker); color: var(--rust); transform: rotate(-2deg); transform-origin: 0 50%; }
+  .menu-receipt {
+    position: relative; width: min(340px, 100%); box-sizing: border-box; padding: 30px 22px 22px;
+    background: var(--card); color: var(--oil); box-shadow: var(--drop); transform: rotate(1.5deg);
+  }
+  .menu-receipt::before { content: ""; position: absolute; left: 50%; top: 10px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: #8a7a58; }
+  .menu-receipt-title { margin: 0 0 12px; font: 900 30px/1 var(--stencil); text-transform: uppercase; }
+  .menu-receipt-lines, .menu-receipt-total { display: grid; grid-template-columns: 3.2em minmax(0, 1fr); gap: 6px 12px; margin: 0; font: 500 15px/1.3 var(--sans); }
+  .menu-receipt dt { font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+  .menu-receipt dd { margin: 0; }
+  .menu-receipt-total { margin-top: 12px; padding-top: 10px; border-top: 2px dashed var(--card-ink); align-items: baseline; font-weight: 700; }
+  .menu-receipt-total dt { font: 900 26px/1 var(--stencil); }
+
+  /* Grand écran : des plaques et des entrées un peu plus grandes (à 1280 × 720, celles de la maquette) */
+  @media (min-width: 1600px) and (min-height: 900px) {
+    .menu-panel, .stage > .menu-plate { width: min(560px, 100%); }
+    .menu-entry { min-height: 60px; }
+    .menu-label { font-size: 40px; }
+    .menu-plate > .menu-note { font-size: 17px; }
+    .menu-slip { font-size: 13px; }
+    .menu-clipboard { width: 400px; }
+  }
+  /*
+   * Paramètres : des onglets en intercalaires de classeur (l'actif en jaune), puis une ligne par
+   * réglage, séparées d'un pointillé (libellé à gauche, commande à droite). Centré quand il tient dans
+   * l'écran, en haut sinon : l'onglet des contrôles est plus haut que l'écran.
+   */
+  .menu-panel.settings { width: min(680px, 100%); }
+  .menu-panel.settings .menu-entries { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .menu-panel.settings .menu-label { font-size: 30px; }
+  .menu-tabs {
+    display: flex; align-items: flex-end; gap: 4px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+    padding-top: 4px; border-bottom: 6px solid var(--hazard);
+  }
+  .menu-tab {
+    flex: none; min-height: 34px; padding: 8px 12px 6px; border: 0; border-radius: 0; cursor: pointer; white-space: nowrap;
+    background: var(--primer-line); color: var(--paint); font: 700 14px/1 var(--sans); letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .menu-tab:hover { background: var(--primer-rivet); }
+  .menu-tab[aria-selected="true"] { min-height: 40px; padding-top: 12px; background: var(--hazard); color: var(--oil); }
+  .menu .menu-tab:focus-visible, body.pad-nav .menu .menu-tab:focus { outline: 3px solid var(--paint); outline-offset: -3px; }
+  .menu-rows { display: grid; }
+  .menu-heading { margin: 18px 0 2px; font: 900 22px/1 var(--stencil); letter-spacing: 0.04em; text-transform: uppercase; color: var(--paint); }
+  .menu-row {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 18px;
+    padding: 12px 0; border-bottom: 2px dashed var(--primer-line);
+  }
+  .menu-row:last-child { border-bottom: 0; }
+  .menu-row-text { display: grid; gap: 3px; min-width: 0; }
+  .menu-row-label { font: 700 17px/1.2 var(--sans); color: var(--paint); }
+  .menu-row-detail { margin: 0; font: 500 14px/1.4 var(--sans); color: var(--paint-dim); }
+  .menu-row-note { margin: 2px 0 0; font: 600 14px/1.4 var(--sans); color: var(--rust-text); }
+  /* Case à cocher : vide sur l'huile, ou peinte en blanc et cochée */
+  .menu-switch {
+    display: inline-flex; align-items: center; gap: 10px; min-height: 36px; padding: 0; cursor: pointer;
+    background: none; border: 0; font: 700 14px/1 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--paint-dim);
+  }
+  .menu-switch i { order: 2; width: 28px; height: 28px; box-sizing: border-box; background: var(--oil); border: 3px solid var(--primer-line); }
+  .menu-switch:hover i { border-color: var(--steel); }
+  .menu-switch[aria-checked="true"] { color: var(--paint); }
+  .menu-switch[aria-checked="true"] i {
+    border-color: var(--paint);
+    background: var(--paint) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4 12.5l5 5L20 6' fill='none' stroke='%23171614' stroke-width='3.6'/%3E%3C/svg%3E") center / 20px no-repeat;
+  }
+  /* Choix : des plaquettes côte à côte, celle qui est prise peinte en blanc */
+  .menu-choice { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+  .menu-choice button {
+    min-height: 36px; padding: 7px 11px; border-radius: 0; cursor: pointer; white-space: nowrap;
+    background: var(--oil); color: var(--paint-dim); border: 2px solid var(--primer-line);
+    font: 700 14px/1 var(--sans); letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .menu-choice button:hover { color: var(--paint); border-color: var(--steel); }
+  .menu-choice button[aria-checked="true"] { background: var(--paint); border-color: var(--paint); color: var(--oil); }
+  /* Curseur : un niveau de peinture (--level : la part peinte, menu.ts), la poignée en jaune */
+  .menu-slider { display: inline-flex; align-items: center; gap: 12px; }
+  .menu-slider input {
+    -webkit-appearance: none; appearance: none; width: 190px; height: 26px; margin: 0; box-sizing: border-box; cursor: pointer;
+    border: 3px solid var(--primer-line); border-radius: 0;
+    background: linear-gradient(var(--paint), var(--paint)) 0 0 / calc(7px + (100% - 14px) * var(--level, 0)) 100% no-repeat, var(--oil);
+  }
+  .menu-slider input::-webkit-slider-runnable-track { height: 100%; background: transparent; }
+  .menu-slider input::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 14px; height: 32px; margin-top: -6px; box-sizing: border-box;
+    background: var(--hazard); border: 2px solid var(--oil); border-radius: 0;
+  }
+  .menu-slider input::-moz-range-track { height: 100%; background: transparent; border: 0; }
+  .menu-slider input::-moz-range-thumb { width: 14px; height: 32px; box-sizing: border-box; background: var(--hazard); border: 2px solid var(--oil); border-radius: 0; }
+  .menu-slider output { min-width: 3.6em; text-align: right; font: 700 15px/1 var(--sans); font-variant-numeric: tabular-nums; }
+  .menu-row.text input { width: 230px; }
+  .menu-action {
+    min-height: 40px; padding: 9px 14px; border: 0; border-bottom: 3px solid var(--primer-edge); border-radius: 0; cursor: pointer; white-space: nowrap;
+    background: var(--primer-line); color: var(--paint); font: 700 14px/1 var(--sans); letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .menu-action:hover:not(:disabled), .menu-action:focus-visible { background: var(--hazard); color: var(--oil); border-bottom-color: var(--oil); }
+  .menu-action:disabled { opacity: 0.45; cursor: default; }
+  /* Touches (l'écran des touches) : deux cases au clavier ou à la souris, une à la manette, et ↺ ; des touches frappées */
+  .menu-heading-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 6px 18px; }
+  .menu-key-cols, .menu-keyset { display: grid; grid-template-columns: repeat(3, 96px) 30px; gap: 6px; }
+  .menu-key-cols { padding-bottom: 2px; font: 700 11px/1 var(--sans); letter-spacing: 0.12em; text-transform: uppercase; color: var(--paint-dim); }
+  .menu-key-cols span { text-align: center; }
+  .menu-key {
+    min-width: 0; min-height: 34px; padding: 6px; border-radius: 0; cursor: pointer; text-align: center;
+    font: 700 14px/1 var(--sans); color: var(--paint); background: var(--oil); border: 2px solid var(--primer-line); border-bottom-width: 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .menu-key:hover:not(:disabled) { border-color: var(--steel); }
+  .menu-key.empty { color: var(--paint-dim); }
+  .menu-key:disabled { cursor: default; color: var(--paint-dim); border-style: dashed; }
+  .menu-key.listening { color: var(--oil); background: var(--hazard); border-color: var(--oil); animation: key-listen 0.9s ease-in-out infinite alternate; }
+  @keyframes key-listen { from { opacity: 1; } to { opacity: 0.6; } }
+  @media (prefers-reduced-motion: reduce) { .menu-key.listening { animation: none; } }
+  .menu-key-reset { padding: 0; font: 700 18px/1 var(--sans); color: var(--paint-dim); background: none; border: 2px solid transparent; border-radius: 0; cursor: pointer; }
+  .menu-key-reset:hover { color: var(--paint); border-color: var(--primer-line); }
+  .menu-key-reset.idle { visibility: hidden; }
+  @media (max-width: 560px) {
+    .menu-heading-row { grid-template-columns: 1fr; }
+    .menu-key-cols, .menu-keyset { grid-template-columns: repeat(3, minmax(0, 1fr)) 30px; }
+    .menu-row { grid-template-columns: 1fr; }
+    .menu-slider input, .menu-row.text input { width: 100%; }
+    .menu-slider { display: flex; }
+    .menu-choice { justify-content: flex-start; }
+    .menu-panel.settings .menu-entries { grid-template-columns: 1fr; }
+    /* (en hauteur, un écran étroit : les onglets passent à la ligne plutôt que de se cacher hors de l'écran) */
+    .menu-tabs { flex-wrap: wrap; overflow-x: visible; }
+  }
 
   /*
    * Choix du robot et de l'arène (menu/robotPicker.ts, arenaPicker.ts, cardGrid.ts) : une grille de
-   * cartes sur toute la largeur de l'écran, et la fiche de la carte sélectionnée à côté ; sur un
-   * téléphone en hauteur, la fiche au-dessus (elle reste en haut pendant que la page défile).
+   * cartes (des plaques ; la choisie, un cadre jaune à rayures) sur toute la largeur de l'écran, et la
+   * fiche de la carte sélectionnée à côté ; sur un téléphone en hauteur, la fiche au-dessus (elle reste
+   * en haut pendant que la page défile). Les étiquettes : du carton découpé.
    */
-  /* Centré quand il tient dans l'écran, en haut sinon (centré, son haut débordait hors de portée du défilement) */
-  .menu-panel.custom { width: min(1760px, 100%); grid-template-columns: minmax(0, 1fr); align-self: flex-start; margin-block: auto; }
-  /* Sur toute la largeur : le fond s'assombrit davantage (au garage, son panneau transparaissait sous le titre) */
-  .menu:has(> .menu-panel.custom) {
-    background: linear-gradient(90deg, rgba(10, 14, 20, 0.95) 0%, rgba(10, 14, 20, 0.88) 60%, rgba(10, 14, 20, 0.62) 100%);
-  }
-  .picker { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-width: 0; }
+  .menu-panel.custom { width: 100%; max-width: 1760px; }
+  .custom > .menu-plate { gap: 12px; }
+  /* Les entrées sous une grille (« Cartes communautaires… », « Retour ») : côte à côte quand il y a la place */
+  .custom .menu-entries { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); }
+  .custom .menu-label { font-size: 30px; }
+  .picker { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
   .picker-tools { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; }
-  .rp-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+  .rp-filters { display: flex; flex-wrap: wrap; gap: 4px; }
   .rp-chip {
-    display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; cursor: pointer;
-    font: 500 12px/1 var(--mono); color: var(--text); background: var(--panel);
-    border: 1px solid var(--line); border-radius: 999px;
+    display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 6px 11px; cursor: pointer;
+    background: var(--oil); color: var(--paint); border: 2px solid var(--primer-line); border-radius: 0;
+    font: 700 13px/1 var(--sans); letter-spacing: 0.08em; text-transform: uppercase;
   }
-  .rp-chip span { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
-  .rp-chip:hover { border-color: var(--line-strong); }
-  .rp-chip[aria-pressed="true"] { color: var(--signal-ink); background: var(--signal); border-color: var(--signal); }
-  .rp-chip[aria-pressed="true"] span { color: var(--signal-ink); }
-  .rp-chip:focus-visible, .rp-search input:focus-visible, .rp-search select:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
+  .rp-chip span { color: var(--paint-dim); font-variant-numeric: tabular-nums; }
+  .rp-chip:hover { border-color: var(--steel); }
+  .rp-chip[aria-pressed="true"] { background: var(--paint); border-color: var(--paint); color: var(--oil); }
+  .rp-chip[aria-pressed="true"] span { color: var(--card-ink); }
   .rp-search { display: flex; gap: 6px; flex: 1 1 280px; justify-content: flex-end; min-width: 0; }
   .rp-search input, .rp-search select {
-    min-width: 0; padding: 8px 10px; font: 500 13px/1.2 var(--mono); color: var(--text);
-    background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+    min-width: 0; min-height: 40px; box-sizing: border-box; padding: 8px 10px; border-radius: 0;
+    font: 600 15px/1.2 var(--sans); color: var(--paint); background: var(--oil); border: 2px solid var(--primer-line);
   }
-  .rp-search input { flex: 1 1 150px; max-width: 250px; }
+  .rp-search input { flex: 1 1 150px; max-width: 260px; }
+  .rp-search input::placeholder { color: #7f857e; }
   .rp-search select { flex: 0 0 auto; cursor: pointer; }
-  .rp-search option { color: #111; }
+  .rp-search option { color: #111; background: #fff; }
   .picker-body { display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, 27vw, 430px); gap: 14px; align-items: start; }
   .picker-main { min-width: 0; }
   .picker-grid {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(178px, 1fr)); gap: 10px; align-content: start;
-    padding: 3px; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent;
+    padding: 6px; scrollbar-width: thin; scrollbar-color: var(--primer-line) transparent;
   }
   .picker-card {
-    position: relative; display: grid; gap: 4px; align-content: start; min-width: 0; padding: 5px 5px 9px;
-    text-align: left; font: inherit; color: var(--text); cursor: pointer;
-    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    position: relative; display: grid; gap: 5px; align-content: start; min-width: 0; padding: 5px 5px 9px;
+    text-align: left; font: inherit; color: var(--paint); cursor: pointer;
+    background: var(--primer-edge); border: 3px solid var(--primer-line); border-radius: 0;
     touch-action: manipulation; -webkit-tap-highlight-color: transparent;
   }
   .picker-card[hidden] { display: none; }
-  .picker-card:hover { border-color: var(--line-strong); background: rgba(40, 48, 56, 0.92); }
-  .picker-card[aria-selected="true"] { border-color: var(--signal); box-shadow: inset 0 0 0 1px var(--signal); background: rgba(44, 42, 30, 0.94); }
-  .picker-card:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
-  .picker-card.locked .picker-thumb, .picker-card.locked .picker-name { opacity: 0.55; }
-  .picker-figure {
-    position: relative; display: block; border-radius: 5px; overflow: hidden;
-    background: radial-gradient(ellipse at 50% 75%, rgba(130, 150, 165, 0.22), rgba(0, 0, 0, 0) 70%);
+  .picker-card:hover { border-color: var(--steel); }
+  .picker-card[aria-selected="true"] { border-color: var(--hazard); }
+  /* La carte choisie : un cadre jaune à rayures (posé par-dessus son bord : rien ne bouge) */
+  .picker-card[aria-selected="true"]::after {
+    content: ""; position: absolute; inset: -6px; pointer-events: none;
+    border: 7px solid transparent; border-image: var(--stripes) 7;
   }
+  .picker-card:focus-visible, body.pad-nav .menu .picker-card:focus { outline: none; }
+  .picker-card.locked .picker-thumb, .picker-card.locked .picker-name { opacity: 0.55; }
+  .picker-figure { position: relative; display: block; overflow: hidden; background: #262a25; }
   .picker-thumb { display: block; width: 100%; height: auto; aspect-ratio: 200 / 124; }
   .picker-badge {
-    position: absolute; right: 5px; top: 5px; padding: 3px 6px; border-radius: 4px;
-    font: 600 12px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--muted); background: rgba(10, 14, 20, 0.72);
+    position: absolute; right: 5px; top: 5px; padding: 3px 6px 2px; background: var(--oil);
+    font: 900 17px/1 var(--stencil); font-variant-numeric: tabular-nums; color: var(--paint);
   }
-  .picker-card[aria-selected="true"] .picker-badge { color: var(--signal); }
-  .picker-tags { position: absolute; left: 5px; top: 5px; display: flex; flex-wrap: wrap; gap: 4px; }
-  .rp-tag {
-    padding: 2px 5px; border-radius: 3px;
-    font: 600 9.5px/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase;
-    color: var(--signal); border: 1px solid rgba(240, 189, 44, 0.45); background: rgba(10, 14, 20, 0.72);
+  .picker-tags { position: absolute; left: 4px; top: 5px; display: flex; flex-wrap: wrap; gap: 4px; }
+  /* Étiquettes de carton découpées, un trou d'œillet ; « de nuit » sur de l'huile */
+  .rp-tag, .picker-chip {
+    position: relative; display: inline-block; padding: 4px 9px 4px 18px; background: var(--card); color: var(--oil);
+    clip-path: polygon(8px 0, 100% 0, 100% 100%, 8px 100%, 0 50%);
+    font: 700 11px/1.1 var(--sans); letter-spacing: 0.1em; text-transform: uppercase;
   }
-  .picker-name { padding: 0 4px; font: 600 16px/1.2 var(--display); letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rp-tag::before, .picker-chip::before {
+    content: ""; position: absolute; left: 9px; top: 50%; width: 5px; height: 5px; margin-top: -2.5px; border-radius: 50%; background: #8a7a58;
+  }
+  .picker-chip { padding: 6px 11px 6px 21px; font-size: 13px; }
+  .picker-chip::before { left: 11px; }
+  .rp-tag.night, .picker-chip.night { background: var(--oil); color: var(--hazard); }
+  .picker-name {
+    padding: 2px 4px 0; font: 800 23px/1.12 var(--stencil); letter-spacing: 0.02em; text-transform: uppercase;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
   .picker-sub {
-    padding: 0 4px; min-height: 2.7em; font: 400 11.5px/1.35 var(--mono); color: var(--muted);
+    padding: 0 4px; min-height: 2.7em; font: 500 13px/1.35 var(--sans); color: var(--paint-dim);
     display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   }
-  .picker-empty { margin: 8px 2px; font: 400 13px/1.4 var(--mono); color: var(--muted); }
+  .picker-empty { margin: 8px 2px; font: 500 15px/1.4 var(--sans); color: var(--paint-dim); }
   .picker-empty[hidden] { display: none; }
+  /* La fiche : une plaque creusée, rivetée ; son bouton, une plaque d'acier */
   .picker-detail {
-    position: sticky; top: 0; display: grid; gap: 10px; min-width: 0; padding: 12px;
-    background: rgba(17, 22, 28, 0.94); border: 1px solid var(--line); border-radius: 8px;
+    position: sticky; top: 0; display: grid; gap: 10px; min-width: 0; padding: 18px 18px 0; overflow-x: hidden;
+    background: var(--primer-edge); border: 3px solid var(--primer-line);
   }
-  .picker-view {
-    height: clamp(190px, 34vh, 330px); border-radius: 6px; overflow: hidden;
-    background: radial-gradient(ellipse at 50% 78%, rgba(96, 116, 130, 0.42), rgba(24, 30, 36, 0.4) 72%);
-  }
+  .picker-view { height: clamp(190px, 34vh, 330px); overflow: hidden; background: #262a25; border: 2px solid var(--oil); }
   .rp-canvas { display: block; width: 100%; height: 100%; touch-action: none; outline: none; cursor: grab; }
   .rp-canvas:active { cursor: grabbing; }
-  .picker-title { margin: 0; font: 700 26px/1.05 var(--display); letter-spacing: 0.04em; text-transform: uppercase; overflow-wrap: anywhere; }
-  .picker-text { margin: -4px 0 0; font: 400 13px/1.45 var(--mono); color: var(--muted); }
-  .picker-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; margin: 0; }
-  .picker-stats > div { display: grid; gap: 3px; align-content: start; min-width: 0; }
-  .picker-stats dt { font: 500 10.5px/1.2 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-  .picker-stats dd { margin: 0; font: 600 15px/1.2 var(--display); }
-  .picker-meter { display: block; height: 4px; margin-top: 4px; border-radius: 2px; overflow: hidden; background: rgba(255, 255, 255, 0.1); }
-  .picker-meter i { display: block; height: 100%; background: var(--signal); }
+  .picker-title { margin: 0; font: 900 32px/1.08 var(--stencil); letter-spacing: 0.02em; text-transform: uppercase; overflow-wrap: anywhere; }
+  .picker-text { margin: -4px 0 0; font: 500 15px/1.45 var(--sans); color: var(--paint-dim); }
+  .picker-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; margin: 0; }
+  .picker-stats > div { display: grid; gap: 4px; align-content: start; min-width: 0; }
+  .picker-stats dt { font: 700 11px/1.2 var(--sans); letter-spacing: 0.14em; text-transform: uppercase; color: var(--paint-dim); }
+  .picker-stats dd { margin: 0; font: 700 17px/1.2 var(--sans); }
+  .picker-meter { display: block; height: 10px; margin-top: 5px; box-sizing: border-box; background: var(--oil); border: 2px solid var(--primer-line); }
+  .picker-meter i { display: block; height: 100%; background: var(--paint); }
   .picker-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  .picker-chip {
-    padding: 5px 8px; font: 500 12px/1 var(--mono); color: var(--text);
-    background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); border-radius: 4px;
-  }
-  .picker-warn { margin: 0; font: 500 12px/1.4 var(--mono); color: var(--warn); }
-  .picker-go { text-align: center; justify-items: center; }
+  .picker-warn { margin: 0; font: 600 14px/1.4 var(--sans); color: var(--rust-text); }
+  .picker-detail > .picker-go { margin: 4px -18px 0; padding-left: 26px; background: var(--steel); }
+  .picker-go .menu-label { font-size: 30px; }
   /* Grand écran : le panneau prend toute la hauteur, la grille et la fiche défilent chacune de leur côté (le titre, les filtres et « Retour » restent en vue) */
   @media (min-width: 761px) and (min-height: 561px) {
     .menu:has(> .menu-panel.custom) { align-items: stretch; }
-    .menu-panel.custom { display: flex; flex-direction: column; align-self: stretch; min-height: 0; margin-block: 0; }
-    .menu-panel.custom > .picker { flex: 1 1 0; min-height: 0; grid-template-rows: auto minmax(0, 1fr); }
-    .menu-panel.custom > .picker.bare { grid-template-rows: minmax(0, 1fr); }
+    .menu-panel.custom { align-self: stretch; min-height: 0; margin-block: 0; }
+    .custom > .menu-plate { flex: 1 1 0; min-height: 0; }
+    .custom > .menu-plate > .picker { flex: 1 1 0; min-height: 0; grid-template-rows: auto minmax(0, 1fr); }
+    .custom > .menu-plate > .picker.bare { grid-template-rows: minmax(0, 1fr); }
     .picker-body { min-height: 0; height: 100%; align-items: stretch; }
     .picker-main { display: flex; flex-direction: column; min-height: 0; }
     .picker-grid { flex: 0 1 auto; min-height: 0; overflow-y: auto; }
-    .picker-detail { position: static; align-self: start; max-height: 100%; overflow-y: auto; scrollbar-width: thin; }
+    .picker-detail { position: relative; align-self: start; max-height: 100%; overflow-y: auto; scrollbar-width: thin; }
     /* Le bouton qui choisit reste en vue quand la fiche défile */
-    .picker-detail > .picker-go { position: sticky; bottom: 0; background-color: #161b21; box-shadow: 0 -8px 10px rgba(17, 22, 28, 0.94); }
+    .picker-detail > .picker-go { position: sticky; bottom: 0; }
   }
   /* Écran d'ordinateur portable : un titre plus petit, un aperçu plus bas (la fiche tient sans défiler) */
   @media (min-width: 761px) and (max-height: 820px) {
-    .menu-panel.custom .menu-title { font-size: 38px; }
+    .menu-panel.custom .menu-title { font-size: 40px; }
     .picker-view { height: clamp(150px, 28vh, 330px); }
   }
   /* Écran bas (téléphone à l'horizontale) : la page défile, la fiche à côté reste en vue */
   @media (min-width: 761px) and (max-height: 560px) {
-    .menu-panel.custom .menu-title { font-size: 28px; }
-    .picker-detail { top: -12px; gap: 8px; padding: 10px; }
+    .menu-panel.custom .menu-title { font-size: 30px; }
+    .picker-detail { top: -12px; gap: 8px; padding: 14px 14px 0; }
+    .picker-detail > .picker-go { margin-inline: -14px; }
     .picker-view { height: 120px; }
-    .picker-title { font-size: 20px; }
+    .picker-title { font-size: 24px; }
     .picker-stats, .picker-detail .picker-text { display: none; }
     .picker-body { grid-template-columns: minmax(0, 1fr) clamp(240px, 34vw, 340px); }
     .picker-grid { grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 8px; }
-    .picker-name { font-size: 14px; }
-    .picker-sub { font-size: 11px; }
+    .picker-name { font-size: 19px; }
+    .picker-sub { font-size: 12px; }
   }
   /*
    * Téléphone en hauteur : la fiche, ramassée (l'aperçu à gauche, le nom et les armes à droite, le
@@ -1099,218 +1423,162 @@
   @media (max-width: 760px) {
     .picker-body { grid-template-columns: minmax(0, 1fr); }
     .picker-detail {
-      order: -1; top: -24px; z-index: 1; padding: 10px; background: rgb(17, 22, 28);
+      order: -1; top: -24px; z-index: 1; padding: 12px 12px 0;
       grid-template-columns: 120px minmax(0, 1fr); gap: 6px 12px; align-items: start;
     }
     .picker-detail > * { grid-column: 2; }
     .picker-detail > .picker-view { grid-column: 1; grid-row: 1 / span 3; height: 100px; }
-    .picker-detail > .picker-go { grid-column: 1 / -1; padding: 10px 14px; }
-    .picker-title { font-size: 20px; }
+    .picker-detail > .picker-go { grid-column: 1 / -1; margin-inline: -12px; }
+    .picker-title { font-size: 24px; }
     .picker-stats, .picker-detail .picker-text { display: none; }
-    .picker-grid { grid-template-columns: repeat(auto-fill, minmax(138px, 1fr)); gap: 8px; padding: 2px; }
-    .picker-name { font-size: 15px; }
+    .picker-grid { grid-template-columns: repeat(auto-fill, minmax(138px, 1fr)); gap: 8px; padding: 4px; }
+    .picker-name { font-size: 20px; }
     .rp-search { flex-basis: 100%; }
     .rp-search input { max-width: none; }
   }
-  /* Les entrées sous une grille (« Cartes communautaires… », « Retour ») : côte à côte quand il y a la place */
-  .menu-panel.custom .menu-entries { grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); }
   /* Choix de l'arène (menu/arenaPicker.ts, arenaPreview.ts) : le plan de chaque arène vu de dessus */
   .ap-thumb { aspect-ratio: 5 / 4; }
-  .ap-figure { background: linear-gradient(110deg, rgba(60, 72, 82, 0.35) 30%, rgba(96, 112, 124, 0.45) 50%, rgba(60, 72, 82, 0.35) 70%) 0 0 / 300% 100%; animation: ap-wait 1.4s linear infinite; }
+  .ap-figure { background: linear-gradient(110deg, #262a25 30%, #353a33 50%, #262a25 70%) 0 0 / 300% 100%; animation: ap-wait 1.4s linear infinite; }
   .ap-figure.ready { background: #1c232a; animation: none; }
   @keyframes ap-wait { to { background-position: -300% 0; } }
   @media (prefers-reduced-motion: reduce) { .ap-figure, .ap-view { animation: none !important; } }
-  .ap-random .ap-figure { display: grid; place-items: center; aspect-ratio: 5 / 4; background: radial-gradient(circle at 50% 45%, rgba(240, 189, 44, 0.16), rgba(28, 35, 42, 0.9) 70%); }
+  .ap-random .ap-figure { display: grid; place-items: center; aspect-ratio: 5 / 4; background: #262a25; }
   .ap-dice { width: 46%; height: auto; max-height: 100%; }
-  .ap-dice rect { fill: rgba(240, 189, 44, 0.14); stroke: var(--signal); stroke-width: 3.5; }
-  .ap-dice circle { fill: var(--signal); }
-  .picker-view.ap-view { --ap-side: min(calc(clamp(300px, 27vw, 430px) - 26px), 44vh); width: var(--ap-side); height: var(--ap-side); justify-self: center; background: #1c232a; display: grid; place-items: center; }
-  .ap-view:not(.ready) { animation: ap-wait 1.4s linear infinite; background: linear-gradient(110deg, rgba(60, 72, 82, 0.35) 30%, rgba(96, 112, 124, 0.45) 50%, rgba(60, 72, 82, 0.35) 70%) 0 0 / 300% 100%; }
+  .ap-dice rect { fill: rgba(239, 233, 216, 0.08); stroke: var(--paint); stroke-width: 3.5; }
+  .ap-dice circle { fill: var(--paint); }
+  .picker-view.ap-view { --ap-side: min(calc(clamp(300px, 27vw, 430px) - 42px), 44vh); width: var(--ap-side); height: var(--ap-side); justify-self: center; background: #1c232a; display: grid; place-items: center; }
+  .ap-view:not(.ready) { animation: ap-wait 1.4s linear infinite; background: linear-gradient(110deg, #262a25 30%, #353a33 50%, #262a25 70%) 0 0 / 300% 100%; }
   .ap-view .ap-dice { width: 42%; }
   .ap-plan { display: block; width: 100%; height: 100%; }
-  .picker-byline { margin: -4px 0 0; font: 500 12px/1.4 var(--mono); color: var(--text); }
+  .picker-byline { margin: -4px 0 0; font: 600 14px/1.4 var(--sans); color: var(--paint); }
   @media (min-width: 761px) and (max-height: 560px) {
     .picker-view.ap-view { --ap-side: 140px; }
   }
   @media (max-width: 760px) {
     .picker-detail > .picker-view.ap-view { --ap-side: 120px; }
     .picker-byline { margin: 0; }
-    .arena-picker .picker-detail .picker-text { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin: 0; font-size: 12px; }
-    .arena-picker .picker-chip { padding: 4px 6px; font-size: 11px; }
+    .arena-picker .picker-detail .picker-text { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin: 0; font-size: 13px; }
+    .arena-picker .picker-chip { padding: 5px 8px 5px 18px; font-size: 11px; }
   }
   body.menu-open .hint, body.menu-open .scoreboard, body.menu-open .killfeed, body.menu-open .status,
   body.menu-open .bottom-dock, body.menu-open .minimap, body.menu-open .bigmap, body.menu-open .tab-panel,
   body.menu-open .scope-overlay, body.menu-open .gunnery, body.menu-open .impact-mark, body.menu-open .bomb-mark, body.menu-open .detonate-hint, body.menu-open .missile-hint, body.menu-open .lock-mark, body.menu-open .warhead-hud, body.menu-open .flight-hud, body.menu-open .steady-hint, body.menu-open .gun-marks, body.menu-open .nose-mark { display: none; }
 
-  /* Écran titre : le nom du jeu en grand */
-  .menu-panel.hero { width: min(500px, 100%); }
-  .menu-panel.hero .menu-title { font-size: clamp(36px, 5vw, 66px); letter-spacing: 0.05em; white-space: nowrap; }
-  .menu-panel.hero .menu-title span { color: var(--signal); }
-  .menu-panel.hero .menu-subtitle { margin-bottom: 14px; }
-  .menu-panel.hero .menu-entry { padding: 14px 16px; }
-  .menu-panel.hero .menu-entry .menu-label { font-size: 20px; }
-  /* Un écran d'ordinateur peu haut (720 px) : l'accueil et ses six entrées tiennent sans défiler */
-  @media (min-width: 761px) and (min-height: 561px) and (max-height: 780px) { .menu-panel.hero .menu-entry { padding-block: 11px; } }
-
-  /* Paramètres : onglets, puis une ligne par réglage (libellé à gauche, commande à droite) */
-  /* Centré quand il tient dans l'écran, en haut sinon : l'onglet des contrôles (toutes les touches) est plus haut que l'écran */
-  .menu-panel.settings { width: min(620px, 100%); align-self: flex-start; margin-block: auto; }
-  /* Fin de partie : le détail des crédits gagnés */
-  .menu-keys dt { font-variant-numeric: tabular-nums; }
-  .menu-tabs {
-    display: flex; gap: 4px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
-    box-shadow: inset 0 -1px 0 var(--line);
-  }
-  .menu-tab {
-    padding: 9px 14px 8px;
-    font: 600 15px/1 var(--display); letter-spacing: 0.03em; color: var(--muted);
-    background: none; border: 0; border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap;
-  }
-  .menu-tab:hover { color: var(--text); }
-  .menu-tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--signal); }
-  .menu-tab:focus-visible { outline: 2px solid var(--signal); outline-offset: -2px; border-radius: 4px 4px 0 0; }
-  .menu-rows {
-    display: grid; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 4px 14px;
-  }
-  .menu-heading {
-    margin: 12px 0 2px; font: 600 11px/1.2 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--signal);
-  }
-  .menu-row {
-    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 18px;
-    padding: 10px 0; border-bottom: 1px solid var(--line);
-  }
-  .menu-row:last-child { border-bottom: 0; }
-  .menu-row-text { display: grid; gap: 2px; min-width: 0; }
-  .menu-row-label { font: 600 15px/1.25 var(--display); letter-spacing: 0.02em; }
-  .menu-row-detail { margin: 0; font: 400 11.5px/1.4 var(--mono); color: var(--muted); }
-  .menu-row button:focus-visible, .menu-row input:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
-  /* Interrupteur */
-  .menu-switch {
-    display: inline-flex; align-items: center; gap: 8px; padding: 0; min-width: 76px; justify-content: flex-end;
-    font: 500 12.5px/1 var(--mono); color: var(--muted); background: none; border: 0; cursor: pointer;
-  }
-  .menu-switch i {
-    position: relative; order: 2; width: 38px; height: 22px; border-radius: 11px;
-    background: rgba(255, 255, 255, 0.1); border: 1px solid var(--line-strong); transition: background 0.15s;
-  }
-  .menu-switch i::after {
-    content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
-    background: var(--muted); transition: transform 0.15s, background 0.15s;
-  }
-  .menu-switch[aria-checked="true"] { color: var(--text); }
-  .menu-switch[aria-checked="true"] i { background: rgba(240, 189, 44, 0.3); border-color: var(--signal); }
-  .menu-switch[aria-checked="true"] i::after { transform: translateX(16px); background: var(--signal); }
-  /* Choix : boutons côte à côte */
-  .menu-choice { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 6px; overflow: hidden; }
-  .menu-choice button {
-    padding: 7px 11px; font: 500 12.5px/1 var(--mono); color: var(--muted); background: none;
-    border: 0; border-left: 1px solid var(--line); cursor: pointer; white-space: nowrap;
-  }
-  .menu-choice button:first-child { border-left: 0; }
-  .menu-choice button:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
-  .menu-choice button[aria-checked="true"] { color: var(--signal-ink); background: var(--signal); }
-  .menu-choice button:focus-visible { outline-offset: -3px; }
-  /* Curseur */
-  .menu-slider { display: inline-flex; align-items: center; gap: 10px; }
-  .menu-slider input { width: 170px; accent-color: var(--signal); cursor: pointer; }
-  .menu-slider output { min-width: 3.6em; text-align: right; font: 500 12.5px/1 var(--mono); font-variant-numeric: tabular-nums; }
-  .menu-row.text input {
-    width: 220px; font: 500 13px/1.3 var(--mono); color: var(--text); background: rgba(0, 0, 0, 0.25);
-    border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px;
-  }
-  .menu-action {
-    padding: 7px 12px; font: 500 12.5px/1 var(--mono); color: var(--text); background: rgba(255, 255, 255, 0.06);
-    border: 1px solid var(--line-strong); border-radius: 6px; cursor: pointer; white-space: nowrap;
-  }
-  .menu-action:hover:not(:disabled) { border-color: var(--signal); }
-  .menu-action:disabled { opacity: 0.45; cursor: default; }
-  /* Touches (Paramètres, Contrôles) : deux cases au clavier ou à la souris, une à la manette, et ↺ */
-  .menu-heading-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 6px 18px; }
-  .menu-key-cols, .menu-keyset { display: grid; grid-template-columns: repeat(3, 92px) 26px; gap: 6px; }
-  .menu-key-cols { padding-bottom: 2px; font: 500 10px/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-  .menu-key-cols span { text-align: center; }
-  .menu-key {
-    min-width: 0; padding: 7px 6px; font: 500 12px/1 var(--mono); color: var(--text); text-align: center;
-    background: rgba(0, 0, 0, 0.28); border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 5px;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
-  }
-  .menu-key:hover:not(:disabled) { border-color: var(--signal); }
-  .menu-key.empty { color: var(--muted); }
-  .menu-key:disabled { cursor: default; opacity: 0.6; border-style: dashed; }
-  .menu-key.listening { color: var(--signal-ink); background: var(--signal); border-color: var(--signal); animation: key-listen 0.9s ease-in-out infinite alternate; }
-  @keyframes key-listen { from { opacity: 1; } to { opacity: 0.55; } }
-  @media (prefers-reduced-motion: reduce) { .menu-key.listening { animation: none; } }
-  .menu-key-reset {
-    padding: 0; font: 600 15px/1 var(--mono); color: var(--muted); background: none; border: 1px solid transparent; border-radius: 5px; cursor: pointer;
-  }
-  .menu-key-reset:hover { color: var(--signal); border-color: var(--line-strong); }
-  .menu-key-reset.idle { visibility: hidden; }
-  .menu-row-note { margin: 2px 0 0; font: 500 11.5px/1.4 var(--mono); color: var(--warn); }
-  /* À la manette, le focus se voit toujours (elle n'est pas un clavier pour le navigateur) */
-  body.pad-nav .menu :focus { outline: 2px solid var(--signal); outline-offset: 2px; }
-  .menu-panel.settings .menu-entries { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  @media (max-width: 560px) {
-    .menu-heading-row { grid-template-columns: 1fr; }
-    .menu-key-cols, .menu-keyset { grid-template-columns: repeat(3, minmax(0, 1fr)) 26px; }
-    .menu-row { grid-template-columns: 1fr; }
-    .menu-slider input, .menu-row.text input { width: 100%; }
-    .menu-slider { display: flex; }
-    .menu-choice { justify-self: start; }
-    .menu-panel.settings .menu-entries { grid-template-columns: 1fr; }
+  /*
+   * Petit écran (téléphone en hauteur) : les plaques en bas, la plaque d'apprêt sur toute la largeur,
+   * collée au bord, à portée du pouce ; le nom de l'écran au-dessus. L'accueil : le titre reste en
+   * haut, l'étiquette des crédits dessous. La pause : le score, le constat, puis la plaque.
+   */
+  @media (max-width: 760px) {
+    .menu { align-items: flex-end; }
+    .menu-panel { width: 100%; }
+    .menu-panel:not(.custom) > .menu-plate {
+      margin: 0 calc(-1 * var(--pad-x)) calc(-1 * var(--pad-y) - env(safe-area-inset-bottom, 0px));
+      padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)); border-width: 3px 0 0; box-shadow: none;
+    }
+    .menu-plate::before { display: none; }
+    .menu-entry { min-height: 48px; padding-left: 34px; }
+    .menu-label { font-size: 30px; }
+    .menu-plate > .menu-note { margin-left: 34px; }
+    .menu-panel.stage { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto; grid-template-areas: "name" "corner" "aside" "plate"; gap: 18px; }
+    .stage > .menu-plate { width: auto; align-self: end; }
+    .stage > .menu-aside { justify-self: center; align-self: center; }
+    .hero > .menu-corner { justify-self: start; }
+    .hero .menu-title { font-size: clamp(52px, 17vw, 84px); white-space: normal; }
+    .menu-tagline { font-size: 13px; letter-spacing: 0.14em; }
+    .stage:not(.hero) > .menu-nameplate .menu-title { font-size: clamp(48px, 15vw, 72px); }
+    .menu-panel.taped { row-gap: 18px; }
+    .taped > .menu-corner { margin-top: 0; }
+    .menu-tape { top: 58px; height: 44px; font-size: 26px; border-block-width: 4px; }
+    .taped > .menu-aside { margin-top: 60px; }
+    /* (le ruban de la musique, en haut à droite : les plaques commencent dessous) */
+    .menu { padding-top: calc(var(--pad-y) + 56px + env(safe-area-inset-top, 0px)); }
+    /* Ancré en bas (centré, il laissait la bataille sous la plaque) ; plus haut que l'écran, il commence en haut */
+    .menu-panel { margin-block: auto 0; }
+    .stage > .menu-plate { justify-self: stretch; }
+    .menu-cluster { flex-wrap: nowrap; }
+    .menu-score { padding: 4px 10px 6px; gap: 8px; font-size: 30px; }
+    .menu-team { padding: 4px 6px 3px; font-size: 14px; }
+    .menu-score-dot { font-size: 20px; }
+    .menu-clock { margin-left: 2px; font-size: 18px; }
+    .menu-tool { width: 44px; height: 44px; }
+    .picker-go .menu-label { font-size: 26px; }
+    .menu-clipboard { width: min(330px, 100%); padding: 28px 14px 14px; }
+    .menu-sheet { gap: 9px; padding: 14px 16px 16px; }
+    .menu-sheet-title { font-size: 26px; }
   }
   /*
-   * Petit écran (téléphone, en hauteur ou à l'horizontale). Paramètres et touches : Retour reste au
-   * bas de l'écran pendant qu'on fait défiler les lignes (les deux entrées côte à côte, sans leur
-   * explication). Tuiles (MenuView.tiles : l'accueil, le choix du mode, la pause, la fin de partie) :
-   * les entrées sur la largeur, l'écran tient sans défiler ; deux colonnes en hauteur (l'entrée
-   * principale sur toute la ligne), quatre à l'horizontale (elle sur deux) ; l'explication de chaque
-   * entrée sur deux lignes au plus.
+   * Écran bas (téléphone à l'horizontale) : moins de marges, des entrées de 44 px ; les longues listes
+   * (`columns` : le choix du mode, la pause, la fin de partie) sur deux colonnes. L'accueil : le titre
+   * et les crédits à gauche, le bon de sortie à droite, en bas (le lecteur de musique en haut à droite).
+   */
+  @media (max-height: 560px) {
+    .menu { --pad-y: 12px; }
+    .menu-title { font-size: 32px; }
+    .menu-nameplate { padding: 10px 24px; }
+    .menu-plate { padding: 12px 0 14px; gap: 8px; }
+    .menu-entry { min-height: 44px; padding-block: 3px; }
+    .menu-label { font-size: 26px; }
+    .menu-plate > .menu-note { font-size: 14px; }
+    .menu-panel.columns { width: min(760px, 100%); }
+    .columns .menu-entries { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .menu-panel.settings { width: min(760px, 100%); }
+    .menu-panel.stage { grid-template-columns: minmax(0, 1fr) minmax(0, auto); gap: 14px 24px; }
+    .menu-panel.hero { grid-template-columns: minmax(0, 1fr) min(400px, 50%); grid-template-areas: "name plate" "corner plate"; grid-template-rows: auto minmax(0, 1fr); }
+    .menu-panel.hero > .menu-plate { width: 100%; align-self: end; }
+    .menu-panel.hero > .menu-corner { justify-self: start; align-self: end; }
+    .hero .menu-title { font-size: clamp(36px, 6.4vw, 64px); }
+    .stage:not(.hero) > .menu-nameplate .menu-title { font-size: 40px; }
+    .stage > .menu-plate { width: min(520px, 100%); }
+    /* (sur deux colonnes, des libellés plus petits, sans la flèche : ils tiennent sur une ligne) */
+    .columns .menu-entry { padding-inline: 30px 10px; }
+    .columns .menu-label { font-size: 21px; }
+    /* (la pause : le score au-dessus des deux colonnes, la plaque prend la largeur que le constat laisse) */
+    .menu-panel.taped { grid-template-areas: "corner corner" "plate aside"; }
+    .menu-receipt { width: 300px; }
+    .columns .menu-entry:not(:disabled):is(:hover, :focus, :active)::after { display: none; }
+    /* (la pause, la fin de partie : le ruban de la musique couvrirait le score ; l'onglet Son a ses boutons) */
+    body.menu-open:has(.menu-panel.stage:not(.hero)) .now-playing { display: none !important; }
+    .menu-panel.taped { row-gap: 40px; }
+    .menu-tape { top: 34px; height: 40px; font-size: 26px; border-block-width: 4px; }
+    .menu-tag { padding: 6px 14px 8px 30px; min-width: 0; }
+    .menu-tag-value { font-size: 26px; }
+    .menu-score { padding: 4px 12px 6px; font-size: 32px; gap: 10px; }
+    .menu-team { font-size: 16px; }
+    .menu-tool { width: 44px; height: 44px; }
+    .menu-clipboard { width: 300px; margin-top: 8px; padding: 22px 12px 12px; }
+    .menu-clipboard::before { top: -10px; height: 24px; width: 90px; margin-left: -45px; }
+    .menu-sheet { gap: 7px; padding: 12px 14px; }
+    .menu-sheet-title { font-size: 22px; }
+    .menu-sheet-facts { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto; gap: 4px 10px; font-size: 14px; }
+    .menu-sheet-note { font-size: 15px; }
+    .menu-receipt { padding: 22px 16px 14px; }
+    .menu-receipt-title { font-size: 24px; margin-bottom: 6px; }
+  }
+  /*
+   * Petit écran (en hauteur ou à l'horizontale), paramètres et touches : « Retour » reste au bas de
+   * l'écran pendant qu'on fait défiler les lignes (les deux entrées côte à côte)
    */
   @media (max-width: 760px), (max-height: 560px) {
-    .menu-panel.settings > .menu-entries {
-      position: sticky; bottom: -12px; z-index: 2; grid-template-columns: repeat(2, minmax(0, 1fr));
-      margin-top: -4px; padding: 10px 0 12px; background: linear-gradient(rgba(10, 14, 20, 0), rgba(10, 14, 20, 0.96) 28%);
+    .menu-panel.settings > .menu-plate > .menu-entries {
+      position: sticky; bottom: calc(-1 * var(--pad-y) - env(safe-area-inset-bottom, 0px)); z-index: 2; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-top: -4px; padding: 6px 0 calc(6px + env(safe-area-inset-bottom, 0px)); background: var(--primer); border-top: 2px dashed var(--primer-line);
     }
-    .menu-panel.settings > .menu-entries .menu-entry { padding: 10px 12px; }
-    .menu-panel.settings > .menu-entries .menu-label { font-size: 15px; }
-    .menu-panel.settings > .menu-entries .menu-detail { display: none; }
+    .menu-panel.settings .menu-label { font-size: 24px; }
+    .menu-panel.settings .menu-entry { padding-left: 30px; }
     /* (le lecteur de musique cacherait le titre ou les lignes : l'onglet Son a ses boutons) */
     body.menu-open:has(.menu-panel.settings) .now-playing { display: none !important; }
-    /* Le panneau occupe tout l'écran : le fond s'assombrit partout (les onglets, l'explication restent lisibles sur un ciel clair) */
-    .menu:has(> .menu-panel.settings) { background: rgba(10, 14, 20, 0.9); }
-    .menu:has(> .menu-panel.tiles) { background: linear-gradient(0deg, rgba(10, 14, 20, 0.92) 0%, rgba(10, 14, 20, 0.72) 70%, rgba(10, 14, 20, 0.35) 100%); }
-    .menu-panel.tiles { width: min(760px, 100%); gap: 10px; }
-    .menu-panel.tiles .menu-entries { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-    .menu-panel.tiles .menu-entry { align-content: start; min-height: 60px; padding: 11px 12px; }
-    .menu-panel.tiles .menu-entry.primary { grid-column: 1 / -1; }
-    .menu-panel.tiles .menu-label { font-size: 17px; }
-    .menu-panel.tiles.hero .menu-entry .menu-label { font-size: 18px; }
-    .menu-panel.tiles .menu-detail {
-      display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-      font-size: 11px; line-height: 1.35;
-    }
-    .menu-panel.tiles.hero .menu-subtitle { margin-bottom: 4px; }
   }
-  /* En hauteur, un écran étroit : les onglets passent à la ligne plutôt que de se cacher hors de l'écran */
-  @media (max-width: 560px) {
-    .menu-tabs { flex-wrap: wrap; overflow-x: visible; }
-  }
-  @media (max-height: 560px) {
-    .menu-panel.settings { width: min(760px, 100%); }
-    .menu-panel.tiles .menu-entries { grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); }
-    .menu-panel.tiles .menu-entry.primary { grid-column: span 2; }
-    .menu-panel.tiles.hero .menu-title { font-size: 34px; }
-    .menu-panel.tiles .menu-title { font-size: 28px; }
-    .menu-panel.tiles .menu-subtitle { margin: 0; font-size: 12.5px; }
-    .menu-panel.tiles .menu-foot { display: none; }
-  }
-  /* Au doigt : des commandes de réglage plus grandes, faciles à toucher */
-  body.touch-ui .menu-choice button { padding: 10px 13px; }
-  body.touch-ui .menu-action { padding: 10px 14px; }
-  body.touch-ui .menu-key { padding: 10px 6px; }
-  body.touch-ui .menu-key-reset { min-height: 34px; }
-  body.touch-ui .menu-slider input { height: 30px; }
-  body.touch-ui .menu-tab { padding: 12px 14px 11px; }
+  /* Au doigt : des commandes de réglage plus grandes, faciles à toucher (44 px) */
+  body.touch-ui .menu-choice button, body.touch-ui .menu-action, body.touch-ui .rp-chip, body.touch-ui .menu-switch { min-height: 44px; }
+  body.touch-ui .menu-choice button { padding-inline: 13px; }
+  body.touch-ui .menu-key { min-height: 44px; }
+  body.touch-ui .menu-key-reset { min-height: 44px; }
+  body.touch-ui .menu-slider input { height: 32px; }
+  body.touch-ui .menu-slider input::-webkit-slider-thumb { height: 38px; }
+  body.touch-ui .menu-slider input::-moz-range-thumb { height: 38px; }
+  body.touch-ui .menu-tab { min-height: 44px; padding-top: 14px; }
+  body.touch-ui .rp-search :is(input, select) { min-height: 44px; }
 
   /* Images par seconde (réglage) : au-dessus de tout, même des menus */
   .fps-badge {
@@ -1331,65 +1599,65 @@
   .pad-badge svg { width: 22px; height: 15px; fill: none; stroke: var(--ok); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
   .pad-badge span:empty { display: none; }
   /*
-   * Musique en cours (hud/nowPlaying.ts) : en partie, un mot sous la mini-carte quand un morceau
-   * commence ; dans les menus et au garage, une ligne en bas à droite (en haut sur un petit écran),
-   * au-dessus des menus, avec ses boutons, ou réduite à une pastille (np-folded), ou cachée
-   * (np-hidden), selon le réglage. Rien pendant un chargement, dans l'éditeur de cartes, ni quand la
-   * musique est coupée.
+   * Musique en cours (hud/nowPlaying.ts) : du ruban à étiqueter (fond noir, lettres blanches
+   * espacées, une encoche au bout), et ses deux boutons carrés. En partie, un mot sous la mini-carte
+   * quand un morceau commence ; dans les menus et au garage, le ruban en bas à droite (en haut sur un
+   * petit écran), au-dessus des menus, avec ses boutons, ou réduit à la note seule (np-folded), ou
+   * caché (np-hidden), selon le réglage. Rien pendant un chargement, dans l'éditeur de cartes, ni
+   * quand la musique est coupée.
    */
   .now-playing {
     position: fixed; right: 14px; top: calc(252px + env(safe-area-inset-top, 0px)); z-index: 21;
-    display: none; align-items: center; gap: 10px; max-width: min(340px, calc(100% - 28px));
-    padding: 7px 8px 7px 11px; border-radius: 6px; background: var(--panel); border: 1px solid var(--line);
-    box-shadow: 0 8px 22px rgba(10, 14, 20, 0.3); pointer-events: none;
+    display: none; align-items: stretch; gap: 6px; max-width: min(460px, calc(100% - 28px)); pointer-events: none;
+    font: 700 14px/1 var(--sans); letter-spacing: 0.16em; text-transform: uppercase; color: #f2f2f2;
   }
   .now-playing.np-toast { display: flex; animation: np-in 0.35s ease-out; }
   body.menu-open .now-playing.np-on, body.in-garage .now-playing.np-on {
-    display: flex; top: auto; bottom: calc(36px + env(safe-area-inset-bottom, 0px)); pointer-events: auto;
+    display: flex; top: auto; right: clamp(16px, 3.2vw, 48px); bottom: calc(clamp(16px, 4vh, 40px) + env(safe-area-inset-bottom, 0px)); pointer-events: auto;
   }
-  body.menu-open .now-playing.np-toast, body.in-garage .now-playing.np-toast { animation: np-flash 1.2s ease-out; }
+  body.menu-open .now-playing.np-toast .np-toggle, body.in-garage .now-playing.np-toast .np-toggle { animation: np-flash 1.2s ease-out; }
   body.loading-open .now-playing, body.in-editor .now-playing, .now-playing.np-muted { display: none !important; }
   /* Caché (réglage) : rien dans les menus ni au garage ; en partie, le mot d'un morceau que le joueur a changé */
   body.menu-open .now-playing.np-hidden, body.in-garage .now-playing.np-hidden { display: none !important; }
-  /* La note : une simple icône ; un bouton quand le lecteur se réduit tout seul (np-auto), dans les menus et au garage */
+  /* Le bout du ruban : la note ; un bouton quand le lecteur se réduit tout seul (np-auto), dans les menus et au garage */
   .np-toggle {
-    flex: none; display: grid; place-items: center; width: 15px; height: 15px; padding: 0; margin: 0;
-    color: inherit; background: none; border: 0; border-radius: 50%; pointer-events: none;
+    flex: none; display: grid; place-items: center; width: 40px; min-height: 40px; padding: 0; margin: 0;
+    color: inherit; background: #141414; border: 0; border-radius: 0; pointer-events: none;
     touch-action: manipulation; -webkit-tap-highlight-color: transparent;
   }
-  body.menu-open .now-playing.np-auto .np-toggle, body.in-garage .now-playing.np-auto .np-toggle {
-    width: 30px; height: 30px; margin: -8px -6px -8px -8px; pointer-events: auto; cursor: pointer;
-  }
-  .np-toggle:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
-  @media (hover: hover) { .now-playing.np-auto .np-toggle:hover { background: rgba(255, 255, 255, 0.08); } }
-  /* Réduit : une pastille ronde, la note seule (un toucher la déplie) */
-  body.menu-open .now-playing.np-folded, body.in-garage .now-playing.np-folded { gap: 0; padding: 0; border-radius: 999px; }
-  body.menu-open .now-playing.np-folded .np-toggle, body.in-garage .now-playing.np-folded .np-toggle { width: 42px; height: 42px; margin: 0; }
+  body.menu-open .now-playing.np-auto .np-toggle, body.in-garage .now-playing.np-auto .np-toggle { pointer-events: auto; cursor: pointer; }
+  .np-toggle:focus-visible { outline: 3px solid var(--hazard); outline-offset: 1px; }
+  @media (hover: hover) { .now-playing.np-auto .np-toggle:hover { background: var(--hazard); color: var(--oil); } }
+  /* Réduit : la note seule, un carré noir (un toucher le déplie) */
+  body.menu-open .now-playing.np-folded, body.in-garage .now-playing.np-folded { gap: 0; }
+  body.menu-open .now-playing.np-folded .np-toggle, body.in-garage .now-playing.np-folded .np-toggle { width: 44px; height: 44px; }
   body.menu-open .now-playing.np-folded :is(.np-text, .np-controls), body.in-garage .now-playing.np-folded :is(.np-text, .np-controls) { display: none; }
   body.menu-open .now-playing.np-folded .np-icon, body.in-garage .now-playing.np-folded .np-icon { width: 18px; height: 18px; }
-  .now-playing .np-icon { flex: none; width: 15px; height: 15px; fill: var(--signal); }
+  .now-playing .np-icon { flex: none; width: 15px; height: 15px; fill: currentColor; }
   .now-playing.np-loading .np-icon { animation: np-pulse 0.9s ease-in-out infinite alternate; }
-  .now-playing.np-bad .np-icon { fill: var(--bad); }
-  .np-text { display: grid; gap: 2px; min-width: 0; }
-  .np-label { font: 500 10.5px/1.2 var(--mono); color: var(--muted); letter-spacing: 0.03em; }
-  .np-title {
-    font: 600 14px/1.2 var(--display); letter-spacing: 0.02em; color: var(--text);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  .now-playing.np-bad .np-icon { fill: var(--rust-text); }
+  /* Le ruban : l'écran de la musique, puis le titre (encoche au bout) */
+  .np-text {
+    display: flex; align-items: center; gap: 0.6em; min-width: 0; min-height: 40px; margin-left: -6px; padding: 0 20px 0 2px;
+    background: #141414; clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 50%, 100% 100%, 0 100%);
   }
-  .np-controls { display: none; gap: 4px; margin-left: 4px; }
+  .np-label { flex: none; color: #b5b5b5; white-space: nowrap; }
+  .np-label:not(:empty)::after { content: "·"; margin-left: 0.6em; }
+  .np-title { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .np-controls { display: none; gap: 6px; }
   body.menu-open .np-controls, body.in-garage .np-controls { display: flex; }
   .np-btn {
-    display: grid; place-items: center; width: 30px; height: 28px; padding: 0; cursor: pointer;
-    color: var(--text); background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); border-radius: 5px;
+    display: grid; place-items: center; width: 44px; height: 40px; padding: 0; cursor: pointer;
+    color: #f2f2f2; background: #141414; border: 0; border-radius: 0; -webkit-tap-highlight-color: transparent;
   }
-  .np-btn svg { width: 13px; height: 13px; fill: currentColor; }
-  .np-btn:hover:not(:disabled), .np-btn:focus-visible { border-color: var(--line-strong); background: rgba(40, 48, 56, 0.92); outline: none; }
-  .np-btn:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
-  .np-btn:disabled { opacity: 0.35; cursor: default; }
+  .np-btn svg { width: 14px; height: 14px; fill: currentColor; }
+  .np-btn:hover:not(:disabled), .np-btn:focus-visible { background: var(--hazard); color: var(--oil); outline: none; }
+  .np-btn:disabled { color: #6b6b6b; cursor: default; }
   /* Au doigt : des boutons à la taille d'un pouce */
-  body.touch-ui .np-btn { width: 38px; height: 34px; }
+  body.touch-ui .np-btn { height: 44px; }
+  body.touch-ui .np-toggle, body.touch-ui .np-text { min-height: 44px; }
   @keyframes np-in { from { opacity: 0; transform: translateY(-6px); } }
-  @keyframes np-flash { from { border-color: var(--signal); box-shadow: 0 0 0 1px var(--signal), 0 8px 22px rgba(10, 14, 20, 0.3); } }
+  @keyframes np-flash { from { background: var(--hazard); color: var(--oil); } }
   @keyframes np-pulse { to { opacity: 0.35; } }
   /* Au garage : à gauche de l'inventaire ; sur un écran étroit (l'inventaire en bas), pas de place */
   body.in-garage .now-playing.np-on { right: calc(min(390px, 100% - 24px) + 24px); bottom: 18px; }
@@ -1404,20 +1672,14 @@
     body.touch-pilot:not(.menu-open) .now-playing { top: calc(104px + env(safe-area-inset-top, 0px)); }
   }
   /*
-   * Écran étroit : les menus occupent le bas de l'écran ; la ligne passe en haut. Écran bas (un
-   * téléphone à l'horizontale) : en haut aussi, au-dessus des tuiles (en bas, elle mordait sur leur
-   * dernière ligne, et sur le bouton de la fiche des choix du robot et de l'arène)
+   * Écran étroit : les plaques des menus occupent le bas de l'écran ; le ruban passe en haut. Écran
+   * bas (un téléphone à l'horizontale) : en haut aussi, au-dessus des plaques (en bas, il mordait sur
+   * leurs entrées, et sur le bouton de la fiche des choix du robot et de l'arène)
    */
   @media (max-width: 760px), (max-height: 560px) {
     body.menu-open .now-playing.np-on { top: calc(8px + env(safe-area-inset-top, 0px)); bottom: auto; right: calc(10px + env(safe-area-inset-right, 0px)); }
   }
-  @media (prefers-reduced-motion: reduce) { .now-playing, .now-playing .np-icon { animation: none !important; } }
-  @media (max-width: 760px) {
-    .menu {
-      align-items: flex-end;
-      background: linear-gradient(0deg, rgba(10, 14, 20, 0.9) 0%, rgba(10, 14, 20, 0.6) 65%, rgba(10, 14, 20, 0.15) 100%);
-    }
-  }
+  @media (prefers-reduced-motion: reduce) { .now-playing, .now-playing .np-icon, .now-playing .np-toggle { animation: none !important; } }
 
   /* Éditeur de cartes (client/editor/) : par-dessus sa scène ; un menu de l'application (quitter, essayer) le cache */
   body.menu-open .editor { display: none; }

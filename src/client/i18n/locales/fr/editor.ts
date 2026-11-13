@@ -15,7 +15,7 @@ export const editor = {
   "editor.untitled": "Nouvelle carte",
   "editor.copyName": "{name} (copie)",
   "editor.menu": "Éditeur de cartes",
-  "editor.menuDetail": "Faire une carte : relief, éléments de jeu, essai contre l'IA.",
+  "editor.menuDetail": "relief, éléments de jeu, essai contre l'IA",
   "editor.mapsNew": "Nouvelle carte",
   "editor.mapsNewDetail": "Ouvre l'éditeur de cartes sur une carte vierge.",
   "editor.mapsEdit": "Modifier",

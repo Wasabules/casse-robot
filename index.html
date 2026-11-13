@@ -6,7 +6,8 @@
   <title>Casse-Robot</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <!-- « La Casse » : le pochoir (titres, entrées des menus, chiffres), l'étroite (tout ce qui se lit en phrase), le marqueur (une note par écran) -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@500;600;700&family=Big+Shoulders+Stencil:wght@800;900&family=Permanent+Marker&display=swap">
 </head>
 <body>
 <canvas id="c" aria-label="Arène 3D : robots ennemis en blocs à détruire" data-i18n-aria-label="hud.page.canvas"></canvas>
@@ -243,11 +244,13 @@
 <!-- Écran de chargement : au démarrage, puis avant chaque partie (client/menu/loading.ts) -->
 <div class="loading" id="loading" role="progressbar" aria-label="Chargement" data-i18n-aria-label="menu.loading.label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
   <div class="loading-panel">
-    <h1 class="menu-title loading-title" translate="no">Casse<span>-</span>Robot</h1>
-    <p class="loading-subtitle" id="loadingSubtitle" data-i18n="menu.loading.prepare">Préparation du jeu</p>
-    <div class="loading-bar"><div class="loading-fill" id="loadingFill"></div></div>
-    <p class="loading-step" id="loadingStep" data-i18n="menu.loading.physics">Chargement de la physique…</p>
-    <button class="menu-entry primary loading-go" id="loadingGo" type="button" hidden><span class="menu-label" data-i18n="menu.loading.start">Cliquer pour commencer</span></button>
+    <div class="menu-nameplate loading-plate"><h1 class="menu-title loading-title" translate="no">Casse-Robot</h1></div>
+    <div class="loading-sheet">
+      <p class="menu-slip loading-subtitle" id="loadingSubtitle" data-i18n="menu.loading.prepare">Préparation du jeu</p>
+      <div class="loading-bar"><div class="loading-fill" id="loadingFill"></div></div>
+      <p class="loading-step" id="loadingStep" data-i18n="menu.loading.physics">Chargement de la physique…</p>
+      <button class="menu-entry primary loading-go" id="loadingGo" type="button" hidden><span class="menu-label" data-i18n="menu.loading.start">Cliquer pour commencer</span></button>
+    </div>
   </div>
 </div>
 <!-- La carte graphique réinitialisée (client/hud/gpuNotice.ts) -->

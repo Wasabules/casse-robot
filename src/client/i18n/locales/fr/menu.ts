@@ -1,4 +1,5 @@
 import type { MusicTheme, StingerKind, Track } from "../../../audio/music";
+import type { WheelSpot } from "../../../menu/plates";
 import type { Message } from "../../i18n";
 import { section } from "../section";
 
@@ -29,22 +30,28 @@ export const menu = {
   "menu.error.physics": "Impossible de démarrer la physique : {error}",
   "menu.error.start": "Impossible de démarrer le jeu : {error}",
 
+  /** Le ruban qui barre une entrée de menu indisponible. */
+  "menu.outOfService": "Hors service",
+
   // --- Écran titre ---
-  "menu.title.tagline": "Des robots en blocs, une physique qui ne triche pas.",
+  /** La bande jaune sous le nom du jeu (en capitales à l'écran). */
+  "menu.title.tagline": "Pièces détachées · démolition sur place",
+  /** L'en-tête du menu ; `{lot}` : le nombre de robots prédéfinis, sur trois chiffres (« 046 »). */
+  "menu.title.slip": "Bon de sortie n° {lot}",
   "menu.title.play": "Jouer",
-  /** `{modes}` : les modes de jeu, en minuscules, séparés par des virgules. */
-  "menu.title.playDetail": "Contre l'IA : {modes}.",
-  "menu.title.multiDetail": "Rejoins une bataille sur un serveur, avec d'autres joueurs et l'IA.",
+  "menu.title.online": "En ligne",
+  /** Les notes au marqueur, sous l'entrée choisie : courtes, en minuscules, sans point. */
+  "menu.title.onlineDetail": "une bataille sur un serveur, avec d'autres joueurs",
   "menu.title.garage": "Garage",
-  /** `{progress}` : « Bac à sable : toutes les pièces. » ou « 120 crédits. ». */
-  "menu.title.garageDetail": "Construis ton propre robot, bloc par bloc, et essaie-le. {progress}",
-  "menu.title.sandbox": "Bac à sable : toutes les pièces.",
-  "menu.title.credits": { one: "{n} crédit.", other: "{n} crédits." },
-  "menu.title.settingsDetail": "Graphismes, contrôles, son et profil.",
-  "menu.title.footer": "Babylon.js · Rapier · physique à 60 Hz",
+  "menu.title.garageDetail": "construis ton robot, bloc par bloc",
+  "menu.title.settingsDetail": "graphismes, commandes, son, profil",
+  /** L'étiquette de carton en haut à droite : les crédits du joueur (« 120 cr »), ou le bac à sable. */
+  "menu.title.creditsLabel": "Crédits",
+  "menu.title.creditsValue": "{n} cr",
+  "menu.title.sandboxValue": "Bac à sable",
 
   // --- Jouer : mode, arène, robot ---
-  "menu.play.subtitle": "Choisis un mode de jeu.",
+  "menu.play.subtitle": "Choisis un mode de jeu",
   "menu.arena.title": "Arène",
   "menu.arena.random": "Au hasard",
   "menu.arena.randomInfo": "Une arène tirée au sort parmi les {n} de la liste.",
@@ -63,7 +70,6 @@ export const menu = {
   /** `{name}` : le nom de l'arène. */
   "menu.arena.unavailableDetail": "Le fichier de l'arène {name} n'a pas pu se charger. Vérifie ta connexion, puis réessaie.",
   "menu.arena.day": "De jour",
-  "menu.fullscreenDetail": "Le jeu occupe tout l'écran.",
   "menu.robot.title": "Ton robot",
   "menu.robot.pilot": "Piloter ce robot",
   "menu.robots.title": "Mes robots",
@@ -77,19 +83,55 @@ export const menu = {
 
   // --- Pause, fin de partie ---
   "menu.pause.title": "Pause",
-  "menu.pause.online": "Multijoueur · la partie continue sans toi",
+  /** L'en-tête de la plaque de la pause ; `{where}` : le mode et l'arène (« Bataille · Dépôt »). */
+  "menu.pause.slip": "Arrêt technique · {where}",
+  "menu.pause.online": "La partie continue sans toi.",
+  /** Au pied de la plaque de la pause ; `{key}` : la touche Échap, nommée selon le clavier. */
+  "menu.pause.escapeNote": "{key} : reprendre",
   "menu.pause.resume": "Reprendre",
   "menu.pause.quit": "Quitter la partie",
   "menu.pause.garage": "Retour au garage",
   "menu.pause.restart": "Recommencer",
-  "menu.pause.restartDetail": "Une nouvelle partie, dans le même mode",
   "menu.pause.changeRobot": "Changer de robot",
   "menu.pause.main": "Menu principal",
+  /** Le constat de la pause (menu/plates.ts) : l'état du robot du joueur, sur un porte-bloc. */
+  "menu.report.title": "Constat · {name}",
+  "menu.report.structure": "Structure",
+  "menu.report.structureLevel": "Structure : {level}",
+  "menu.report.blocks": "Blocs",
+  "menu.report.wheelsLine": "Roues",
+  "menu.report.rollersLine": "Galets",
+  "menu.report.battery": "Batteries",
+  "menu.report.kills": "Destructions",
+  /** Ce qui reste sur ce qu'il y avait au départ (« 41 / 48 »). */
+  "menu.report.of": "{n} / {total}",
+  /** La note au marqueur du constat : un fait (le robot détruit, ses roues arrachées). */
+  "menu.report.destroyed": "épave !",
+  "menu.report.destroyedBy": "mis en pièces par {killer} !",
+  /** `{spot}` : où était la roue (`menu.report.spot.*`). */
+  "menu.report.wheelAt": "roue {spot} arrachée !",
+  "menu.report.wheels": { one: "{n} roue arrachée !", other: "{n} roues arrachées !" },
+  "menu.report.rollers": { one: "{n} galet arraché !", other: "{n} galets arrachés !" },
+  ...section("menu.report.spot", {
+    frontLeft: "avant gauche",
+    frontRight: "avant droite",
+    backLeft: "arrière gauche",
+    backRight: "arrière droite",
+    front: "avant",
+    back: "arrière",
+    left: "gauche",
+    right: "droite",
+  } as const satisfies Record<WheelSpot, Message>),
   "menu.result.draw": "Égalité",
   "menu.result.victory": "Victoire",
   "menu.result.defeat": "Défaite",
+  /** L'en-tête de la plaque de fin de partie ; `{where}` : le mode et l'arène. */
+  "menu.result.slip": "Fin de partie · {where}",
+  /** Le score, pour les lecteurs d'écran (la plaque du score). */
   "menu.result.score": "Bleus {blue} — {red} Rouges",
-  "menu.result.nextMatch": "{score} · la partie suivante commence dans quelques secondes",
+  "menu.result.nextSoon": "La partie suivante commence dans quelques secondes.",
+  /** Le titre du reçu des crédits gagnés. */
+  "menu.result.receipt": "Reçu",
   /** Le total des crédits de la partie (`n`), et ce que le joueur en a en tout. */
   "menu.result.earned": { one: "crédit gagné · {total} au total", other: "crédits gagnés · {total} au total" },
   "menu.result.continue": "Continuer",
@@ -110,7 +152,7 @@ export const menu = {
   "menu.keys.subtitle": "En pilotant un robot, puis à la caméra libre (avec tes touches)",
 
   // --- Paramètres ---
-  "menu.settings.title": "Paramètres",
+  "menu.settings.title": "Réglages",
   "menu.settings.graphics": "Graphismes",
   "menu.settings.controls": "Contrôles",
   "menu.settings.sound": "Son",
@@ -301,7 +343,7 @@ export const menu = {
 
   // --- Musique : le lecteur (hud/nowPlaying.ts : un mot quand un morceau commence ; dans les menus, la musique en cours et ses boutons) ---
   /** `{screen}` : l'écran dont c'est la musique (`music.theme.*`), ou le motif de fin de partie (`music.stinger.*`). */
-  "music.label": "Musique · {screen}",
+  "music.label": "{screen}",
   /** Un morceau demandé (un précédent déjà libéré) se prépare : celui qu'on entend continue d'ici là. */
   "music.loading": "Musique · chargement…",
   "music.failed": "Musique · morceau illisible",

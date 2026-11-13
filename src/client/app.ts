@@ -35,6 +35,7 @@ import { LOCALE_IDS, LOCALES, measure, t, type MessageKey } from "./i18n/i18n";
 import { pct } from "./i18n/format";
 import { playerToken, Progress } from "./progress";
 import { choiceRow, Menu, type BindingSlotView, type MenuEntry, type SettingRow } from "./menu/menu";
+import { cluster, constat, creditTag, matchClock, receipt, robotReport, scorePlate, toolButton } from "./menu/plates";
 import { robotCard, type RobotCard } from "./menu/robotCatalog";
 import { lastPick, rememberPick, RobotPicker, type PickerOptions } from "./menu/robotPicker";
 import { ArenaPicker, lastArena, rememberArena, type ArenaOption } from "./menu/arenaPicker";
@@ -265,20 +266,16 @@ export class App {
   }
 
   /**
-   * L'entrée « Plein écran » (ou « Quitter le plein écran ») de l'accueil et du menu pause, là où le
-   * navigateur le permet (pas sur l'iPhone) ; au doigt, elle tourne aussi l'écran à l'horizontale, là
-   * où c'est possible. Le menu se redessine quand la page entre en plein écran ou en sort
-   * (`onFullscreenChange`, dans le constructeur).
+   * Le bouton carré d'acier « Plein écran » (ou « Quitter le plein écran ») de l'accueil et de la
+   * pause, en haut à droite, là où le navigateur le permet (pas sur l'iPhone) ; au doigt, il tourne
+   * aussi l'écran à l'horizontale, là où c'est possible. Le menu se redessine quand la page entre en
+   * plein écran ou en sort (`onFullscreenChange`, dans le constructeur).
    */
-  private fullscreenEntry(): MenuEntry[] {
+  private fullscreenTool(): HTMLButtonElement[] {
     if (!fullscreenSupported()) return [];
     const on = isFullscreen();
-    return [{
-      label: on ? t("hud.page.exitFullscreen") : t("hud.page.fullscreen"),
-      // (l'explication sur une tuile, au doigt ; sur ordinateur, l'accueil tient ainsi en 720 px de haut)
-      detail: on || !this.touchHud.active ? undefined : t("menu.fullscreenDetail"),
-      onSelect: () => void toggleFullscreen(this.touchHud.active),
-    }];
+    const label = on ? t("hud.page.exitFullscreen") : t("hud.page.fullscreen");
+    return [toolButton(on ? "exitFullscreen" : "fullscreen", label, "fullscreen", () => void toggleFullscreen(this.touchHud.active))];
   }
 
   /**
@@ -325,29 +322,31 @@ export class App {
     this.renderTitle();
   }
 
+  /**
+   * L'écran titre : le nom du jeu au pochoir sur sa plaque d'acier, de travers ; en haut à droite, le
+   * plein écran et l'étiquette des crédits (avec le nom du joueur) ; en bas à gauche, le bon de sortie
+   * (son numéro : le nombre de robots prédéfinis) et ses entrées numérotées, la note au marqueur de
+   * celle qui est choisie.
+   */
   private renderTitle(): void {
     const modes = this.listedModes().map((id) => modeName(id).toLocaleLowerCase());
-    const progress = this.progress.sandbox ? t("menu.title.sandbox") : t("menu.title.credits", { n: this.progress.credits });
+    const credits = this.progress.sandbox ? t("menu.title.sandboxValue") : t("menu.title.creditsValue", { n: this.progress.credits });
     this.menu.show({
       id: "title",
       // Le nom du jeu ne se traduit pas
       title: "Casse-Robot", // i18n-ignore
-      subtitle: t("menu.title.tagline"),
+      tagline: t("menu.title.tagline"),
+      slip: t("menu.title.slip", { lot: String(PRESET_BOTS.length).padStart(3, "0") }),
       hero: true,
-      tiles: true,
+      numbered: true,
+      corner: cluster(...this.fullscreenTool(), creditTag(t("menu.title.creditsLabel"), credits, this.settings.name.trim())),
       entries: [
-        { label: t("menu.title.play"), detail: t("menu.title.playDetail", { modes: modes.join(", ") }), primary: true, onSelect: () => this.showPlay() },
-        { label: t("menu.multi.title"), detail: t("menu.title.multiDetail"), onSelect: () => this.showMultiplayer() },
-        {
-          label: t("menu.title.garage"),
-          detail: t("menu.title.garageDetail", { progress }),
-          onSelect: () => this.openGarage(this.lastRobot),
-        },
+        { label: t("menu.title.play"), detail: modes.join(" · "), primary: true, onSelect: () => this.showPlay() },
+        { label: t("menu.title.online"), detail: t("menu.title.onlineDetail"), onSelect: () => this.showMultiplayer() },
+        { label: t("menu.title.garage"), detail: t("menu.title.garageDetail"), onSelect: () => this.openGarage(this.lastRobot) },
         { label: t("editor.menu"), detail: t("editor.menuDetail"), onSelect: () => void this.openEditor({ kind: "resume" }) },
         { label: t("menu.settings.title"), detail: t("menu.title.settingsDetail"), onSelect: () => this.showSettings(() => this.renderTitle()) },
-        ...this.fullscreenEntry(),
       ],
-      footer: t("menu.title.footer"),
     });
   }
 
@@ -366,10 +365,11 @@ export class App {
     }));
     this.menu.show({
       id: "play",
-      tiles: true,
+      columns: true,
+      numbered: true,
       title: t("menu.title.play"),
-      subtitle: t("menu.play.subtitle"),
-      entries: [...modes, { label: t("common.back"), onSelect: back }],
+      slip: t("menu.play.subtitle"),
+      entries: [...modes, { label: t("common.back"), tone: "back", onSelect: back }],
       back,
     });
   }
@@ -416,12 +416,12 @@ export class App {
     this.menu.show({
       id: "arena",
       title: t("menu.arena.title"),
-      subtitle: label,
+      slip: label,
       content: picker.element,
       onClose: () => picker.dispose(),
       entries: [
         { label: t("maps.manage"), detail: t("maps.manageDetail"), onSelect: () => this.showMaps(() => this.pickArena(mode)) },
-        { label: t("common.back"), onSelect: back },
+        { label: t("common.back"), tone: "back", onSelect: back },
       ],
       back,
     });
@@ -438,6 +438,7 @@ export class App {
       id: "maps",
       title: t("maps.title"),
       subtitle: note ?? t("maps.subtitle"),
+      numbered: true,
       entries: [
         ...list.map((e): MenuEntry => ({
           label: mapName(e.map),
@@ -446,7 +447,7 @@ export class App {
         })),
         { label: t("maps.import"), detail: t("maps.importDetail"), primary: !list.length, onSelect: () => void this.importMap(back) },
         { label: t("editor.mapsNew"), detail: t("editor.mapsNewDetail"), onSelect: () => void this.openEditor({ kind: "new" }) },
-        { label: t("common.back"), onSelect: back },
+        { label: t("common.back"), tone: "back", onSelect: back },
       ],
       footer: !this.maps.persistent ? t("maps.storage") : list.length ? undefined : t("maps.empty"),
       back,
@@ -467,6 +468,7 @@ export class App {
       id: `map-${entry.key}`,
       title: name,
       subtitle: note ?? [t("maps.by", { author: meta.author }), t("maps.license", { license: meta.license }), t(`maps.origin.${entry.origin}`), ...(packaged ? [assetsLine(entry.map)] : [])].join(" · "),
+      numbered: true,
       entries: [
         { label: t("maps.export"), detail: t(packaged ? "maps.exportPackageDetail" : "maps.exportDetail"), primary: true, onSelect: () => void exported() },
         { label: t("editor.mapsEdit"), detail: t("editor.mapsEditDetail"), onSelect: () => void this.openEditor({ kind: "entry", entry }) },
@@ -474,9 +476,10 @@ export class App {
           label: t("maps.delete"),
           detail: t("maps.deleteDetail"),
           disabled: entry.origin === "bundled",
+          tone: "danger",
           onSelect: () => void this.maps.remove(entry.key).then(() => this.showMaps(outer, t("maps.deleted", { name }))),
         },
-        { label: t("common.back"), onSelect: back },
+        { label: t("common.back"), tone: "back", onSelect: back },
       ],
       footer: meta.description ? communityInfo(meta) : undefined,
       back,
@@ -510,9 +513,9 @@ export class App {
     this.menu.show({
       id: "mapIssues",
       title: t("maps.invalidTitle"),
-      subtitle: file,
+      slip: file,
       rows: issues.map((issue): SettingRow => ({ kind: "note", label: mapIssueText(issue) })),
-      entries: [{ label: t("common.back"), onSelect: back }],
+      entries: [{ label: t("common.back"), tone: "back", onSelect: back }],
       back,
     });
   }
@@ -545,7 +548,7 @@ export class App {
    * des pièces à débloquer se voient, sans se jouer), puis les robots prédéfinis ; le dernier choisi
    * est sélectionné d'emblée.
    */
-  private pickRobot(subtitle: string, onPick: (profile: BotProfile) => void, back: () => void): void {
+  private pickRobot(slip: string, onPick: (profile: BotProfile) => void, back: () => void): void {
     const own = loadRobots()
       .filter((r) => !validateDesign(r.design).length)
       .map((r) => profileFromDesign(r.name, r.color, r.design));
@@ -553,7 +556,7 @@ export class App {
       ...own.map((profile, i) => robotCard(profile, true, i, lockedParts(profile.design, (part) => this.progress.has(part)))),
       ...PILOTABLE.map((profile, i) => robotCard(profile, false, own.length + i)),
     ];
-    this.showPicker(t("menu.robot.title"), subtitle, back, {
+    this.showPicker(t("menu.robot.title"), { slip }, back, {
       cards,
       last: lastPick(),
       action: () => t("menu.robot.pilot"),
@@ -565,15 +568,18 @@ export class App {
     });
   }
 
-  /** Écran de choix d'un robot (liste, filtres, aperçu) ; Échap ou « Retour » : `back`. */
-  private showPicker(title: string, subtitle: string, back: () => void, options: PickerOptions): void {
+  /**
+   * Écran de choix d'un robot (liste, filtres, aperçu) ; Échap ou « Retour » : `back`. `head` : ce
+   * qu'on choisit (« Bataille · Dépôt », l'en-tête du bon), ou une phrase.
+   */
+  private showPicker(title: string, head: { slip?: string; subtitle?: string }, back: () => void, options: PickerOptions): void {
     const picker = new RobotPicker(options);
     this.menu.show({
       title,
-      subtitle,
+      ...head,
       content: picker.element,
       onClose: () => picker.dispose(),
-      entries: [{ label: t("common.back"), onSelect: back }],
+      entries: [{ label: t("common.back"), tone: "back", onSelect: back }],
       back,
     });
     picker.focus();
@@ -665,32 +671,57 @@ export class App {
       id: "arenaUnavailable",
       title: t("menu.arena.unavailable"),
       subtitle: t("menu.arena.unavailableDetail", { name }),
-      entries: [{ label: t("common.back"), primary: true, onSelect: back }],
+      entries: [{ label: t("common.back"), primary: true, tone: "back", onSelect: back }],
       back,
     });
   }
 
-  /** La touche qui reprend la partie, sous « Reprendre » (au doigt, il n'y en a pas : le bouton de pause). */
-  private get escapeHint(): string | undefined {
-    return this.touchHud.active ? undefined : codeLabel("Escape");
+  /** La touche qui reprend la partie, au pied de la plaque de la pause (au doigt, il n'y en a pas : le bouton de pause). */
+  private get escapeNote(): string | undefined {
+    return this.touchHud.active ? undefined : t("menu.pause.escapeNote", { key: codeLabel("Escape") });
   }
 
+  /**
+   * Le haut à droite de la pause et de la fin de partie : le plein écran (la pause) et la plaque du
+   * score, s'il y a une partie (le monde affiché : la simulation de la page, ou la réplique).
+   */
+  private matchCorner(tools: readonly HTMLElement[], clock: boolean): HTMLElement | undefined {
+    const match = this.game.world.match;
+    const parts = [...tools, ...(match ? [scorePlate(match.score, clock ? matchClock(match) : null)] : [])];
+    return parts.length ? cluster(...parts) : undefined;
+  }
+
+  /**
+   * La pause : un ruban de chantier en travers de l'écran, le score en haut à droite, la plaque de
+   * l'arrêt technique (le mode et l'arène) et, à droite, le constat du robot du joueur (ce que la
+   * page en sait : menu/plates.ts).
+   */
   private pause(): void {
     this.enter("paused");
     this.game.frozen = true;
     this.game.closeOverlays();
+    const world = this.game.world;
+    const player = world.player;
+    const title = t("menu.pause.title");
+    const report = player ? constat(robotReport(player, world.match ? this.game.matchStats.kills : null)) : undefined;
+    const settings: MenuEntry = { label: t("menu.settings.title"), onSelect: () => this.showSettings(() => this.pause()) };
     if (this.game.online) {
       // En réseau, la partie continue sur le serveur : la pause ne fait que relâcher les commandes
       this.menu.show({
         id: "pause",
-        tiles: true,
-        title: t("menu.pause.title"),
+        columns: true,
+        title,
+        tape: title,
+        dim: true,
+        slip: t("menu.pause.slip", { where: [t("menu.multi.title"), arenaName(world.arena)].join(" · ") }),
         subtitle: t("menu.pause.online"),
+        note: this.escapeNote,
+        corner: this.matchCorner(this.fullscreenTool(), true),
+        aside: report,
         entries: [
-          { label: t("menu.pause.resume"), detail: this.escapeHint, primary: true, onSelect: () => this.resume() },
-          { label: t("menu.settings.title"), onSelect: () => this.showSettings(() => this.pause()) },
-          ...this.fullscreenEntry(),
-          { label: t("menu.pause.quit"), onSelect: () => this.showTitle() },
+          { label: t("menu.pause.resume"), primary: true, onSelect: () => this.resume() },
+          settings,
+          { label: t("menu.pause.quit"), tone: "danger", onSelect: () => this.showTitle() },
         ],
       });
       return;
@@ -699,20 +730,24 @@ export class App {
     const pilot = this.game.playerProfile;
     this.menu.show({
       id: "pause",
-      tiles: true,
-      title: t("menu.pause.title"),
-      subtitle: pilot ? `${modeName(mode)} · ${botName(pilot)}` : modeName(mode),
+      columns: true,
+      title,
+      tape: title,
+      dim: true,
+      slip: t("menu.pause.slip", { where: [modeName(mode), arenaName(world.arena)].join(" · ") }),
+      note: this.escapeNote,
+      corner: this.matchCorner(this.fullscreenTool(), true),
+      aside: report,
       entries: [
-        { label: t("menu.pause.resume"), detail: this.escapeHint, primary: true, onSelect: () => this.resume() },
+        { label: t("menu.pause.resume"), primary: true, onSelect: () => this.resume() },
         ...(this.trial ? [{ label: t("menu.pause.garage"), onSelect: () => this.openGarage(this.trial) }] : []),
         ...(this.editorTest ? [{ label: t("editor.back"), onSelect: () => this.returnToEditor() }] : []),
-        { label: t("menu.pause.restart"), detail: t("menu.pause.restartDetail"), onSelect: () => this.play(mode, pilot) },
+        { label: t("menu.pause.restart"), onSelect: () => this.play(mode, pilot) },
         ...(GAME_MODES[mode].pilot && !this.trial
           ? [{ label: t("menu.pause.changeRobot"), onSelect: () => this.pickRobot(modeName(mode), (p) => this.play(mode, p), () => this.pause()) }]
           : []),
-        { label: t("menu.settings.title"), onSelect: () => this.showSettings(() => this.pause()) },
-        ...this.fullscreenEntry(),
-        { label: t("menu.pause.main"), onSelect: () => this.showTitle() },
+        settings,
+        { label: t("menu.pause.main"), tone: "danger", onSelect: () => this.showTitle() },
       ],
     });
   }
@@ -727,13 +762,17 @@ export class App {
     if (this.game.piloting) this.game.controls.captureMouse();
   }
 
-  /** Fin de partie : le résultat et le score ; la bataille continue derrière, sans le joueur. */
+  /**
+   * Fin de partie : la victoire ou la défaite au pochoir (la défaite sur une plaque rouillée), le
+   * score en haut à droite, la plaque de la fin de partie, et à droite le reçu des crédits gagnés ;
+   * la bataille continue derrière, sans le joueur.
+   */
   private showResult(winner: Team | "draw"): void {
     if (this.state !== "playing") return;
     this.enter("over");
     this.game.inputEnabled = false;
-    const score = this.game.world.match?.score ?? { blue: 0, red: 0 };
-    const team = this.game.world.player?.team ?? "blue";
+    const world = this.game.world;
+    const team = world.player?.team ?? "blue";
     const title = winner === "draw" ? t("menu.result.draw") : winner === team ? t("menu.result.victory") : t("menu.result.defeat");
     this.game.sound.stinger(winner === team ? "victory" : "defeat");
     // Crédits de la partie, et leur détail
@@ -742,22 +781,27 @@ export class App {
     this.game.resetMatchStats();
     // Les crédits tombent juste après le motif de fin
     if (reward.total > 0) window.setTimeout(() => this.game.sound.ui("credits"), 1400);
-    const keys: [string, string][] = [
-      ...reward.lines.map((line): [string, string] => [`+${line.credits}`, rewardLineText(line)]),
+    const ticket = receipt(
+      t("menu.result.receipt"),
+      reward.lines.map((line) => [`+${line.credits}`, rewardLineText(line)] as const),
       [`+${reward.total}`, t("menu.result.earned", { n: reward.total, total: this.progress.credits })],
-    ];
-    const scoreLine = t("menu.result.score", { blue: Math.floor(score.blue), red: Math.floor(score.red) });
+    );
+    const rusted = winner !== "draw" && winner !== team;
     if (this.game.online) {
       this.menu.show({
         id: "result",
-        tiles: true,
+        columns: true,
         title,
-        subtitle: t("menu.result.nextMatch", { score: scoreLine }),
+        rusted,
+        dim: true,
+        slip: t("menu.result.slip", { where: [t("menu.multi.title"), arenaName(world.arena)].join(" · ") }),
+        subtitle: t("menu.result.nextSoon"),
+        corner: this.matchCorner([], false),
+        aside: ticket,
         entries: [
           { label: t("menu.result.continue"), primary: true, onSelect: () => this.resume() },
-          { label: t("menu.pause.quit"), onSelect: () => this.showTitle() },
+          { label: t("menu.pause.quit"), tone: "danger", onSelect: () => this.showTitle() },
         ],
-        keys,
       });
       return;
     }
@@ -765,10 +809,13 @@ export class App {
     const pilot = this.game.playerProfile;
     this.menu.show({
       id: "result",
-      tiles: true,
+      columns: true,
       title,
-      subtitle: scoreLine,
-      keys,
+      rusted,
+      dim: true,
+      slip: t("menu.result.slip", { where: [modeName(mode), arenaName(world.arena)].join(" · ") }),
+      corner: this.matchCorner([], false),
+      aside: ticket,
       entries: [
         ...(this.editorTest ? [{ label: t("editor.back"), primary: true, onSelect: () => this.returnToEditor() }] : []),
         { label: t("menu.result.replay"), primary: !this.editorTest, onSelect: () => this.play(mode, pilot) },
@@ -797,7 +844,7 @@ export class App {
           primary: true,
           onSelect: () => this.pickRobot(t("menu.multi.title"), (p) => this.connect(p), () => this.showMultiplayer()),
         },
-        { label: t("common.back"), onSelect: () => this.renderTitle() },
+        { label: t("common.back"), tone: "back", onSelect: () => this.renderTitle() },
       ],
       footer: t("menu.multi.footer", { port: DEFAULT_PORT }),
       back: () => this.renderTitle(),
@@ -859,7 +906,7 @@ export class App {
       net.close();
       this.showMultiplayer();
     };
-    this.menu.show({ id: "connecting", title: t("menu.multi.connecting"), subtitle: url, entries: [{ label: t("common.cancel"), onSelect: cancel }], back: cancel });
+    this.menu.show({ id: "connecting", title: t("menu.multi.connecting"), slip: url, entries: [{ label: t("common.cancel"), tone: "back", onSelect: cancel }], back: cancel });
   }
 
   // --- Pour les outils qui pilotent le jeu dans un navigateur ---
@@ -956,6 +1003,7 @@ export class App {
       id: "editorLeave",
       title: t("editor.leave.title"),
       subtitle: t("editor.leave.subtitle"),
+      numbered: true,
       entries: [
         {
           label: t("editor.leave.save"), detail: t("editor.leave.saveDetail"), primary: true,
@@ -965,8 +1013,8 @@ export class App {
           },
         },
         { label: t("editor.leave.keep"), detail: t("editor.leave.keepDetail"), onSelect: () => this.closeEditor(false) },
-        { label: t("editor.leave.discard"), detail: t("editor.leave.discardDetail"), onSelect: () => this.closeEditor(true) },
-        { label: t("editor.leave.stay"), onSelect: stay },
+        { label: t("editor.leave.discard"), detail: t("editor.leave.discardDetail"), tone: "danger", onSelect: () => this.closeEditor(true) },
+        { label: t("editor.leave.stay"), tone: "back", onSelect: stay },
       ],
       back: stay,
     });
@@ -986,6 +1034,8 @@ export class App {
       id: "editorTest",
       title: t("editor.test.title"),
       subtitle: t("editor.test.subtitle"),
+      numbered: true,
+      columns: true,
       entries: [
         ...this.listedModes().map((id): MenuEntry => ({
           label: modeName(id),
@@ -997,7 +1047,7 @@ export class App {
             else this.startTest(map, id, null);
           },
         })),
-        { label: t("editor.back"), onSelect: back },
+        { label: t("editor.back"), tone: "back", onSelect: back },
       ],
       back,
     });
@@ -1075,7 +1125,7 @@ export class App {
       }),
       ...PRESET_BOTS.map((profile, i) => robotCard(profile, false, own.length + i)),
     ];
-    this.showPicker(t("menu.robots.title"), own.length ? t("menu.robots.subtitle") : t("menu.robots.empty"), back, {
+    this.showPicker(t("menu.robots.title"), { subtitle: own.length ? t("menu.robots.subtitle") : t("menu.robots.empty") }, back, {
       cards,
       last: null,
       action: (card) => (card.own ? t("menu.robots.open") : t("menu.robots.copy")),
@@ -1096,7 +1146,7 @@ export class App {
       id: "keys",
       title: t("menu.keys.title"),
       subtitle: t("menu.keys.subtitle"),
-      entries: [{ label: t("common.back"), primary: true, onSelect: back }],
+      entries: [{ label: t("common.back"), primary: true, tone: "back", onSelect: back }],
       keys: [...pilotKeys(k, p), ["", ""], ...freeKeys(k, p), ["", ""], [t("help.garage"), ""], ...garageKeys(k), ["", ""], [t("help.editor"), ""], ...editorKeys(k)],
       back,
     });
@@ -1142,7 +1192,7 @@ export class App {
         if (this.redrawSettings === redraw) this.redrawSettings = null;
       },
       entries: [
-        { label: t("common.back"), primary: true, onSelect: back },
+        { label: t("common.back"), primary: true, tone: "back", onSelect: back },
         {
           label: t("menu.settings.defaults"),
           detail: t("menu.settings.defaultsDetail"),
@@ -1185,7 +1235,7 @@ export class App {
         if (this.redrawSettings === redraw) this.redrawSettings = null;
       },
       entries: [
-        { label: t("common.back"), primary: true, onSelect: leave },
+        { label: t("common.back"), primary: true, tone: "back", onSelect: leave },
         {
           label: t("menu.ctl.allDefault"),
           detail: t("menu.bind.allDefaultDetail"),

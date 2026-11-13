@@ -3,12 +3,18 @@ import { t } from "../i18n/i18n";
 
 export interface MenuEntry {
   label: string;
-  /** Petite ligne d'explication sous le libellé. */
+  /**
+   * Ce que fait l'entrée : il s'écrit au pied de la plaque quand elle est choisie (survol, focus
+   * du clavier ou de la manette), jamais sous chaque entrée. Sur un écran à lignes de réglage
+   * (paramètres, touches), il passe en bulle d'aide.
+   */
   detail?: string;
-  /** Bouton mis en avant (l'action principale). */
+  /** L'action principale : elle a le focus quand l'écran s'ouvre. */
   primary?: boolean;
-  /** Entrée visible mais inactive (fonctionnalité à venir). */
+  /** Entrée visible mais hors service (barrée d'un ruban). */
   disabled?: boolean;
+  /** Retour à l'écran précédent (sans numéro de lot) ; danger (quitter, supprimer : en rouille). */
+  tone?: "back" | "danger";
   onSelect?: () => void;
 }
 
@@ -81,6 +87,13 @@ export interface MenuTabs {
   onSelect: (index: number) => void;
 }
 
+/**
+ * Un écran de menu, dans le langage de « La Casse » (style.css) : son nom au pochoir sur une
+ * plaque d'acier rivetée, puis une plaque d'apprêt qui porte le reste (en-tête du bon, onglets,
+ * lignes de réglage, contenu, champs, entrées numérotées, note). Un écran « de scène » (l'accueil,
+ * la pause, la fin de partie : `hero`, `corner`, `aside`) pose ses plaques aux coins de l'écran,
+ * par-dessus la bataille ; les autres les empilent à gauche.
+ */
 export interface MenuView {
   /**
    * Identifiant de l'écran (« settings ») : le même identifiant, c'est le même écran redessiné (le
@@ -89,39 +102,58 @@ export interface MenuView {
    */
   id?: string;
   title: string;
+  /** Une phrase sous l'en-tête, dans la plaque. */
   subtitle?: string;
+  /** L'en-tête de la plaque, en capitales espacées au-dessus d'un pointillé (« Bon de sortie n° 046 », « Bataille · Dépôt »). */
+  slip?: string;
+  /** Écran titre : le nom du jeu en grand, de travers, avec sa bande jaune (`tagline`). */
+  hero?: boolean;
+  tagline?: string;
+  /** La plaque du titre en rouille (une défaite). */
+  rusted?: boolean;
   /** Onglets, au-dessus des lignes de réglage. */
   tabs?: MenuTabs;
   /** Lignes de réglage (écran des paramètres). */
   rows?: readonly SettingRow[];
   entries: readonly MenuEntry[];
+  /** Numéros de lot frappés devant les entrées (sauf celle du retour). */
+  numbered?: boolean;
+  /**
+   * Sur un écran bas (téléphone à l'horizontale), les entrées sur deux colonnes : l'écran tient sans
+   * défiler. Les longues listes qu'on voit souvent : le choix du mode, la pause, la fin de partie.
+   */
+  columns?: boolean;
   /** Champs de saisie, au-dessus des entrées. */
   fields?: readonly MenuField[];
   /** Liste de paires (touche, effet), affichée sous les entrées. */
   keys?: readonly (readonly [string, string])[];
+  /** Note manuscrite fixe au pied de la plaque (une par écran au plus : « Échap : reprendre »). */
+  note?: string;
   footer?: string;
-  /** Entrées sur deux colonnes, dans un panneau plus large (longues listes : choix du robot). */
-  wide?: boolean;
-  /** Écran titre : le nom du jeu en grand. */
-  hero?: boolean;
-  /**
-   * Entrées en tuiles sur la largeur, sur un petit écran (téléphone, en hauteur comme à
-   * l'horizontale : style.css) : l'écran tient sans défiler et chaque entrée se touche facilement.
-   * Les écrans qu'on voit souvent : l'accueil, le choix du mode, la pause, la fin de partie.
-   */
-  tiles?: boolean;
-  /** Contenu construit ailleurs, entre le titre et les entrées (choix du robot : menu/robotPicker.ts), dans le panneau le plus large. */
+  /** Contenu construit ailleurs, entre l'en-tête et les entrées (choix du robot : menu/robotPicker.ts), dans la plaque la plus large. */
   content?: HTMLElement;
+  /** En haut à droite (écran de scène) : les crédits et le plein écran à l'accueil, le score en pause (menu/plates.ts). */
+  corner?: HTMLElement;
+  /** À droite de la plaque (écran de scène) : le constat du robot en pause, le reçu des crédits en fin de partie. */
+  aside?: HTMLElement;
+  /** Un ruban de chantier en travers de l'écran, qui répète ce mot (la pause) ; le titre ne s'écrit alors pas. */
+  tape?: string;
+  /** La bataille derrière s'assombrit (la pause, la fin de partie : elle est figée, ou continue sans le joueur). */
+  dim?: boolean;
   /** Appelé quand l'écran est remplacé ou fermé : le contenu libère ce qu'il a pris (l'aperçu 3D). */
   onClose?: () => void;
   /** Retour à l'écran précédent (Échap), s'il y en a un. */
   back?: () => void;
 }
 
+/** Les champs de saisie : le survol d'une entrée ne leur prend pas le focus (on y tape). */
+const TYPING = "input:not([type=range]), select, textarea";
+
 /**
  * Menu plein écran (écran titre, pause, paramètres), dessiné en HTML par-dessus la scène.
  * Le balisage est construit ici à partir d'une description (`MenuView`). Quand un écran se
- * redessine (un réglage a changé), la commande qui avait le focus le garde.
+ * redessine (un réglage a changé), la commande qui avait le focus le garde. Une seule entrée est
+ * choisie à la fois (en jaune) : celle qui a le focus, que le survol de la souris lui donne.
  */
 export class Menu {
   private readonly root = byId("menu");
@@ -142,7 +174,7 @@ export class Menu {
 
   /** Remet le focus sur la première commande (l'écran était caché derrière l'écran de chargement). */
   focus(): void {
-    if (this.visible) this.root.querySelector<HTMLElement>(".menu-entries button:not(:disabled), .menu-tab[aria-selected=true]")?.focus();
+    if (this.visible) firstCommand(this.root)?.focus();
   }
 
   show(view: MenuView): void {
@@ -155,35 +187,47 @@ export class Menu {
     this.closeView();
     this.close = view.onClose;
 
+    const stage = !!(view.hero || view.corner || view.aside);
     const panel = document.createElement("div");
-    panel.className = ["menu-panel", view.wide && "wide", view.hero && "hero", view.rows && "settings", view.content && "custom", view.tiles && "tiles"].filter(Boolean).join(" ");
+    panel.className = [
+      "menu-panel", stage && "stage", view.hero && "hero", view.rows && "settings", view.content && "custom", view.keys && "listing",
+      view.columns && "columns", view.tape && "taped", view.dim && "dim",
+    ].filter(Boolean).join(" ");
     panel.setAttribute("role", "dialog");
     panel.setAttribute("aria-label", view.title);
 
+    // Le ruban de chantier en travers (la pause) : il dit le titre, qui ne s'écrit pas
+    if (view.tape) panel.append(tape(view.tape));
     const title = document.createElement("h1");
     title.className = "menu-title";
-    if (view.hero) {
-      // « Casse-Robot » : le trait d'union à la couleur du jeu, comme dans le HUD
-      const [head, ...rest] = view.title.split("-");
-      const dash = document.createElement("span");
-      dash.textContent = "-";
-      title.append(head, ...(rest.length ? [dash, rest.join("-")] : []));
+    title.textContent = view.title;
+    if (view.tape) {
+      title.classList.add("menu-unseen");
+      panel.append(title);
     } else {
-      title.textContent = view.title;
+      const plate = document.createElement("div");
+      plate.className = view.rusted ? "menu-nameplate rusted" : "menu-nameplate";
+      plate.append(title);
+      if (view.tagline) plate.append(paragraph("menu-tagline", view.tagline));
+      panel.append(plate);
     }
-    panel.append(title);
-    if (view.subtitle) panel.append(paragraph("menu-subtitle", view.subtitle));
+    if (view.corner) panel.append(wrap("menu-corner", view.corner));
 
-    if (view.tabs) panel.append(tabBar(view.tabs));
+    const plate = document.createElement("section");
+    plate.className = "menu-plate";
+    if (view.slip) plate.append(paragraph("menu-slip", view.slip));
+    if (view.subtitle) plate.append(paragraph("menu-subtitle", view.subtitle));
+
+    if (view.tabs) plate.append(tabBar(view.tabs));
     if (view.rows) {
       const rows = document.createElement("div");
       rows.className = "menu-rows";
       if (view.tabs) rows.setAttribute("role", "tabpanel");
       view.rows.forEach((row, i) => rows.append(settingRow(row, `row${i}`)));
-      panel.append(rows);
+      plate.append(rows);
     }
 
-    if (view.content) panel.append(view.content);
+    if (view.content) plate.append(view.content);
 
     view.fields?.forEach((field, i) => {
       const label = document.createElement("label");
@@ -193,13 +237,33 @@ export class Menu {
       const input = textInput(field.value, field.placeholder, field.onInput);
       input.dataset.key = `field${i}`;
       label.append(name, input);
-      panel.append(label);
+      plate.append(label);
     });
 
+    // La note du pied : fixe, ou ce que fait l'entrée choisie (au marqueur sur l'accueil : sa seule
+    // note manuscrite). Un écran à lignes de réglage ou à contenu (un choix en grille) n'en a pas :
+    // l'explication de ses entrées passe en bulle d'aide
+    const explained = !view.note && !view.rows && !view.content && view.entries.some((e) => e.detail);
+    const note = view.note || explained
+      ? paragraph(["menu-note", explained && "live", explained && view.hero && "hand"].filter(Boolean).join(" "), view.note ?? "")
+      : null;
     const list = document.createElement("div");
     list.className = "menu-entries";
-    view.entries.forEach((entry, i) => list.append(this.button(entry, `entry${i}`)));
-    panel.append(list);
+    let lot = 0;
+    view.entries.forEach((entry, i) => {
+      const number = view.numbered && entry.tone !== "back" ? ++lot : null;
+      list.append(this.button(entry, `entry${i}`, number, explained ? note : null, !explained));
+    });
+    plate.append(list);
+    if (note && explained) {
+      // D'emblée, ce que fait l'entrée qui aura le focus
+      note.textContent = (view.entries.find((e) => e.primary && !e.disabled) ?? view.entries.find((e) => !e.disabled))?.detail ?? "";
+      // La souris quitte les entrées : la note revient à celle qui a le focus
+      list.addEventListener("pointerleave", () => {
+        const at = view.entries[[...list.children].indexOf(document.activeElement as Element)];
+        if (at) note.textContent = at.detail ?? "";
+      });
+    }
 
     if (view.keys) {
       const dl = document.createElement("dl");
@@ -211,9 +275,12 @@ export class Menu {
         dd.textContent = effect;
         dl.append(dt, dd);
       }
-      panel.append(dl);
+      plate.append(dl);
     }
-    if (view.footer) panel.append(paragraph("menu-foot", view.footer));
+    if (note) plate.append(note);
+    if (view.footer) plate.append(paragraph("menu-foot", view.footer));
+    panel.append(plate);
+    if (view.aside) panel.append(wrap("menu-aside", view.aside));
 
     const scroll = this.root.scrollTop;
     this.root.replaceChildren(panel);
@@ -232,7 +299,7 @@ export class Menu {
       panel.querySelector<HTMLElement>(".menu-rows button:not(:disabled)")?.focus({ preventScroll: true });
     } else if (!view.content) {
       // Un contenu construit ailleurs place le focus lui-même (le choix du robot, sur le robot sélectionné)
-      panel.querySelector<HTMLElement>(".menu-entries button:not(:disabled)")?.focus();
+      firstCommand(panel)?.focus();
     }
   }
 
@@ -320,24 +387,52 @@ export class Menu {
     this.root.querySelector<HTMLElement>(`.menu-tab[data-key="${key}"]`)?.focus();
   }
 
-  private button(entry: MenuEntry, key: string): HTMLButtonElement {
+  /**
+   * Une entrée : son numéro de lot frappé (`lot`), son libellé au pochoir. Survolée à la souris,
+   * elle prend le focus (une seule entrée choisie à la fois, et le clavier ou la manette repartent
+   * d'elle), sauf si l'on tape dans un champ ; choisie, elle écrit ce qu'elle fait dans `note`.
+   * Sans note (`tooltip`), son explication passe en bulle d'aide.
+   */
+  private button(entry: MenuEntry, key: string, lot: number | null, note: HTMLElement | null, tooltip: boolean): HTMLButtonElement {
     const button = document.createElement("button");
-    button.className = entry.primary ? "menu-entry primary" : "menu-entry";
+    button.type = "button";
+    button.className = ["menu-entry", entry.primary && "primary", entry.tone].filter(Boolean).join(" ");
     button.dataset.key = key;
     button.disabled = !!entry.disabled;
+    // (le ruban qui barre une entrée hors service)
+    if (entry.disabled) button.dataset.out = t("menu.outOfService");
+    if (lot !== null) {
+      const number = document.createElement("span");
+      number.className = "menu-lot";
+      number.setAttribute("aria-hidden", "true");
+      number.textContent = String(lot).padStart(2, "0");
+      button.append(number);
+    }
     const label = document.createElement("span");
     label.className = "menu-label";
     label.textContent = entry.label;
     button.append(label);
-    if (entry.detail) {
-      const detail = document.createElement("span");
-      detail.className = "menu-detail";
-      detail.textContent = entry.detail;
-      button.append(detail);
-    }
+    if (entry.detail && tooltip) button.title = entry.detail;
+    if (entry.detail && !tooltip) button.setAttribute("aria-description", entry.detail);
+    const explain = (): void => {
+      if (note) note.textContent = entry.detail ?? "";
+    };
+    button.addEventListener("focus", explain);
+    button.addEventListener("pointerenter", (e) => {
+      if (button.disabled) return;
+      explain();
+      if (e.pointerType !== "mouse" || document.activeElement === button || document.activeElement?.matches(TYPING)) return;
+      button.focus({ preventScroll: true });
+    });
     if (entry.onSelect) button.addEventListener("click", entry.onSelect);
     return button;
   }
+}
+
+/** La commande qui prend le focus à l'ouverture : l'entrée principale, sinon la première entrée active. */
+function firstCommand(root: ParentNode): HTMLElement | null {
+  return root.querySelector<HTMLElement>(".menu-entries .menu-entry.primary:not(:disabled)")
+    ?? root.querySelector<HTMLElement>(".menu-entries button:not(:disabled), .menu-tab[aria-selected=true]");
 }
 
 const ARROWS = { up: "ArrowUp", down: "ArrowDown", left: "ArrowLeft", right: "ArrowRight" } as const;
@@ -383,7 +478,26 @@ function stepRange(input: HTMLInputElement, sign: number): void {
   input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
-/** Barre d'onglets ; les flèches gauche et droite passent d'un onglet à l'autre. */
+/** Combien de fois le mot du ruban se répète : de quoi traverser un écran large, incliné. */
+const TAPE_WORDS = 14;
+
+/** Le ruban de chantier en travers de l'écran : le mot, répété entre des croix (décor : les lecteurs d'écran ont le titre). */
+function tape(word: string): HTMLElement {
+  const band = document.createElement("div");
+  band.className = "menu-tape";
+  band.setAttribute("aria-hidden", "true");
+  for (let i = 0; i < TAPE_WORDS; i++) {
+    const w = document.createElement("span");
+    w.textContent = word;
+    const x = document.createElement("span");
+    x.className = "menu-tape-x";
+    x.textContent = "✕";
+    band.append(w, x);
+  }
+  return band;
+}
+
+/** Barre d'onglets (des intercalaires de classeur) ; les flèches gauche et droite passent d'un onglet à l'autre. */
 function tabBar(tabs: MenuTabs): HTMLElement {
   const bar = document.createElement("div");
   bar.className = "menu-tabs";
@@ -484,6 +598,7 @@ function settingRow(row: SettingRow, key: string): HTMLElement {
       break;
     }
     case "toggle": {
+      // Une case à cocher : vide, ou peinte en blanc et cochée
       const sw = document.createElement("button");
       sw.type = "button";
       sw.className = "menu-switch";
@@ -519,8 +634,9 @@ function settingRow(row: SettingRow, key: string): HTMLElement {
       break;
     }
     case "slider": {
-      const wrap = document.createElement("div");
-      wrap.className = "menu-slider";
+      // Un niveau de peinture : la part peinte suit la valeur (--level, style.css)
+      const wrapper = document.createElement("div");
+      wrapper.className = "menu-slider";
       const input = document.createElement("input");
       input.type = "range";
       input.min = String(row.min);
@@ -529,11 +645,14 @@ function settingRow(row: SettingRow, key: string): HTMLElement {
       input.value = String(row.value);
       input.dataset.key = key;
       input.setAttribute("aria-labelledby", label.id);
+      const level = (v: number): void => input.style.setProperty("--level", String(row.max > row.min ? (v - row.min) / (row.max - row.min) : 0));
+      level(row.value);
       const out = document.createElement("output");
       out.textContent = row.format(row.value);
       input.setAttribute("aria-valuetext", out.textContent);
       input.addEventListener("input", () => {
         const v = Number(input.value);
+        level(v);
         out.textContent = row.format(v);
         input.setAttribute("aria-valuetext", out.textContent);
         row.onChange(v, false);
@@ -543,8 +662,8 @@ function settingRow(row: SettingRow, key: string): HTMLElement {
       input.addEventListener("keydown", (e) => {
         if (e.key !== "Escape") e.stopPropagation();
       });
-      wrap.append(input, out);
-      line.append(wrap);
+      wrapper.append(input, out);
+      line.append(wrapper);
       break;
     }
     case "text": {
@@ -586,4 +705,11 @@ function paragraph(className: string, text: string): HTMLParagraphElement {
   p.className = className;
   p.textContent = text;
   return p;
+}
+
+function wrap(className: string, child: HTMLElement): HTMLElement {
+  const box = document.createElement("div");
+  box.className = className;
+  box.append(child);
+  return box;
 }

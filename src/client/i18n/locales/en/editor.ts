@@ -11,7 +11,7 @@ export const editor = {
   "editor.untitled": "New map",
   "editor.copyName": "{name} (copy)",
   "editor.menu": "Map editor",
-  "editor.menuDetail": "Make a map: terrain, game elements, a test against the AI.",
+  "editor.menuDetail": "terrain, game elements, a test against the AI",
   "editor.mapsNew": "New map",
   "editor.mapsNewDetail": "Opens the map editor on a blank map.",
   "editor.mapsEdit": "Edit",
