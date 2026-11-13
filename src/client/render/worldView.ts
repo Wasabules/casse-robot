@@ -226,6 +226,11 @@ export class WorldView {
   tagsVisible = true;
   /** Robots dont on montre l'étiquette : ceux que l'équipe du joueur a repérés (tous, par défaut). */
   tagFilter: (bot: Bot) => boolean = () => true;
+  /**
+   * Opacité de l'étiquette d'un robot montré, en `at` (son cockpit) : moins d'un ennemi caché par un
+   * fumigène (1, par défaut). Elle se dessine par-dessus tout : sans cela, on la voyait au travers.
+   */
+  tagOpacity: (bot: Bot, at: Vec3) => number = () => 1;
   /** Flammes des moteurs et têtes de tourelles, par id de leur bloc. */
   private readonly flames = new Map<number, B.InstancedMesh>();
   /** Nacelles des turboréacteurs, par bloc. */
@@ -298,7 +303,10 @@ export class WorldView {
       const left = debris.life - (this.sim.time - debris.born);
       if (left < DEBRIS_FADE) mesh.scaling.setAll(debrisScale(debris.look) * Math.max(0.05, left / DEBRIS_FADE));
     }
-    for (const tag of this.tags.values()) tag.update(camera, this.tagsVisible && this.tagFilter(tag.bot));
+    for (const tag of this.tags.values()) {
+      const shown = this.tagsVisible && this.tagFilter(tag.bot);
+      tag.update(camera, shown, shown ? this.tagOpacity(tag.bot, tag.anchor()) : 0);
+    }
     this.readJets();
     this.syncFlames();
     this.syncFires();

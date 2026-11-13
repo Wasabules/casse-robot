@@ -1,7 +1,6 @@
-import { groundLevel } from "../../../shared/arena/layout";
-import { smokeRadius } from "../../../shared/combat/smoke";
 import { distance, type Vec3 } from "../../../shared/math/vec";
 import type { SmokeCloud } from "../../../shared/sim/entities";
+import { CLOUD_GROWTH, cloudShape } from "../smokeVeil";
 import { FX_RANGE, type FxContext, type FxSystem } from "./fx";
 import { jitter } from "./layer";
 
@@ -12,7 +11,10 @@ import { jitter } from "./layer";
  * et roulent sur elles-mêmes ; celles du bord débordent, s'éloignent en s'effaçant et renaissent.
  * Le nuage grandit, tient puis se dissipe comme celui de la simulation (`smokeRadius`), et
  * s'effiloche en se dissipant. Ses volutes sont redonnées à chaque image (`ParticleField.volute`) :
- * triées avec les autres fumées.
+ * triées avec les autres fumées. Elles ne s'effacent au ras du sol que sur `GROUND_FADE` m (pas
+ * de trait net où elles le traversent) : sur le tiers de leur taille, comme les autres fumées, le
+ * bas du nuage laissait voir le sol, et les ombres et les traces dessus. Ce qui se dessine après
+ * lui (disques flous des pales, lueurs, flammes) s'efface de soi-même derrière lui (render/smokeVeil.ts).
  */
 
 /** Volutes du cœur et du bord d'un nuage (en effets réduits, d'autant moins). */
@@ -30,8 +32,8 @@ const VEIL = 8;
 const VEIL_DISTANCE = 2.4;
 const VEIL_SIZE = 4.6;
 const VEIL_ALPHA = 0.72;
-/** Temps de croissance d'un nuage (s, voir combat/smoke.ts) : ensuite, il ne fait plus que s'effilocher en se dissipant. */
-const GROWTH = 1.2;
+/** Hauteur (m) sur laquelle une volute s'efface au ras du sol. */
+const GROUND_FADE = 0.35;
 
 interface Volute {
   /** Direction depuis le centre (le nuage est une demi-boule posée au sol, un peu aplatie), et distance (part du rayon). */
@@ -92,17 +94,15 @@ export function smokeCloudFx(ctx: FxContext): FxSystem {
   function draw(c: Cloud): void {
     const { cloud } = c;
     const time = ctx.world.time;
-    const r = smokeRadius(cloud, time);
+    // (sa forme, commune à son voile : render/smokeVeil.ts)
+    const { r, show, ground, base } = cloudShape(cloud, time, ctx.world.arena);
     if (r < 0.05) return;
     const center: Vec3 = cloud.pos;
     if (distance(center, ctx.eye) > FX_RANGE + r) return;
     const age = time - cloud.born;
     const k = Math.min(1, r / cloud.radius);
     // Il grandit d'abord (les volutes s'épaississent), puis s'effiloche en se dissipant
-    const fray = age < GROWTH ? 0.08 : 0.08 + (1 - k) * 0.7;
-    const show = Math.min(1, k * 1.6);
-    const ground = Math.min(center.y, groundLevel(ctx.world.arena, center.x, center.z));
-    const base = Math.max(ground, center.y - r * 0.15);
+    const fray = age < CLOUD_GROWTH ? 0.08 : 0.08 + (1 - k) * 0.7;
     const turn = c.swirl * age;
     const cos = Math.cos(turn);
     const sin = Math.sin(turn);
@@ -123,7 +123,7 @@ export function smokeCloudFx(ctx: FxContext): FxSystem {
       at.z = center.z + oz;
       // Plus bas, plus au cœur : plus sombre (le nuage s'ombre lui-même)
       const shade = 0.72 + 0.2 * (v.dy * 0.5 + 0.5) + 0.08 * v.dist;
-      ctx.particles.volute(at, r * v.size, COLOR, coreAlpha, v.angle + v.spin * age, v.frame, fray, ground, shade, v.seed);
+      ctx.particles.volute(at, r * v.size, COLOR, coreAlpha, v.angle + v.spin * age, v.frame, fray, ground, shade, v.seed, GROUND_FADE);
     }
     const edgeCount = Math.ceil(c.edge.length * Math.min(ctx.density, near));
     for (let i = 0; i < edgeCount; i++) {
@@ -137,7 +137,7 @@ export function smokeCloudFx(ctx: FxContext): FxSystem {
       at.y = base + (v.dy * 0.5 + 0.18 + 0.35 * t) * r;
       at.z = center.z + dz * out;
       const a = EDGE_ALPHA * show * Math.sin(Math.PI * t) * (1 - t * 0.4);
-      ctx.particles.volute(at, r * v.size * (0.8 + 0.5 * t), COLOR, a, v.angle + v.spin * age, v.frame, Math.min(1, fray + 0.25 + 0.4 * t), ground, 0.9, v.seed);
+      ctx.particles.volute(at, r * v.size * (0.8 + 0.5 * t), COLOR, a, v.angle + v.spin * age, v.frame, Math.min(1, fray + 0.25 + 0.4 * t), ground, 0.9, v.seed, GROUND_FADE);
     }
     // Du dedans : un voile de volutes tout autour de la caméra, à quelques mètres (elles couvrent
     // l'écran : on n'y voit pas à plus de quelques mètres, ce qui est le rôle du nuage)
@@ -151,7 +151,7 @@ export function smokeCloudFx(ctx: FxContext): FxSystem {
       at.x = eye.x + Math.cos(a) * cy * VEIL_DISTANCE;
       at.y = eye.y + Math.sin(y) * VEIL_DISTANCE;
       at.z = eye.z + Math.sin(a) * cy * VEIL_DISTANCE;
-      ctx.particles.volute(at, VEIL_SIZE, COLOR, VEIL_ALPHA * inside, a * 3, i % 4, fray, ground, 0.85, i / VEIL);
+      ctx.particles.volute(at, VEIL_SIZE, COLOR, VEIL_ALPHA * inside, a * 3, i % 4, fray, ground, 0.85, i / VEIL, GROUND_FADE);
     }
   }
 

@@ -38,13 +38,13 @@ describe("Réglages du joueur", () => {
     expect(graphicsPreset({ ...DEFAULT_SETTINGS, glow: false })).toBeNull();
   });
 
-  it("ombres lointaines : une image sur deux par défaut, à chaque image au préréglage Haute", () => {
-    expect(DEFAULT_SETTINGS.farShadows).toBe("half");
-    expect(GRAPHICS_PRESETS.medium.farShadows).toBe("half");
+  it("ombres lointaines : à chaque image par défaut et aux préréglages Moyen et Haute", () => {
+    expect(DEFAULT_SETTINGS.farShadows).toBe("every");
+    expect(GRAPHICS_PRESETS.medium.farShadows).toBe("every");
     expect(GRAPHICS_PRESETS.high.farShadows).toBe("every");
     // Elles font partie des préréglages, sauf sans ombres
-    expect(graphicsPreset({ ...DEFAULT_SETTINGS, farShadows: "every" })).toBeNull();
-    expect(graphicsPreset({ ...DEFAULT_SETTINGS, ...GRAPHICS_PRESETS.low, farShadows: "every" })).toBe("low");
+    expect(graphicsPreset({ ...DEFAULT_SETTINGS, farShadows: "half" })).toBeNull();
+    expect(graphicsPreset({ ...DEFAULT_SETTINGS, ...GRAPHICS_PRESETS.low, farShadows: "half" })).toBe("low");
     // Des réglages d'avant celui-ci restent sur leur préréglage
     const high = { ...DEFAULT_SETTINGS, ...GRAPHICS_PRESETS.high } as Record<string, unknown>;
     delete high.farShadows;
@@ -52,7 +52,7 @@ describe("Réglages du joueur", () => {
     const medium = { ...DEFAULT_SETTINGS, ...GRAPHICS_PRESETS.medium } as Record<string, unknown>;
     delete medium.farShadows;
     expect(graphicsPreset(parseSettings(JSON.stringify(medium)))).toBe("medium");
-    expect(parseSettings(JSON.stringify({ farShadows: "jamais" })).farShadows).toBe("half");
+    expect(parseSettings(JSON.stringify({ farShadows: "jamais" })).farShadows).toBe("every");
   });
 
   it("des réglages d'avant les touches et la manette : touches par défaut, manette par défaut", () => {

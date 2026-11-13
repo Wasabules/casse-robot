@@ -1,6 +1,7 @@
 import * as B from "../babylon";
 import type { LightRequest } from "./lightChoice";
 import { FOG_GLSL, FxMaterial } from "./fx/fxMaterial";
+import { VEIL_GLSL } from "./smokeVeil";
 
 /*
  * Cônes de lumière, la nuit : sous un lampadaire, devant les projecteurs d'un mât d'éclairage,
@@ -59,6 +60,7 @@ uniform float glowPass;
 uniform vec3 beamColor;
 uniform float strength;
 ${FOG_GLSL}
+${VEIL_GLSL}
 void main(void) {
   // (rien dans le halo : le cône ne brille pas, il ne cache rien non plus)
   if (glowPass > 0.5) discard;
@@ -75,6 +77,8 @@ void main(void) {
 #ifdef FOG
   a *= fogAmount(vDepth);
 #endif
+  // (et derrière un fumigène : dessiné après la fumée, il ne s'y voit pas au travers, render/smokeVeil.ts)
+  a *= smokeVeil(cameraPosition, vWorld);
   if (a < 0.002) discard;
   // Prémultiplié, d'opacité nulle : il s'ajoute à ce qui est derrière
   gl_FragColor = vec4(beamColor * a, 0.0);

@@ -57,12 +57,13 @@ import { firingTurret, recoilKick } from "./render/recoil";
 import { requestedSimulation, type FarShadows, type FxLook, type ShadowQuality, type SimulationEngine } from "./settings";
 import { DEFAULT_SIMULATION } from "../shared/native/choice";
 import { LocomotionView } from "./render/locomotionView";
-import { applyArenaLook, SHADOW_MAPS, type SceneKit } from "./render/scene";
+import { applyArenaLook, focusShadows, SHADOW_MAPS, type SceneKit } from "./render/scene";
 import { Assets } from "./render/materials";
 import { ProjectileView } from "./render/projectiles";
 import { createScene } from "./render/scene";
 import { dustColor } from "./render/propModels";
 import { SmokeView } from "./render/smokeView";
+import { SmokeVeil } from "./render/smokeVeil";
 import { pickTerrain } from "./render/terrainPick";
 import { BarrierView } from "./render/barrierView";
 import { WorldView } from "./render/worldView";
@@ -154,6 +155,17 @@ function biteShake(bot: Bot): number {
 }
 
 const toVec3 = (v: B.Vector3): Vec3 => vec3(v.x, v.y, v.z);
+
+/**
+ * L'étiquette d'un robot derrière un fumigène, d'après la part de lumière qui traverse les nuages
+ * entre la caméra et lui (render/smokeVeil.ts) : effacée sous HIDDEN_BEHIND, pleine au-dessus de
+ * SEEN_THROUGH, entre les deux elle s'estompe (le robot passe derrière le bord du nuage).
+ */
+const HIDDEN_BEHIND = 0.25;
+const SEEN_THROUGH = 0.6;
+function revealed(transmittance: number): number {
+  return clamp((transmittance - HIDDEN_BEHIND) / (SEEN_THROUGH - HIDDEN_BEHIND), 0, 1);
+}
 
 /**
  * Partie en arène, selon un mode de jeu (voir shared/modes.ts). Soit le joueur pilote un robot de
@@ -249,6 +261,8 @@ export class ArenaGame {
   private readonly zoneView: ZoneView;
   private projectiles: ProjectileView;
   private smokes: SmokeView;
+  /** Ce que les fumigènes cachent de ce qui se dessine après eux, et des étiquettes (render/smokeVeil.ts). */
+  private readonly veil: SmokeVeil;
   private barriers: BarrierView;
   private locomotion: LocomotionView;
   /** Session multijoueur en cours, ou null (partie locale). */
@@ -357,7 +371,9 @@ export class ArenaGame {
     this.zoneView = new ZoneView(scene);
     this.effects = new Effects(scene);
     this.fx = new Fx(scene, assets, this.sim);
-    this.lighting = new SceneLighting(scene, this.rig.camera, this.sim, this.fx.glowMeshes);
+    // (la lueur des patins aussi, avec sa propre matière : son halo s'efface derrière un fumigène)
+    this.lighting = new SceneLighting(scene, this.rig.camera, this.sim, [...this.fx.glowMeshes, assets.hoverGlowSource()]);
+    this.veil = new SmokeVeil(scene, this.sim);
     this.view = this.worldView(this.sim);
     this.projectiles = new ProjectileView(this.sim, assets);
     this.smokes = new SmokeView(this.sim, scene);
@@ -648,6 +664,7 @@ export class ArenaGame {
     this.sound.setWorld(world);
     this.fx.bind(world);
     this.lighting.bind(world);
+    this.veil.bind(world);
     this.showArena(world.arena);
     this.unbindWorld = world.on((e) => this.onWorldEvent(e));
     this.setDetectionFilter();
@@ -1249,6 +1266,13 @@ export class ArenaGame {
     this.minimap.setDetection(this.piloting ? seen : null);
     // Pas d'étiquette sur son propre robot : elle masquerait la visée
     this.view.tagFilter = this.piloting ? (bot) => bot !== this.world.player && seen(bot) : () => true;
+    // Un ennemi caché par un fumigène perd son étiquette (même repéré par son équipe : la fumée cache
+    // ce qu'on voit, pas ce que l'on sait) ; les alliés du pilote gardent la leur
+    this.view.tagOpacity = (bot, at) => {
+      const player = this.world.player;
+      if (this.piloting && player && bot.team === player.team) return 1;
+      return revealed(this.veil.transmittance(this.rig.position, at));
+    };
   }
 
   /** Le robot du joueur se saborde (renversé, coincé) : il réapparaîtra. */
@@ -1482,7 +1506,14 @@ export class ArenaGame {
     // Le balourd d'une arme de contact du joueur fait trembler la vue, et sa lame qui mord la secoue
     const pilot = this.world.player;
     if (this.piloting && !this.attract && !this.frozen && pilot?.cockpit.alive && pilot.melee.length) this.rig.shake(Math.max(vibration(pilot) * SHAKE_VIEW, biteShake(pilot)));
-    this.measure("caméra", () => this.rig.update(dt));
+    this.measure("caméra", () => {
+      this.rig.update(dt);
+      // Le robot du pilote dans la première cascade d'ombres, la plus fine (à la caméra libre, qui
+      // regarde de loin, la première cascade garde sa portée : dessinée à chaque image, elle coûte)
+      focusShadows(this.kit, this.piloting && !this.attract ? this.rig.camera.radius : 0);
+    });
+    // Les fumigènes de l'image, pour les shaders qui s'effacent derrière eux et pour les étiquettes
+    this.measure("effets", () => this.veil.update(this.rig.position));
     this.measure("visées", () => this.showSights());
     this.measure("son", () => this.sound.update(this.rig.camera, dt));
     const fps = this.engine.getFps();

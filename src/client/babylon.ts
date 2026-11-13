@@ -42,6 +42,9 @@ export { InstancedMesh } from "@babylonjs/core/Meshes/instancedMesh";
 export { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData";
 export { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
 export { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
+// Le voile des fumigènes dans les matières transparentes (render/smokeVeil.ts)
+export { MaterialPluginBase } from "@babylonjs/core/Materials/materialPluginBase";
+export type { MaterialDefines } from "@babylonjs/core/Materials/materialDefines";
 export { MultiMaterial } from "@babylonjs/core/Materials/multiMaterial";
 export type { Material } from "@babylonjs/core/Materials/material";
 export { Texture } from "@babylonjs/core/Materials/Textures/texture";

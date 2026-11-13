@@ -1,4 +1,5 @@
 import * as B from "../../babylon";
+import { VEIL_GLSL } from "../smokeVeil";
 import { FIRE_RAMP_GLSL, FOG_GLSL, FxMaterial } from "./fxMaterial";
 
 /*
@@ -60,6 +61,7 @@ uniform float time;
 uniform float glowPass;
 ${FOG_GLSL}
 ${FIRE_RAMP_GLSL}
+${VEIL_GLSL}
 void main(void) {
   // De la tuyère (0) à la pointe (1)
   float along = clamp(0.5 - vLocal.y, 0.0, 1.0);
@@ -83,7 +85,8 @@ void main(void) {
 #else
   vec3 col = fireRamp(intensity * 0.8 + (1.0 - along) * 0.12);
 #endif
-  float a = clamp(intensity * 1.15, 0.0, 1.0);
+  // (dessinée après la fumée : derrière un fumigène, elle s'efface d'elle-même, render/smokeVeil.ts)
+  float a = clamp(intensity * 1.15, 0.0, 1.0) * smokeVeil(cameraPosition, vWorld);
   if (a < 0.003) discard;
   col = applyFog(col, vDepth);
   if (glowPass > 0.5) {

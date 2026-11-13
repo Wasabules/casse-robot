@@ -80,7 +80,8 @@ export class StreakField {
       this.ribbons = {
         smoke: new SpriteLayer(scene, "fx-ribbon-smoke", { look: "smoke", ribbon: true, capacity: CAPACITY.smoke, sizeScale: 1.6, selfLight: 0.35, softness: 0.1, alphaIndex: 9 }),
         vapor: new SpriteLayer(scene, "fx-ribbon-vapor", { look: "vapor", ribbon: true, capacity: CAPACITY.vapor, sizeScale: 1.6, selfLight: 1, softness: 0.1, alphaIndex: 9 }),
-        glow: new SpriteLayer(scene, "fx-ribbon-glow", { look: "glow", ribbon: true, capacity: CAPACITY.glow, sizeScale: 2, softness: 0.05, alphaIndex: 14 }),
+        // (dessinés après la fumée : les traits lumineux s'effacent derrière les fumigènes, render/smokeVeil.ts)
+        glow: new SpriteLayer(scene, "fx-ribbon-glow", { look: "glow", ribbon: true, capacity: CAPACITY.glow, sizeScale: 2, softness: 0.05, alphaIndex: 14, veiled: true }),
       };
     }
   }

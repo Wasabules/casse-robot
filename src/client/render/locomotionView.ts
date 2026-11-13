@@ -16,6 +16,7 @@ import { beltMesh, BeltShoes, beltShape, shoeHorns, sprocketRollers, trackGroups
 import type { Assets } from "./materials";
 import { TRACK_DETAIL_RANGE } from "./models/tracks";
 import { padGlow } from "./fx/engineFx";
+import { veilMaterial } from "./smokeVeil";
 import { BLADES, FOOT_OUT, kneeOf, legOut, type BladeKind } from "../../shared/design/clearance";
 
 /**
@@ -466,6 +467,8 @@ export class LocomotionView {
     mat.backFaceCulling = false;
     mat.disableDepthWrite = true;
     mat.alpha = BLUR_ALPHA;
+    // (transparent, dessiné après la fumée : il s'efface derrière un fumigène, render/smokeVeil.ts)
+    veilMaterial(mat);
     disc.material = mat;
     disc.isVisible = false;
     disc.isPickable = false;

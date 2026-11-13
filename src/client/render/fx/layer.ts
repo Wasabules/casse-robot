@@ -22,6 +22,8 @@ export interface LayerOptions {
   zOffset?: number;
   /** Part de lumière propre d'une couche éclairée : son côté à l'ombre n'est pas noir. */
   selfLight?: number;
+  /** Ordre de dessin entre couches transparentes (plus petit : avant ; par défaut, après les effets). */
+  alphaIndex?: number;
 }
 
 /**
@@ -54,6 +56,7 @@ export class InstanceLayer {
     mat.alphaMode = options.blend === "add" ? ALPHA_ADD : ALPHA_COMBINE;
     mat.zOffset = options.zOffset ?? 0;
     geometry.material = mat;
+    if (options.alphaIndex !== undefined) geometry.alphaIndex = options.alphaIndex;
     geometry.isPickable = false;
     geometry.receiveShadows = false;
     geometry.alwaysSelectAsActiveMesh = true;
@@ -112,6 +115,12 @@ export class InstanceLayer {
   /** L'image est prête : les instances écrites partent au GPU. */
   end(): void {
     const mesh = this.mesh;
+    // La couche se remplit : Babylon revoit les attributs de sa matière. Il ne met la couleur des
+    // instances dans le shader (`INSTANCESCOLOR`) que s'il voit des instances quand il les revoit :
+    // vérifiée une fois sans instance (la scène vérifiée pendant l'écran de chargement, couche vide),
+    // la matière l'oubliait pour de bon, et les marques au sol (cratères, empreintes, traces) se
+    // dessinaient blanches et pleines, sans leur couleur ni leur opacité
+    if (this.count > 0 && mesh.thinInstanceCount === 0) (mesh as unknown as AttributesDirty)._markSubMeshesAsAttributesDirty();
     if (this.count > 0) {
       if (this.uploaded) {
         mesh.thinInstancePartialBufferUpdate("matrix", this.count, 0);
@@ -138,6 +147,11 @@ export class InstanceLayer {
     c[o] = r; c[o + 1] = g; c[o + 2] = b; c[o + 3] = a;
     this.count++;
   }
+}
+
+/** Ce que Babylon fait d'un mesh dont les attributs changent (interne : `AbstractMesh`). */
+interface AttributesDirty {
+  _markSubMeshesAsAttributesDirty(): void;
 }
 
 /** Couleur « #rrggbb » en composantes de 0 à 1 (gardée : on la demande à chaque effet). */

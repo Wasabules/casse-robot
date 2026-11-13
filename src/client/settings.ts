@@ -179,7 +179,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   simulationChosen: false,
   shadows: true,
   shadowQuality: "medium",
-  farShadows: "half",
+  farShadows: "every",
   renderScale: 1,
   effects: "full",
   fxLook: "realistic",
@@ -224,7 +224,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
 /** Préréglages graphiques : ce qu'ils fixent, du plus léger au plus beau. */
 export const GRAPHICS_PRESETS = {
   low: { shadows: false, shadowQuality: "low", farShadows: "half", renderScale: 0.75, effects: "reduced", fxLook: "simple", glow: false, lights: false, heatHaze: false },
-  medium: { shadows: true, shadowQuality: "medium", farShadows: "half", renderScale: 1, effects: "full", fxLook: "realistic", glow: true, lights: true, heatHaze: false },
+  medium: { shadows: true, shadowQuality: "medium", farShadows: "every", renderScale: 1, effects: "full", fxLook: "realistic", glow: true, lights: true, heatHaze: false },
   high: { shadows: true, shadowQuality: "high", farShadows: "every", renderScale: 1, effects: "full", fxLook: "realistic", glow: true, lights: true, heatHaze: true },
 } as const satisfies Record<string, Pick<Settings, "shadows" | "shadowQuality" | "farShadows" | "renderScale" | "effects" | "fxLook" | "glow" | "lights" | "heatHaze">>;
 export type GraphicsPreset = keyof typeof GRAPHICS_PRESETS;
@@ -354,8 +354,9 @@ export function parseSettings(json: string | null, device: DeviceInfo = deviceIn
   s.simulationChosen = saved.simulationChosen === true || (saved.simulationChosen === undefined && saved.simulation === "rust");
   s.simulation = (s.simulationChosen ? pick(SIMULATIONS, saved.simulation) : undefined) ?? DEFAULT_SIMULATION;
   s.shadowQuality = pick(SHADOW_QUALITIES, saved.shadowQuality) ?? s.shadowQuality;
-  // (des réglages d'avant celui-ci : à chaque image avec les ombres fines du préréglage Haute, une image sur deux sinon)
-  s.farShadows = pick(FAR_SHADOWS, saved.farShadows) ?? (s.shadowQuality === "high" ? "every" : "half");
+  // (des réglages d'avant celui-ci : à chaque image, une image sur deux seulement avec les ombres grossières du préréglage Bas ;
+  // depuis le tri des cascades par la tranche du champ de la caméra, « à chaque image » coûte moins que « une image sur deux » avant)
+  s.farShadows = pick(FAR_SHADOWS, saved.farShadows) ?? (s.shadowQuality === "low" ? "half" : "every");
   s.renderScale = pick(RENDER_SCALES, saved.renderScale) ?? s.renderScale;
   s.effects = pick(EFFECT_LEVELS, saved.effects) ?? s.effects;
   // (des réglages d'avant celui-ci : la fumée et les flammes réalistes, sauf au préréglage le plus léger)

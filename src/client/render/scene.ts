@@ -114,6 +114,36 @@ const WIDE_SHADOWS = 240;
 const SMALL_SHADOWS = 110;
 /** Part de chaque cascade fondue dans la suivante : pas de marche visible entre deux cascades. */
 const CASCADE_BLEND = 0.08;
+/**
+ * Fin de la première cascade (m, de la caméra) : le robot du pilote (la caméra à 13 m derrière lui :
+ * `PILOT_CAMERA`, game.ts ; jusqu'à ~4 m au-delà pour un long robot, et son ombre) y est tout entier,
+ * avec le fondu de la cascade dans la suivante (ses derniers 8 %) : au moins FIRST_SPLIT, ou la
+ * distance de la caméra au robot plus FOCUS_MARGIN (`focusShadows` ; la caméra reculée à la molette).
+ * Babylon place les limites des cascades entre un partage égal et un partage logarithmique de leur
+ * portée (`lambda`) : à 0,85, la première finissait à 11 m dans une petite arène, à 13 m dans une
+ * grande. Le robot du pilote tombait donc dans la deuxième cascade, la lointaine d'une petite arène
+ * (de 11 à 110 m : une ombre floue, ~10 cm par texel, en tache ronde, que les « Ombres lointaines »
+ * ne refaisaient qu'une image sur deux : en roulant, elle se dédoublait dans le fondu des deux
+ * cascades), ou à cheval sur la limite des deux premières dans une grande. Le `lambda` est calculé
+ * pour que la première cascade finisse ici : 0 à 21 m (~2 cm par texel), puis 21 à 110 m dans une
+ * petite arène ; 0 à 21, 21 à 53 et 53 à 240 m dans une grande (au plus, le partage égal : 55 m,
+ * 80 m). Plus loin (28 m), la première cascade couvrait la moitié d'une petite arène, dessinée à
+ * chaque image : ~1,2 ms de processeur de plus par image au Dépôt.
+ */
+const FIRST_SPLIT = 21;
+const FOCUS_MARGIN = 8;
+
+/**
+ * Le `lambda` de Babylon pour que la première de `cascades` cascades finisse à `first` m, d'une
+ * caméra qui voit à partir de `near` m, des ombres jusqu'à `maxZ` m (son `_splitFrustum` : chaque
+ * limite est lambda × partage logarithmique + (1 − lambda) × partage égal).
+ */
+export function cascadeLambda(first: number, near: number, maxZ: number, cascades: number): number {
+  const p = 1 / cascades;
+  const log = near * (maxZ / near) ** p;
+  const uniform = near + (maxZ - near) * p;
+  return Math.min(1, Math.max(0, (uniform - first) / (uniform - log)));
+}
 
 /** Scène, lumières, ombres et sol, sur le moteur du jeu (WebGL ou WebGPU : render/engine.ts). */
 export function createScene(engine: B.AbstractEngine): SceneKit {
@@ -133,6 +163,7 @@ export function createScene(engine: B.AbstractEngine): SceneKit {
   let farShadows: FarCascade | null = null;
   const shadows = cascades ? new B.CascadedShadowGenerator(SHADOW_MAPS.medium.size, sun) : new B.ShadowGenerator(SHADOW_MAPS.medium.size, sun);
   if (shadows instanceof B.CascadedShadowGenerator) {
+    // (les limites des cascades, d'après la portée des ombres de l'arène : `applyArenaLook`)
     shadows.lambda = 0.85;
     shadows.cascadeBlendPercentage = CASCADE_BLEND;
     shadows.depthClamp = true;
@@ -149,17 +180,28 @@ export function createScene(engine: B.AbstractEngine): SceneKit {
 }
 
 /**
- * Chaque cascade d'ombre ne dessine que ce qui peut y jeter une ombre : les objets dont la sphère
- * englobante touche son cadre, vu du soleil. Babylon les dessinait tous dans chacune : un robot au
- * loin dans la cascade proche, trois fois chaque robot dans une grande arène. Le côté du soleil n'est
- * pas limité (un objet entre le soleil et le cadre y jette son ombre ; la profondeur est bornée,
- * `depthClamp`). Babylon refait sa carte d'ombre quand le nombre de cascades ou sa taille changent
- * (une autre arène, la qualité des ombres) : le tri est remis sur chaque nouvelle carte.
+ * Chaque cascade d'ombre ne dessine que ce qui peut y jeter une ombre sur ce que voit la caméra :
+ * les objets dont la sphère englobante, vue du soleil, touche la tranche du champ de la caméra que
+ * couvre la cascade (son enveloppe convexe vue du soleil, `sliceHull`, son fondu dans la cascade
+ * d'avant compris : les points de ce fondu lisent aussi celle-ci). Une ombre tombe le long des rayons
+ * du soleil : un objet hors de cette enveloppe n'ombre rien de visible dans la cascade. Le cadre de
+ * la cascade (un carré autour de la sphère qui englobe la tranche, `stabilizeCascades`) est bien plus
+ * grand : ses coins, hors du champ de la caméra, faisaient dessiner des dizaines d'objets pour rien
+ * (avec la première cascade jusqu'à 21 m, ~40 % des objets dessinés dans les cartes d'ombre au Dépôt).
+ * Babylon les dessinait tous dans chacune : un robot au loin dans la cascade proche, trois fois chaque
+ * robot dans une grande arène. Le côté du soleil n'est pas limité (un objet entre le soleil et la
+ * tranche y jette son ombre ; la profondeur est bornée, `depthClamp`). Babylon refait sa carte
+ * d'ombre quand le nombre de cascades ou sa taille changent (une autre arène, la qualité des
+ * ombres) : le tri est remis sur chaque nouvelle carte.
  */
 function cullCascades(scene: B.Scene, shadows: B.CascadedShadowGenerator): FarCascade {
   const lists: B.AbstractMesh[][] = [];
   const at = new B.Vector3();
   const far = new FarCascade(shadows);
+  const internals = shadows as unknown as CascadeInternals;
+  const corners = new Float64Array(16);
+  const hull = new Float64Array(32);
+  const corner = new B.Vector3();
   const cull = (layer: number, list: readonly B.AbstractMesh[] | null, length: number): B.AbstractMesh[] | null => {
     const view = shadows.getCascadeViewMatrix(layer);
     const projection = shadows.getCascadeProjectionMatrix(layer);
@@ -169,6 +211,27 @@ function cullCascades(scene: B.Scene, shadows: B.CascadedShadowGenerator): FarCa
     // (la cascade lointaine gardée de l'image précédente : rien à y dessiner, voir `FarCascade`)
     far.skipping = far.keeps(layer);
     if (far.skipping) return out;
+    // La tranche du champ de la caméra que couvre la cascade, vue du soleil (dans son repère)
+    const slice = internals._frustumCornersWorldSpace?.[layer];
+    let sides = 0;
+    if (slice?.length === 8) {
+      // (ses quatre coins proches reculés jusqu'au début du fondu de la cascade d'avant)
+      const cascades = internals._cascades;
+      const span = cascades[layer].breakDistance - cascades[layer].prevBreakDistance;
+      const before = layer > 0 ? cascades[layer - 1] : null;
+      const back = before && span > 0 ? (CASCADE_BLEND * (before.breakDistance - before.prevBreakDistance)) / span : 0;
+      for (let i = 0; i < 8; i++) {
+        const c = slice[i];
+        if (i < 4 && back > 0) {
+          const f = slice[i + 4];
+          corner.set(c.x - (f.x - c.x) * back, c.y - (f.y - c.y) * back, c.z - (f.z - c.z) * back);
+        } else corner.copyFrom(c);
+        B.Vector3.TransformCoordinatesToRef(corner, view, at);
+        corners[i * 2] = at.x;
+        corners[i * 2 + 1] = at.y;
+      }
+      sides = sliceHull(corners, hull);
+    }
     // Projection orthographique : x et y de l'écran de la cascade, de -1 à 1
     const p = projection.m;
     for (let i = 0; i < length; i++) {
@@ -178,6 +241,7 @@ function cullCascades(scene: B.Scene, shadows: B.CascadedShadowGenerator): FarCa
       const x = p[0] * at.x + p[12], y = p[5] * at.y + p[13];
       const rx = Math.abs(p[0]) * sphere.radiusWorld, ry = Math.abs(p[5]) * sphere.radiusWorld;
       if (x + rx < -1 || x - rx > 1 || y + ry < -1 || y - ry > 1) continue;
+      if (sides >= 3 && !touchesHull(hull, sides, at.x, at.y, sphere.radiusWorld)) continue;
       out.push(mesh);
     }
     return out;
@@ -196,8 +260,46 @@ function cullCascades(scene: B.Scene, shadows: B.CascadedShadowGenerator): FarCa
   return far;
 }
 
+/**
+ * L'enveloppe convexe (sens trigonométrique) de 8 points du plan (x, y à la suite dans `points`),
+ * écrite dans `out` ; rend son nombre de côtés (chaîne monotone d'Andrew).
+ */
+export function sliceHull(points: Float64Array, out: Float64Array): number {
+  const order = [0, 1, 2, 3, 4, 5, 6, 7].sort((a, b) => points[a * 2] - points[b * 2] || points[a * 2 + 1] - points[b * 2 + 1]);
+  const cross = (o: number, a: number, b: number): number =>
+    (out[a * 2] - out[o * 2]) * (points[b * 2 + 1] - out[o * 2 + 1]) - (out[a * 2 + 1] - out[o * 2 + 1]) * (points[b * 2] - out[o * 2]);
+  let n = 0;
+  const push = (i: number, floor: number): void => {
+    while (n >= floor + 2 && cross(n - 2, n - 1, i) <= 0) n--;
+    out[n * 2] = points[i * 2];
+    out[n * 2 + 1] = points[i * 2 + 1];
+    n++;
+  };
+  for (const i of order) push(i, 0);
+  const lower = n;
+  for (let k = order.length - 2; k >= 0; k--) push(order[k], lower - 1);
+  return n - 1;
+}
+
+/** Le disque de centre (x, y) et de rayon r touche-t-il l'enveloppe convexe `hull` (`sides` côtés, sens trigonométrique) ? */
+export function touchesHull(hull: Float64Array, sides: number, x: number, y: number, r: number): boolean {
+  for (let i = 0; i < sides; i++) {
+    const ax = hull[i * 2], ay = hull[i * 2 + 1];
+    const bx = hull[i * 2 + 2], by = hull[i * 2 + 3];
+    const ex = bx - ax, ey = by - ay;
+    const len = Math.hypot(ex, ey);
+    if (len < 1e-9) continue;
+    // Distance signée au côté (positive vers l'intérieur) : au-delà du rayon dehors, le disque est hors de l'enveloppe
+    if ((ex * (y - ay) - ey * (x - ax)) / len < -r) return false;
+  }
+  return true;
+}
+
 /** Ce que Babylon calcule pour chaque cascade (internes du générateur d'ombres en cascades). */
 interface CascadeInternals {
+  /** Les huit coins de la tranche du champ de la caméra de chaque cascade (quatre proches, puis quatre lointains). */
+  _frustumCornersWorldSpace?: B.Vector3[][];
+  _cascades: { prevBreakDistance: number; breakDistance: number }[];
   _computeMatrices(): void;
   _viewMatrices: B.Matrix[];
   _projectionMatrices: B.Matrix[];
@@ -363,6 +465,20 @@ export function applyArenaLook(kit: SceneKit, layout: ArenaLayout): void {
   const wide = layout.bounds.half > WIDE_ARENA;
   shadows.numCascades = wide ? 3 : 2;
   shadows.shadowMaxZ = wide ? WIDE_SHADOWS : SMALL_SHADOWS;
+  focusShadows(kit, 0);
+}
+
+/**
+ * La première cascade d'ombres finit au-delà du robot du pilote, à `distance` m de la caméra (0 :
+ * à la caméra libre, FIRST_SPLIT ; voir FIRST_SPLIT) ; à chaque image (au mètre près : les limites ne
+ * bougent qu'au changement).
+ */
+export function focusShadows(kit: SceneKit, distance: number): void {
+  const shadows = kit.shadows;
+  if (!(shadows instanceof B.CascadedShadowGenerator)) return;
+  const first = Math.round(Math.max(FIRST_SPLIT, distance + FOCUS_MARGIN));
+  // (le setter de Babylon ne refait les limites que si la valeur change)
+  shadows.lambda = cascadeLambda(first, kit.scene.activeCamera?.minZ ?? 0.1, shadows.shadowMaxZ, shadows.numCascades);
 }
 
 /** Sol quadrillé : une case mineure = un bloc (0,5 m), une case majeure = 4 m. */

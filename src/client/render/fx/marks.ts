@@ -24,6 +24,13 @@ const CAPACITY: Record<MarkShape, number> = { disc: 700, strip: 3000 };
 const REDUCED_SHARE = 0.4;
 /** Hauteur au-dessus du sol (m) : la marque ne se mêle pas à lui. */
 const LIFT = 0.025;
+/**
+ * Rang de dessin des marques parmi les surfaces transparentes : juste après l'eau (0), avant tous
+ * les effets (la fumée : 10). Elles collent au sol, ce qui flotte au-dessus passe par-dessus. Au
+ * rang par défaut (le dernier), elles se dessinaient après la fumée, et les traces de pneus et les
+ * cratères se voyaient à travers un fumigène comme des ombres.
+ */
+const MARKS_ALPHA_INDEX = 1;
 
 interface Mark {
   x: number; y: number; z: number;
@@ -55,9 +62,10 @@ export class MarkField {
   constructor(scene: B.Scene) {
     const disc = B.MeshBuilder.CreateCylinder("fx-mark-disc", { height: 0.001, diameter: 1, tessellation: 18 }, scene);
     const strip = B.MeshBuilder.CreateGround("fx-mark-strip", { width: 1, height: 1 }, scene);
+    const options = { blend: "blend", lit: true, zOffset: -2, selfLight: 0.2, alphaIndex: MARKS_ALPHA_INDEX } as const;
     this.layers = {
-      disc: new InstanceLayer(scene, "fx-mark-disc", disc, { blend: "blend", lit: true, capacity: CAPACITY.disc, zOffset: -2, selfLight: 0.2 }),
-      strip: new InstanceLayer(scene, "fx-mark-strip", strip, { blend: "blend", lit: true, capacity: CAPACITY.strip, zOffset: -2, selfLight: 0.2 }),
+      disc: new InstanceLayer(scene, "fx-mark-disc", disc, { ...options, capacity: CAPACITY.disc }),
+      strip: new InstanceLayer(scene, "fx-mark-strip", strip, { ...options, capacity: CAPACITY.strip }),
     };
   }
 

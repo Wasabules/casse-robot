@@ -96,6 +96,8 @@ class Particle {
   angle = 0; spin = 0; frame = 0; seed = 0;
   /** Hauteur du sol sous son point de départ. */
   ground = 0;
+  /** D'une volute de l'image (`volute`) : la hauteur (m) sur laquelle elle s'efface au ras du sol (0 : selon sa taille). */
+  groundFade = 0;
   heat = 1; burn = 1; billow = false;
   /** Flamme posée pour une image (`flame`) : son haut, de la longueur de sa hauteur en part de sa largeur. */
   posed = false;
@@ -154,10 +156,11 @@ export class ParticleField {
     if (!this.sprites) {
       const scene = this.scene;
       this.sprites = {
+        // (la fumée et les fumigènes, triés ensemble ; ce qui se dessine après s'efface derrière les fumigènes : `veiled`)
         smoke: new SpriteLayer(scene, "fx-sprite-smoke", { look: "smoke", capacity: CAPACITY.smoke + TRANSIENT, sizeScale: 1.45, alphaIndex: 10 }),
-        vapor: new SpriteLayer(scene, "fx-sprite-vapor", { look: "vapor", capacity: CAPACITY.vapor, sizeScale: 1.45, selfLight: 0.75, alphaIndex: 11 }),
-        fire: new SpriteLayer(scene, "fx-sprite-fire", { look: "fire", capacity: CAPACITY.fire, sizeScale: 2.3, softness: 0.15, alphaIndex: 12 }),
-        glow: new SpriteLayer(scene, "fx-sprite-glow", { look: "glow", capacity: CAPACITY.glow, sizeScale: 1.7, lengthScale: 1.15, softness: 0.05, alphaIndex: 13 }),
+        vapor: new SpriteLayer(scene, "fx-sprite-vapor", { look: "vapor", capacity: CAPACITY.vapor, sizeScale: 1.45, selfLight: 0.75, alphaIndex: 11, veiled: true }),
+        fire: new SpriteLayer(scene, "fx-sprite-fire", { look: "fire", capacity: CAPACITY.fire, sizeScale: 2.3, softness: 0.15, alphaIndex: 12, veiled: true }),
+        glow: new SpriteLayer(scene, "fx-sprite-glow", { look: "glow", capacity: CAPACITY.glow, sizeScale: 1.7, lengthScale: 1.15, softness: 0.05, alphaIndex: 13, veiled: true }),
       };
     }
     return this.sprites;
@@ -175,9 +178,10 @@ export class ParticleField {
   /**
    * Une volute dessinée pendant cette image seulement, triée avec les autres (effets réalistes) :
    * les nuages de fumigène, que leur système recompose à chaque image. `shade` : la lumière
-   * qu'elle reçoit (1 : au soleil ; moins : au cœur, sous le nuage).
+   * qu'elle reçoit (1 : au soleil ; moins : au cœur, sous le nuage) ; `groundFade` : la hauteur (m)
+   * sur laquelle elle s'efface au ras du sol `ground` (0 : selon sa taille, comme une particule).
    */
-  volute(at: Vec3, size: number, color: string, alpha: number, angle: number, frame: number, age: number, ground: number, shade: number, seed: number): void {
+  volute(at: Vec3, size: number, color: string, alpha: number, angle: number, frame: number, age: number, ground: number, shade: number, seed: number, groundFade = 0): void {
     if (this.look !== "realistic" || this.transient.length >= TRANSIENT) return;
     const p = this.pool.pop() ?? new Particle();
     const [r, g, b] = rgb(color);
@@ -188,6 +192,7 @@ export class ParticleField {
     p.solid = false;
     p.angle = angle; p.frame = frame; p.seed = seed;
     p.ground = ground;
+    p.groundFade = groundFade;
     p.heat = shade; // (une volute n'a pas de chaleur : on y range sa lumière)
     p.age = age; p.life = 1;
     this.transient.push(p);
@@ -443,7 +448,8 @@ export class ParticleField {
     s.frame = p.frame;
     s.age = p.age;
     s.heat = 0;
-    s.tint = 0;
+    // (une volute n'a pas de teinte de feu : sa case dit sur quelle hauteur elle s'efface au sol)
+    s.tint = p.groundFade;
     s.upright = 0;
     s.ground = p.ground;
     s.shade = p.heat;

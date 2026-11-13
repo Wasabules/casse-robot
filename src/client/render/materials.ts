@@ -23,6 +23,7 @@ import { surfaceSegment } from "./surfaceModels";
 import { SIDES_ALONE } from "../../shared/robot/surfaces";
 import type { FxLook } from "../settings";
 import { flameMaterial } from "./fx/flames";
+import { veilMaterial } from "./smokeVeil";
 import { LIGHT_LENSES } from "./models/lights";
 
 type Ctx = CanvasRenderingContext2D;
@@ -1017,6 +1018,9 @@ export class Assets {
       mat.emissiveColor = B.Color3.FromHexString("#5fe0ff");
       mat.disableLighting = true;
       mat.alpha = 0.7;
+      // (transparente, dessinée après la fumée : elle s'efface derrière un fumigène, son halo aussi,
+      // que la couche de halo dessine avec cette matière : render/smokeVeil.ts, render/lighting.ts)
+      veilMaterial(mat);
       m.material = mat;
       m.isVisible = false;
       m.isPickable = false;
@@ -1064,6 +1068,8 @@ export class Assets {
       }
       mat.backFaceCulling = false;
       mat.disableDepthWrite = true;
+      // (comme le disque flou des pales : il s'efface derrière un fumigène, render/smokeVeil.ts)
+      veilMaterial(mat);
       disc.material = mat;
       disc.isVisible = false;
       disc.isPickable = false;

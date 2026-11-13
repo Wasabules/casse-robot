@@ -1,5 +1,6 @@
 import * as B from "../babylon";
 import { clamp } from "../../shared/math/scalar";
+import type { Vec3 } from "../../shared/math/vec";
 import type { Bot } from "../../shared/sim/entities";
 import { TEAM_COLORS } from "../teams";
 import { context2d } from "./materials";
@@ -37,18 +38,28 @@ export class BotTag {
     this.redraw();
   }
 
-  /** Suit le cockpit et garde une taille lisible à distance, et la même au viseur (la caméra zoome). */
-  update(camera: B.Camera, visible: boolean): void {
-    this.mesh.isVisible = visible;
-    if (!visible) return;
+  /** Où est le robot (son cockpit, ou là où il était) : ce que l'étiquette désigne. */
+  anchor(): Vec3 {
     const ck = this.bot.cockpit;
-    const p = ck.alive ? ck.part.rb.translation() : this.bot.lastPos;
+    return ck.alive ? ck.part.rb.translation() : this.bot.lastPos;
+  }
+
+  /**
+   * Suit le cockpit et garde une taille lisible à distance, et la même au viseur (la caméra zoome) ;
+   * `opacity` : 1, ou moins quand le robot est caché (un fumigène entre la caméra et lui).
+   */
+  update(camera: B.Camera, visible: boolean, opacity = 1): void {
+    this.mesh.isVisible = visible && opacity > 0.01;
+    if (!this.mesh.isVisible) return;
+    this.mesh.visibility = opacity;
+    const p = this.anchor();
     this.mesh.position.set(p.x, p.y + this.bot.top + OFFSET, p.z);
     const dist = B.Vector3.Distance(camera.position, this.mesh.position);
     const zoom = Math.tan(camera.fov / 2) / Math.tan(BASE_FOV / 2);
     this.mesh.scaling.setAll(clamp(dist / 20, 0.9, 2.6) * zoom);
-    if (ck.alive !== this.alive) {
-      this.alive = ck.alive;
+    const alive = this.bot.cockpit.alive;
+    if (alive !== this.alive) {
+      this.alive = alive;
       this.redraw();
     }
   }

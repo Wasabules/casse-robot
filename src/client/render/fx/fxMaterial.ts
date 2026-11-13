@@ -1,4 +1,5 @@
 import * as B from "../../babylon";
+import { bindVeil, VEIL_UNIFORMS } from "../smokeVeil";
 import { NOISE_SIZE, noiseTexture, PUFF_CELL, puffAtlas } from "./fxNoise";
 
 /*
@@ -71,8 +72,11 @@ function envOf(scene: B.Scene): Env {
   return env;
 }
 
-/** Uniformes que reçoit toute matière d'effet. */
-const COMMON_UNIFORMS = ["view", "viewProjection", "world", "cameraPosition", "time", "sunDir", "sunColor", "skyLight", "groundLight", "glowPass"];
+/**
+ * Uniformes que reçoit toute matière d'effet ; ceux du voile des fumigènes (render/smokeVeil.ts)
+ * servent aux shaders qui s'effacent derrière un nuage (`VEIL_GLSL`).
+ */
+const COMMON_UNIFORMS = ["view", "viewProjection", "world", "cameraPosition", "time", "sunDir", "sunColor", "skyLight", "groundLight", "glowPass", ...VEIL_UNIFORMS];
 
 /**
  * Une matière d'effet : le shader `shader` (vertex et fragment, dans `ShaderStore`), ses
@@ -105,6 +109,7 @@ export class FxMaterial extends B.ShaderMaterial {
       effect.setColor3("sunColor", env.sunColor);
       effect.setColor3("skyLight", env.sky);
       effect.setColor3("groundLight", env.ground);
+      bindVeil(effect, scene);
     });
   }
 

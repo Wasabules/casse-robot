@@ -1,4 +1,5 @@
 import * as B from "../../babylon";
+import { VEIL_GLSL } from "../smokeVeil";
 import { FIRE_RAMP_GLSL, FOG_GLSL, FxMaterial } from "./fxMaterial";
 
 /*
@@ -129,6 +130,9 @@ uniform float softness;
 uniform float glowPass;
 ${FOG_GLSL}
 ${FIRE_RAMP_GLSL}
+#ifdef VEIL
+${VEIL_GLSL}
+#endif
 // Une volute de l'atlas (2 x 2 cases)
 vec4 puff(vec2 uv, float frame) {
   // (la case arrive interpolée : 1,99999 sur un triangle du quadrilatère, 2 sur l'autre ; sans
@@ -156,7 +160,13 @@ vec3 shade(vec4 tex) {
 }
 // Fondu au ras du sol (sous la volute) et tout contre la caméra
 float soft() {
-  float ground = smoothstep(0.0, max(0.12, vSize * softness), vWorld.y - vExtra.x);
+  float fade = max(0.12, vSize * softness);
+#if defined(SMOKE) || defined(VAPOR)
+  // (une volute peut donner sa hauteur de fondu : celles d'un fumigène, posé au sol, ne s'y effacent
+  // que sur quelques décimètres ; sur le tiers de leur taille, le bas du nuage laissait voir le sol)
+  if (vData.w > 0.0) fade = vData.w;
+#endif
+  float ground = smoothstep(0.0, fade, vWorld.y - vExtra.x);
   // (et une grande volute plus proche que le tiers de sa taille s'efface : elle entoure la caméra,
   // tout l'écran à une profondeur presque nulle, et son bord y tracerait un trait)
   float near = smoothstep(0.12, 0.8, vDepth) * smoothstep(0.08, 0.35, vDepth / vSize);
@@ -259,6 +269,10 @@ void main(void) {
 #endif
 #endif
   if (!softened) a *= soft();
+#ifdef VEIL
+  // Derrière un fumigène (ou dedans), elle s'efface : la fumée, dessinée avant, ne la couvre pas
+  a *= smokeVeil(cameraPosition, vWorld);
+#endif
   if (a < 0.002) discard;
   col = applyFog(col, vDepth);
   if (glowPass > 0.5) {
@@ -298,7 +312,10 @@ export interface Sprite {
   age: number;
   /** Chaleur d'un feu (0 à 1). */
   heat: number;
-  /** Part de sa propre couleur dans une flamme (0 : la rampe du feu seule). */
+  /**
+   * Part de sa propre couleur dans une flamme (0 : la rampe du feu seule). D'une volute (fumée,
+   * vapeur) : la hauteur (m) sur laquelle elle s'efface au ras du sol (0 : la part `softness` de sa taille).
+   */
   tint: number;
   /** Hauteur du sol sous lui (il s'efface en l'approchant). */
   ground: number;
@@ -334,6 +351,11 @@ export interface SpriteLayerOptions {
   softness?: number;
   /** Ordre de dessin entre couches transparentes (plus petit : avant). */
   alphaIndex: number;
+  /**
+   * Elle s'efface derrière les fumigènes (render/smokeVeil.ts) : une couche dessinée après la fumée,
+   * que les nuages ne couvrent donc pas (vapeur, feu, lueurs).
+   */
+  veiled?: boolean;
 }
 
 /**
@@ -351,7 +373,7 @@ export class SpriteLayer {
   constructor(scene: B.Scene, name: string, options: SpriteLayerOptions) {
     this.capacity = options.capacity;
     const mesh = B.MeshBuilder.CreatePlane(name, { size: 1 }, scene);
-    const defines = [options.look.toUpperCase(), ...(options.ribbon ? ["RIBBON"] : [])];
+    const defines = [options.look.toUpperCase(), ...(options.ribbon ? ["RIBBON"] : []), ...(options.veiled ? ["VEIL"] : [])];
     const mat = new FxMaterial(name, scene, "fxSprite", defines, ["sizeScale", "lengthScale", "selfLight", "softness"]);
     mat.setFloat("sizeScale", options.sizeScale);
     mat.setFloat("lengthScale", options.lengthScale ?? 1);
