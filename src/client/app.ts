@@ -825,6 +825,11 @@ export class App {
       else if (msg.bought) this.game.note(t("net.unlocked", { parts: msg.bought.parts.map(partName).join(", "), price: msg.bought.price, credits }));
       else this.game.note(credits);
     };
+    // Le serveur a relancé sa salle après une erreur de la simulation : on y est toujours, dans une partie neuve
+    net.onRestart = () => {
+      this.game.resetMatchStats();
+      this.game.notice(t("net.restarted"));
+    };
     // Accepté : la partie se charge (le monde reçu du serveur, puis les effets et la musique) avant de s'afficher
     net.onWelcome = () => {
       if (this.state !== "connecting") return;
@@ -1270,6 +1275,13 @@ export class App {
         s.shadowQuality,
         set("shadowQuality"),
         s.shadows ? t("menu.gfx.shadowQualityDetail") : t("menu.gfx.shadowQualityOff"),
+      ),
+      choiceRow(
+        t("menu.gfx.farShadows"),
+        [{ value: "every", label: t("menu.gfx.farShadowsEvery") }, { value: "half", label: t("menu.gfx.farShadowsHalf") }],
+        s.farShadows,
+        set("farShadows"),
+        s.shadows ? t("menu.gfx.farShadowsDetail") : t("menu.gfx.shadowQualityOff"),
       ),
       choiceRow(
         t("menu.gfx.renderScale"),
@@ -1733,6 +1745,7 @@ export class App {
     setLocale(s.language);
     game.setShadows(s.shadows);
     game.setShadowQuality(s.shadowQuality);
+    game.setFarShadows(s.farShadows);
     game.setRenderScale(s.renderScale);
     game.setReducedEffects(s.effects === "reduced");
     game.setFxLook(s.fxLook);

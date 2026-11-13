@@ -1,7 +1,8 @@
 // npm run share : partager le jeu sur Internet, pour jouer à plusieurs.
 //
 // Compile la page du jeu et le serveur, lance le serveur de jeu (qui sert aussi la page : une
-// seule adresse pour tout), puis ouvre un tunnel Cloudflare rapide (cloudflared, sans compte) vers
+// seule adresse pour tout ; sous son superviseur, tools/server/supervise.mjs, qui le relance s'il
+// s'arrête sur une erreur), puis ouvre un tunnel Cloudflare rapide (cloudflared, sans compte) vers
 // lui et affiche le lien à envoyer. Chacun ouvre le lien et choisit « Multijoueur » : le client
 // trouve tout seul le serveur à la même adresse. Ctrl+C arrête tout.
 //
@@ -18,13 +19,43 @@ const TUNNEL_URL = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/;
 
 const children = [];
 let stopping = false;
+/** Ctrl+C reçu : on attend que les processus s'arrêtent d'eux-mêmes (voir `interrupt`). */
+let leaving = false;
+/** Au plus combien de secondes on leur laisse pour s'arrêter seuls après Ctrl+C. */
+const GRACE = 6;
+
+/** Sous Windows, un processus tué ne tue pas les siens (le superviseur, son serveur) : on tue l'arbre. */
+function kill(child) {
+  if (child.exitCode !== null || child.signalCode !== null || !child.pid) return;
+  if (process.platform === "win32") spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+  else child.kill();
+}
+
 function stop(code = 0) {
   if (stopping) return;
   stopping = true;
-  for (const child of children) if (child.exitCode === null) child.kill();
+  for (const child of children) kill(child);
   process.exit(code);
 }
-process.on("SIGINT", () => stop(0));
+
+/**
+ * Ctrl+C : sous Windows, il parvient aussi au superviseur, au serveur (qui enregistre alors la
+ * progression des joueurs) et au tunnel ; on leur laisse le temps de s'arrêter seuls avant de tuer
+ * ce qui reste. Ailleurs, `kill` leur envoie SIGTERM, que le superviseur passe au serveur.
+ */
+function interrupt() {
+  if (stopping || leaving) return;
+  if (process.platform !== "win32") return stop(0);
+  leaving = true;
+  const until = Date.now() + GRACE * 1000;
+  const wait = () => {
+    const alive = children.some((c) => c.exitCode === null && c.signalCode === null);
+    if (!alive || Date.now() > until) stop(0);
+    else setTimeout(wait, 100);
+  };
+  wait();
+}
+process.on("SIGINT", interrupt);
 process.on("SIGTERM", () => stop(0));
 
 function run(label, command) {
@@ -41,12 +72,13 @@ if (!skipBuild) {
   run("Compilation du serveur", "npx vite build --ssr src/server/main.ts --outDir dist-server --emptyOutDir");
 }
 
-// Le serveur de jeu
-console.log(`\n» Serveur de jeu sur le port ${PORT}`);
-const server = spawn(process.execPath, ["dist-server/main.js"], { env: { ...process.env, PORT }, stdio: "inherit" });
+// Le serveur de jeu, sous son superviseur : relancé s'il s'arrête sur une erreur (ce qu'il ne sait pas
+// rattraper lui-même, voir server/roomHost.ts), arrêté avec lui
+console.log(`\n» Serveur de jeu sur le port ${PORT} (relancé s'il s'arrête sur une erreur)`);
+const server = spawn(process.execPath, ["tools/server/supervise.mjs", "dist-server/main.js"], { env: { ...process.env, PORT }, stdio: "inherit" });
 children.push(server);
 server.on("exit", (code) => {
-  if (!stopping) {
+  if (!stopping && !leaving) {
     console.error(`\nLe serveur de jeu s'est arrêté (code ${code}).`);
     stop(code ?? 1);
   }
@@ -129,5 +161,5 @@ tunnel.on("error", (err) => {
   }
 });
 tunnel.on("exit", (code) => {
-  if (!stopping && announced) console.error(`\nLe tunnel s'est fermé (code ${code}). Le serveur reste lancé sur le réseau local ; relancer npm run share pour un nouveau lien.`);
+  if (!stopping && !leaving && announced) console.error(`\nLe tunnel s'est fermé (code ${code}). Le serveur reste lancé sur le réseau local ; relancer npm run share pour un nouveau lien.`);
 });

@@ -122,6 +122,21 @@ export class NativeRoom extends RoomBase<Slot> {
     return this.world.lock(bot);
   }
 
+  /** Une panique : son message, et l'endroit du code d'où elle vient (`keep_panics`, crates/casse-sim/src/sim/mod.rs). */
+  override explain(e: unknown): string {
+    return this.world.m.explain(e);
+  }
+
+  /**
+   * Une vraie panique du module : un robot d'un rang qui n'existe pas (un indice hors du tableau, au
+   * milieu de l'accès au monde). L'instance du module est ensuite inutilisable, comme après une panique
+   * de la simulation.
+   */
+  provokeFault(): void {
+    this.world.alive(0x7fffffff);
+    throw new Error("panne d'essai : le module n'a pas paniqué");
+  }
+
   dispose(): void {
     this.world.dispose();
   }

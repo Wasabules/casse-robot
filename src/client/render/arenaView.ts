@@ -543,14 +543,15 @@ export class ArenaView {
     mat.specularColor = new B.Color3(0, 0, 0);
     mesh.material = mat;
     mesh.receiveShadows = true;
+    // On vise le relief sans la scène : l'éditeur par shared/arena/terrain.ts, le jeu par
+    // render/terrainPick.ts (les mêmes triangles, sans les parcourir tous). D'un seul tenant, il se
+    // dessine en un appel (découpé en 64 morceaux pour la visée, il en faisait jusqu'à 64)
+    mesh.isPickable = false;
     if (this.editable) {
-      // L'éditeur vise le relief sans la scène (shared/arena/terrain.ts) : ni découpé, ni figé
-      mesh.isPickable = false;
+      // (ni figé : l'éditeur le remodèle)
       this.terrainState = { mesh, cells: t.cells, size: t.size, positions, normals, colors };
       return mesh;
     }
-    // En réseau, on vise par la scène : découpé, le relief ne se teste que près du rayon
-    mesh.subdivide(64);
     mesh.freezeWorldMatrix();
     return mesh;
   }

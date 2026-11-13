@@ -87,11 +87,11 @@ export interface BotState {
 }
 
 /** Phases d'un bras dans l'instantané (l'ordre importe). */
-const SWING_PHASES: readonly SwingPhase[] = ["ready", "strike", "recover", "hold"];
+export const SWING_PHASES: readonly SwingPhase[] = ["ready", "strike", "recover", "hold"];
 /** Ce que mord une lame, dans l'instantané (rang + 1 ; 0 : rien ; l'ordre importe). */
-const BITE_SURFACES: readonly ImpactSurface[] = ["robot", "prop", "scenery", "projectile"];
+export const BITE_SURFACES: readonly ImpactSurface[] = ["robot", "prop", "scenery", "projectile"];
 /** Drapeau d'une morsure qui glisse (ricochet), avec le rang de sa surface. */
-const BITE_GLANCE = 0x80;
+export const BITE_GLANCE = 0x80;
 
 /** Une arme de contact dans l'instantané (voir `BotSnapshot.melee`). */
 export interface MeleeSnap {
@@ -125,11 +125,12 @@ export interface Snapshot {
   projectiles: Map<number, ProjectileState>;
 }
 
-const TEAMS: readonly Team[] = ["red", "blue"];
-const WINNERS: readonly (Team | "draw" | null)[] = [null, "red", "blue", "draw"];
-const OWNERS: readonly (Team | null)[] = [null, "red", "blue"];
+/** L'ordre des équipes, des vainqueurs et des propriétaires d'une zone dans l'instantané (il importe). */
+export const TEAMS: readonly Team[] = ["red", "blue"];
+export const WINNERS: readonly (Team | "draw" | null)[] = [null, "red", "blue", "draw"];
+export const OWNERS: readonly (Team | null)[] = [null, "red", "blue"];
 /** Munitions illimitées (armes sans chargeur). */
-const NO_AMMO = 255;
+export const NO_AMMO = 255;
 
 export function writeSnapshot(sim: Simulation): Uint8Array {
   const w = new Writer();

@@ -84,6 +84,21 @@ export interface SimExports {
 /** Le peu de WebAssembly dont on se sert (le code partagé n'a pas les types du navigateur). */
 interface WasmApi {
   instantiate(bytes: Uint8Array, imports: object): Promise<{ instance: { exports: object } }>;
+  compile(bytes: Uint8Array): Promise<object>;
+  readonly Instance: new (module: object, imports: object) => { exports: object };
+}
+
+function wasmApi(): WasmApi {
+  const api = (globalThis as unknown as { WebAssembly?: WasmApi }).WebAssembly;
+  if (!api) throw new Error("pas de WebAssembly");
+  return api;
+}
+
+/** Le module des exports d'une instance, s'il a la simulation entière. */
+function simOf(exports: object): SimModule {
+  const x = exports as unknown as SimExports;
+  if (typeof x.sim_take_events !== "function") throw new Error("ce module n'a pas la simulation entière (npm run native)");
+  return new SimModule(x);
 }
 
 /** Le module chargé, et ce qu'il faut pour lui parler : des octets copiés dans sa mémoire, ses messages. */
@@ -166,14 +181,36 @@ let module: Promise<SimModule> | null = null;
 /** Charge la simulation compilée entière depuis ses octets (une seule fois par processus). */
 export function loadSimModule(bytes: Uint8Array): Promise<SimModule> {
   module ??= (async () => {
-    const api = (globalThis as unknown as { WebAssembly?: WasmApi }).WebAssembly;
-    if (!api) throw new Error("pas de WebAssembly");
-    const { instance } = await api.instantiate(bytes, {});
-    const exports = instance.exports as unknown as SimExports;
-    if (typeof exports.sim_take_events !== "function") throw new Error("ce module n'a pas la simulation entière (npm run native)");
-    return new SimModule(exports);
+    const { instance } = await wasmApi().instantiate(bytes, {});
+    return simOf(instance.exports);
   })();
   return module;
+}
+
+/**
+ * La simulation compilée entière, compilée une fois : chaque `instance()` en est une instance neuve, sa
+ * propre mémoire, faite tout de suite (sans attendre). Le serveur en donne une à chaque salle : une
+ * instance qui a paniqué est inutilisable (son état est resté au milieu de ce qu'elle faisait), la salle
+ * qui la remplace en prend une autre (server/roomHost.ts).
+ */
+export class SimCompiled {
+  private readonly compiled: object;
+
+  private constructor(compiled: object) {
+    this.compiled = compiled;
+  }
+
+  static async compile(bytes: Uint8Array): Promise<SimCompiled> {
+    const made = new SimCompiled(await wasmApi().compile(bytes));
+    // (un module sans la simulation entière se voit tout de suite, pas à la première salle)
+    made.instance();
+    return made;
+  }
+
+  /** Une instance neuve. */
+  instance(): SimModule {
+    return simOf(new (wasmApi().Instance)(this.compiled, {}).exports);
+  }
 }
 
 /** Le module déjà chargé (`loadSimModule`), sinon une erreur. */

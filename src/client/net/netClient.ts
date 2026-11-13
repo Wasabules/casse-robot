@@ -1,7 +1,9 @@
 import { isArenaId, type ArenaId } from "../../shared/arena/layout";
 import { checkMap } from "../../shared/map/validate";
-import { decodeFrame, DEFAULT_PORT, KNOWN_MAPS, type ClientMessage, type ServerMessage } from "../../shared/net/protocol";
+import { DEFAULT_PORT, KNOWN_MAPS, type ClientMessage, type ServerMessage } from "../../shared/net/protocol";
 import { Replica } from "../../shared/net/replica";
+import { DelayTuner } from "../../shared/net/pacing";
+import { WireDecoder, type WireMessage } from "../../shared/net/wire";
 import { t } from "../i18n/i18n";
 import { refusalText } from "../i18n/names";
 import { httpOrigin, mapAssets } from "../maps/assets";
@@ -33,16 +35,27 @@ export class NetClient {
   onEnd: ((reason: string) => void) | null = null;
   /** Progression du joueur sur le serveur : à son arrivée (et ce que son robot y a fait débloquer), puis à chaque fin de partie. */
   onProgress: ((msg: Extract<ServerMessage, { t: "welcome" | "progress" }>) => void) | null = null;
+  /**
+   * Le serveur a relancé sa salle après une erreur de la simulation (server/roomHost.ts) : le joueur y
+   * est toujours, dans une partie neuve, dont l'image dit à la réplique d'oublier l'ancien monde (`reset`).
+   */
+  onRestart: (() => void) | null = null;
   private readonly socket: WebSocket;
   private welcomed = false;
+  /** Images rendues à la réplique. */
+  private frames = 0;
   private closing = false;
+  /** Les images du fil (shared/net/wire.ts) : chacune en écarts à la précédente, décodées dans l'ordre où elles arrivent. */
+  private readonly wire = new WireDecoder();
+  /** Le retard d'affichage de la réplique, réglé d'après l'arrivée des images (net/pacing.ts). */
+  private readonly pacing = new DelayTuner();
   /**
-   * Messages retenus, dans l'ordre, pendant que se charge le fichier d'une arène du jeu qu'une image
-   * annonce (une grande arène que ce navigateur n'a pas encore : client/maps/gameArenas.ts) : la
-   * réplique la trouve quand elle rejoue cette image. Le protocole ne change pas : le serveur ne dit
+   * Messages retenus (déjà décodés), dans l'ordre, pendant que se charge le fichier d'une arène du jeu
+   * qu'une image annonce (une grande arène que ce navigateur n'a pas encore : client/maps/gameArenas.ts) :
+   * la réplique la trouve quand elle rejoue cette image. Le protocole ne change pas : le serveur ne dit
    * que l'identifiant de l'arène.
    */
-  private held: (string | ArrayBuffer)[] | null = null;
+  private held: (string | WireMessage)[] | null = null;
   /** Les arènes dont le fichier n'a pas pu se charger : on ne les attend plus (la réplique note l'arène manquante). */
   private readonly unavailable = new Set<ArenaId>();
 
@@ -86,33 +99,59 @@ export class NetClient {
   }
 
   private onMessage(data: string | ArrayBuffer): void {
-    if (this.held) {
-      this.held.push(data);
-      return;
-    }
+    if (this.closing) return;
     if (typeof data === "string") {
-      this.onText(JSON.parse(data) as ServerMessage);
+      this.take(data);
       return;
     }
-    const frame = decodeFrame(new Uint8Array(data));
-    for (const e of frame.header.events) {
+    // Décodée tout de suite, même retenue : chaque image du fil part de la précédente
+    let frame: WireMessage;
+    try {
+      frame = this.wire.decode(new Uint8Array(data));
+    } catch (e) {
+      // Une image illisible : les suivantes ne se liraient pas non plus (elles en partent) ; on s'arrête là
+      console.warn("Image du serveur illisible", e);
+      this.closing = true;
+      this.socket.close();
+      this.onEnd?.(t("net.corrupt"));
+      return;
+    }
+    this.pacing.arrive(performance.now() / 1000, frame.snapshot.time);
+    this.replica.delay = this.pacing.delay;
+    this.replica.rate = this.pacing.rate;
+    this.take(frame);
+  }
+
+  /** Un message à rendre (texte, ou image décodée), ou à retenir derrière ceux qui attendent. */
+  private take(item: string | WireMessage): void {
+    if (this.held) {
+      this.held.push(item);
+      return;
+    }
+    if (typeof item === "string") {
+      this.onText(JSON.parse(item) as ServerMessage);
+      return;
+    }
+    for (const e of item.header.events) {
       if (e.t === "arena" && isArenaId(e.id) && !arenaReady(e.id) && !this.unavailable.has(e.id)) {
-        this.hold(e.id, data);
+        this.hold(e.id, item);
         return;
       }
     }
-    this.replica.receiveFrame(frame);
+    if (item.header.reset && this.frames > 0) this.onRestart?.();
+    this.frames++;
+    this.replica.receiveFrame(item);
   }
 
   /** Retient cette image et celles qui suivent le temps que le fichier de l'arène se charge, puis les rend. */
-  private hold(arena: ArenaId, first: ArrayBuffer): void {
+  private hold(arena: ArenaId, first: WireMessage): void {
     this.held = [first];
     const release = (): void => {
       const held = this.held ?? [];
       this.held = null;
-      for (const data of held) {
+      for (const item of held) {
         if (this.closing) return;
-        this.onMessage(data);
+        this.take(item);
       }
     };
     loadArena(arena).then(release, (e: unknown) => {

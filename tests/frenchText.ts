@@ -161,7 +161,8 @@ function exempt(lit: Literal, lineText: string): boolean {
   // Un shader (ses commentaires sont pour les développeurs)
   if (/\bprecision (highp|mediump) float\b|\bgl_FragColor\b/.test(lit.text)) return true;
   if (/(\bfrom|\bimport\(?)\s*$/.test(lit.before)) return true;
-  return /(console\.\w+|\bError|\breport|\bmeasure|\bwarn)\(\s*([^()]*\([^()]*\))*[^()]*$/.test(lit.before);
+  // (une erreur : `new Error(…)`, et ses sortes, `new WireError(…)`)
+  return /(console\.\w+|\b\w*Error|\breport|\bmeasure|\bwarn)\(\s*([^()]*\([^()]*\))*[^()]*$/.test(lit.before);
 }
 
 /** Cette chaîne a-t-elle l'air française ? */

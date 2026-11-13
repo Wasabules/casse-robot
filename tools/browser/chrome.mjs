@@ -45,15 +45,18 @@ function freePort() {
   });
 }
 
-/** Sert dist/ (vite preview, sans la configuration du projet : ni ouverture du navigateur ni cache partagé). */
-export async function serve() {
+/**
+ * Sert dist/ (vite preview, sans la configuration du projet : ni ouverture du navigateur ni cache partagé) ;
+ * `dir` : un autre dossier construit (une copie de dist/, pour comparer deux versions en alternant).
+ */
+export async function serve(dir = "dist") {
   const { preview } = await import("vite");
   const port = await freePort();
   const server = await preview({
     root: ROOT,
     configFile: false,
     logLevel: "warn",
-    build: { outDir: "dist" },
+    build: { outDir: dir },
     preview: { host: "127.0.0.1", port, strictPort: true, open: false },
   });
   return { url: `http://127.0.0.1:${port}/`, close: () => server.close() };

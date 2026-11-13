@@ -19,6 +19,8 @@ export interface SceneKit {
   hemi: B.HemisphericLight;
   /** Le ciel étoilé et la lune (la nuit seulement), fait à la première nuit. */
   night: B.Mesh | null;
+  /** La cascade d'ombre lointaine (null sans ombres en cascades) : refaite une image sur combien. */
+  farShadows: FarCascade | null;
 }
 
 /** Ciel et brouillard par défaut (les petites arènes : `PLAIN_SKY`, que l'export en carte écrit aussi). */
@@ -128,13 +130,14 @@ export function createScene(engine: B.AbstractEngine): SceneKit {
   sun.shadowMaxZ = 600;
   // Sans WebGL 2, une seule carte d'ombre, que Babylon cadre sur tout ce qui en projette
   const cascades = B.CascadedShadowGenerator.IsSupported;
+  let farShadows: FarCascade | null = null;
   const shadows = cascades ? new B.CascadedShadowGenerator(SHADOW_MAPS.medium.size, sun) : new B.ShadowGenerator(SHADOW_MAPS.medium.size, sun);
   if (shadows instanceof B.CascadedShadowGenerator) {
     shadows.lambda = 0.85;
     shadows.cascadeBlendPercentage = CASCADE_BLEND;
     shadows.depthClamp = true;
     shadows.stabilizeCascades = true;
-    cullCascades(scene, shadows);
+    farShadows = cullCascades(scene, shadows);
   }
   shadows.usePercentageCloserFiltering = true;
   shadows.filteringQuality = SHADOW_MAPS.medium.filtering;
@@ -142,7 +145,7 @@ export function createScene(engine: B.AbstractEngine): SceneKit {
   shadows.normalBias = 0.02;
 
   createGround(scene);
-  return { engine, scene, shadows, sun, hemi, night: null };
+  return { engine, scene, shadows, sun, hemi, night: null, farShadows };
 }
 
 /**
@@ -153,15 +156,19 @@ export function createScene(engine: B.AbstractEngine): SceneKit {
  * `depthClamp`). Babylon refait sa carte d'ombre quand le nombre de cascades ou sa taille changent
  * (une autre arène, la qualité des ombres) : le tri est remis sur chaque nouvelle carte.
  */
-function cullCascades(scene: B.Scene, shadows: B.CascadedShadowGenerator): void {
+function cullCascades(scene: B.Scene, shadows: B.CascadedShadowGenerator): FarCascade {
   const lists: B.AbstractMesh[][] = [];
   const at = new B.Vector3();
+  const far = new FarCascade(shadows);
   const cull = (layer: number, list: readonly B.AbstractMesh[] | null, length: number): B.AbstractMesh[] | null => {
     const view = shadows.getCascadeViewMatrix(layer);
     const projection = shadows.getCascadeProjectionMatrix(layer);
     if (!list || !view || !projection) return null;
     const out = (lists[layer] ??= []);
     out.length = 0;
+    // (la cascade lointaine gardée de l'image précédente : rien à y dessiner, voir `FarCascade`)
+    far.skipping = far.keeps(layer);
+    if (far.skipping) return out;
     // Projection orthographique : x et y de l'écran de la cascade, de -1 à 1
     const p = projection.m;
     for (let i = 0; i < length; i++) {
@@ -178,10 +185,116 @@ function cullCascades(scene: B.Scene, shadows: B.CascadedShadowGenerator): void 
   let tied: unknown = null;
   scene.onBeforeRenderObservable.add(() => {
     const map = shadows.getShadowMap();
-    if (!map || map === tied) return;
-    map.getCustomRenderList = cull;
-    tied = map;
+    if (!map) return;
+    if (map !== tied) {
+      map.getCustomRenderList = cull;
+      far.tie(map);
+      tied = map;
+    }
+    far.nextFrame();
   });
+  return far;
+}
+
+/** Ce que Babylon calcule pour chaque cascade (internes du générateur d'ombres en cascades). */
+interface CascadeInternals {
+  _computeMatrices(): void;
+  _viewMatrices: B.Matrix[];
+  _projectionMatrices: B.Matrix[];
+  _transformMatrices: B.Matrix[];
+  _transformMatricesAsArray: Float32Array;
+  _cascadeMinExtents: B.Vector3[];
+  _cascadeMaxExtents: B.Vector3[];
+  _frustumCenter: B.Vector3[];
+}
+
+/**
+ * Au plus de combien (m) le centre de la cascade lointaine peut avoir bougé pour qu'on la garde de
+ * l'image précédente : au-delà (la caméra tourne vite, saute d'un robot à l'autre), on la refait.
+ */
+const FAR_KEEP_SHIFT = 1.5;
+
+/**
+ * La cascade la plus lointaine (de quelques dizaines de mètres à la portée des ombres : la plus
+ * grande, et celle où tombent le plus d'objets) refaite seulement une image sur `every` (réglage
+ * « Ombres lointaines ») : entre deux, elle garde ce qu'elle avait dessiné, et le cadre (matrices)
+ * avec lequel elle l'avait dessiné, pour que le rendu y lise les mêmes ombres. Le décor fixe n'y
+ * change pas ; une ombre qui bouge au loin s'y met à jour moins souvent. Si la caméra a trop bougé
+ * pour que l'ancien cadre couvre encore ce qu'elle voit (`FAR_KEEP_SHIFT`), elle est refaite.
+ */
+export class FarCascade {
+  /** Une image sur combien la cascade lointaine est refaite (1 : à chaque image). */
+  every = 1;
+  /** On ne dessine pas dans la cascade lointaine à cette image (son effacement est sauté). */
+  skipping = false;
+  private readonly shadows: B.CascadedShadowGenerator;
+  private readonly internals: CascadeInternals;
+  private frame = 0;
+  /** La cascade lointaine de la dernière fois qu'elle a été faite (null : rien de gardé). */
+  private saved: { index: number; view: B.Matrix; projection: B.Matrix; transform: B.Matrix; min: B.Vector3; max: B.Vector3; center: B.Vector3 } | null = null;
+  /** On garde la cascade lointaine à cette image. */
+  private keep = false;
+
+  constructor(shadows: B.CascadedShadowGenerator) {
+    this.shadows = shadows;
+    const internals = shadows as unknown as CascadeInternals;
+    this.internals = internals;
+    const compute = internals._computeMatrices.bind(internals);
+    internals._computeMatrices = () => {
+      compute();
+      this.afterMatrices();
+    };
+  }
+
+  /** Une nouvelle carte d'ombre (autre arène, autre qualité) : rien de gardé, et son effacement suit `skipping`. */
+  tie(map: B.RenderTargetTexture): void {
+    this.saved = null;
+    // (placé avant celui du générateur, qui efface la profondeur de la couche)
+    map.onClearObservable.add((_engine: B.AbstractEngine, state: { skipNextObservers: boolean }) => {
+      if (this.skipping) state.skipNextObservers = true;
+    }, undefined, true);
+  }
+
+  /** Avant chaque image : la garde-t-on ? */
+  nextFrame(): void {
+    this.frame++;
+    this.keep = this.every > 1 && this.saved !== null && this.frame % this.every !== 0;
+    this.skipping = false;
+  }
+
+  /** La cascade `layer` est-elle gardée de l'image précédente (rien à y dessiner) ? */
+  keeps(layer: number): boolean {
+    return this.keep && layer === this.shadows.numCascades - 1;
+  }
+
+  /** Les matrices des cascades viennent d'être calculées : on remet celles de la lointaine gardée, ou on les garde. */
+  private afterMatrices(): void {
+    const c = this.internals;
+    const k = this.shadows.numCascades - 1;
+    const saved = this.saved;
+    if (this.keep && saved && saved.index === k && B.Vector3.Distance(saved.center, c._frustumCenter[k]) <= FAR_KEEP_SHIFT) {
+      c._viewMatrices[k].copyFrom(saved.view);
+      c._projectionMatrices[k].copyFrom(saved.projection);
+      c._transformMatrices[k].copyFrom(saved.transform);
+      saved.transform.copyToArray(c._transformMatricesAsArray, k * 16);
+      c._cascadeMinExtents[k].copyFrom(saved.min);
+      c._cascadeMaxExtents[k].copyFrom(saved.max);
+      return;
+    }
+    this.keep = false;
+    if (this.every <= 1) {
+      this.saved = null;
+      return;
+    }
+    const s = (this.saved ??= { index: k, view: new B.Matrix(), projection: new B.Matrix(), transform: new B.Matrix(), min: new B.Vector3(), max: new B.Vector3(), center: new B.Vector3() });
+    s.index = k;
+    s.view.copyFrom(c._viewMatrices[k]);
+    s.projection.copyFrom(c._projectionMatrices[k]);
+    s.transform.copyFrom(c._transformMatrices[k]);
+    s.min.copyFrom(c._cascadeMinExtents[k]);
+    s.max.copyFrom(c._cascadeMaxExtents[k]);
+    s.center.copyFrom(c._frustumCenter[k]);
+  }
 }
 
 /** Lumière du ciel, soleil (ou lune) et lumière ambiante, de jour ou de nuit. */

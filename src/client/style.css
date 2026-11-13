@@ -216,6 +216,8 @@
     background: rgba(12, 16, 22, 0.92); border: 1px solid rgba(240, 189, 44, 0.5);
   }
   .gpu-notice p { margin: 0; font: 500 13px/1.5 var(--mono); color: #e9edf1; text-align: center; }
+  /* La simulation relancée après une erreur (client/hud/notice.ts) : le même bandeau, qui ne retient pas la souris */
+  .sim-notice { pointer-events: none; }
 
   /* Écran de chargement (client/menu/loading.ts) : opaque, au-dessus de tout ; la scène qu'on prépare derrière ne se voit pas */
   .loading {

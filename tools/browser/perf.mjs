@@ -10,6 +10,7 @@
 //   npm run perf -- --json=avant.json             garde le résultat…
 //   npm run perf -- --compare=avant.json          … et compare un nouveau résultat à lui
 //   npm run perf -- --no-build                    sans reconstruire la page
+//   npm run perf -- --dist=../avant               un autre dossier construit (une copie de dist/), sans construire : alterner deux versions
 //   npm run perf -- --renderer=webgpu             sous WebGPU (WebGL par défaut)
 //   npm run perf -- --eval="__casse.game.setGlow(false)"   du code dans la page, une fois la bataille lancée
 //   npm run perf -- --cpuprofile=profil.cpuprofile   le profil du processeur (fil de la page), ses fonctions les plus coûteuses
@@ -34,7 +35,7 @@ import { build, launchChrome, MATCH_STARTED, openGame, parseArgs, ROOT, SEED_RAN
 
 const options = parseArgs({
   arena: "depot", size: "", seconds: 30, window: 5, warmup: 8, preset: "", renderOnly: false, noBuild: false, json: "", compare: "", software: false,
-  renderer: "webgl", query: "", eval: "", cpuprofile: "", phone: false, cpuThrottle: 1, network: "",
+  renderer: "webgl", query: "", eval: "", cpuprofile: "", phone: false, cpuThrottle: 1, network: "", dist: "",
 });
 if (options.renderer !== "webgl" && options.renderer !== "webgpu") throw new Error(`--renderer : webgl ou webgpu, pas ${options.renderer}`);
 /** Un réseau mobile (latence en ms, débits en octets par seconde). */
@@ -270,8 +271,8 @@ function compare(before, after) {
   console.log(lines.join("\n"));
 }
 
-if (!options.noBuild) build();
-const server = await serve();
+if (!options.noBuild && !options.dist) build();
+const server = await serve(options.dist || undefined);
 const chrome = await launchChrome({ width, height, software: options.software, extraArgs: options.renderer === "webgpu" ? ["--enable-unsafe-webgpu"] : [] });
 const { page } = chrome;
 /** Ce que le ralentissement n'a pas pu faire (un Worker qui le refuse) : dit dans le bilan. */

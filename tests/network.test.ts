@@ -6,6 +6,7 @@ import { add, flatDistance, qrot, scale, sub, vec3 } from "../src/shared/math/ve
 import { utf8Decode, utf8Encode } from "../src/shared/net/binary";
 import { decodeFrame, encodeFrame, PROTOCOL_VERSION, SNAPSHOT_EVERY, type ClientMessage, type RobotChoice, type ServerMessage } from "../src/shared/net/protocol";
 import { Replica } from "../src/shared/net/replica";
+import { WireDecoder, WireEncoder } from "../src/shared/net/wire";
 import { readSnapshot, writeSnapshot } from "../src/shared/net/snapshot";
 import type { Bot, Prop } from "../src/shared/sim/entities";
 import { applyDamage, strike } from "../src/shared/combat/damage";
@@ -53,6 +54,8 @@ interface TestClient {
 
 describe("multijoueur", () => {
   let room: Room;
+  /** Le fil du serveur (net/wire.ts) : les images passent quantifiées, en écarts, comme par la WebSocket. */
+  let wire: WireEncoder;
 
   beforeAll(async () => {
     await initPhysics();
@@ -60,6 +63,7 @@ describe("multijoueur", () => {
   beforeEach(() => {
     seedRandom(21);
     room = new Room();
+    wire = new WireEncoder();
   });
   afterEach(() => room.dispose());
 
@@ -69,10 +73,12 @@ describe("multijoueur", () => {
     const texts: ServerMessage[] = [];
     const events: SimEvent[] = [];
     replica.on((e) => events.push(e));
+    const stream = wire.stream();
+    const decoder = new WireDecoder();
     const player = room.connect({
       send: (data) => {
         if (typeof data === "string") texts.push(JSON.parse(data) as ServerMessage);
-        else replica.receive(data);
+        else replica.receiveFrame(decoder.decode(stream.encode(data)));
       },
     });
     const client: TestClient = { player, replica, texts, events, send: (msg) => room.receive(player, JSON.stringify(msg)) };

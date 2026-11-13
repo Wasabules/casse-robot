@@ -28,5 +28,8 @@ export const net = {
   "net.earned": "+{total} crédits ({lines}) · {credits}",
   "net.unlocked": "Débloqué sur ce serveur : {parts} (−{price}) · {credits}",
   "net.lost": "La liaison avec le serveur est coupée.",
+  /** Le serveur a relancé sa salle après une erreur de la simulation (server/roomHost.ts) : le joueur est dans une partie neuve. */
+  "net.restarted": "Une erreur de la simulation a arrêté la partie : le serveur en a lancé une nouvelle.",
+  "net.corrupt": "Une image reçue du serveur est illisible : la liaison est coupée.",
   "net.unreachable": "Impossible de joindre le serveur {url}.",
 } as const;

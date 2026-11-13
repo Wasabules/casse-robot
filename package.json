@@ -21,6 +21,7 @@
     "perf": "node tools/browser/perf.mjs",
     "render:check": "node tools/browser/render-check.mjs",
     "server": "vite build --ssr src/server/main.ts --outDir dist-server --emptyOutDir && node dist-server/main.js",
+    "server:supervised": "vite build --ssr src/server/main.ts --outDir dist-server --emptyOutDir && node tools/server/supervise.mjs",
     "sounds": "node tools/sounds/build.mjs",
     "map:build": "vite build --ssr tools/maps/cli.ts --outDir dist-tools --emptyOutDir --logLevel warn",
     "map:check": "npm run map:build && node dist-tools/cli.js check",

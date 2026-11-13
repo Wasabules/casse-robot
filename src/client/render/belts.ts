@@ -2,6 +2,7 @@ import * as B from "../babylon";
 import { wheelDef, type WheelTypeDef } from "../../shared/catalog/wheels";
 import { wheelLocalPos, type WheelMount } from "../../shared/design/robotDesign";
 import type { Assets } from "./materials";
+import { keepThinBounds } from "./thinBounds";
 import { BAND_INSET, BAND_THICKNESS } from "./models/tracks";
 import { BELT_MARGIN, beltPath, beltShape, placeShoes, shoeHorns, shoeLoop, sprocketRollers, trackGroups, type BeltShape, type ShoeLoop } from "./trackShape";
 
@@ -104,6 +105,7 @@ export class BeltShoes {
     mesh.thinInstanceSetBuffer("matrix", this.matrices, 16, false);
     // Les patins défilent sans sortir de la boucle : leur volume (pour la visibilité) ne change pas
     mesh.thinInstanceRefreshBoundingInfo(false);
+    keepThinBounds(mesh);
     this.mesh = mesh;
   }
 

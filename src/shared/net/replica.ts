@@ -122,6 +122,11 @@ export class Replica implements World {
    * bien plus court pour une partie solo, dont les images arrivent à chaque image (net/session.ts).
    */
   delay = INTERP_DELAY;
+  /**
+   * Vitesse à laquelle l'instant affiché avance, par seconde du client : celle du temps du serveur (1
+   * quand il tient le temps réel ; en réseau, `DelayTuner.rate`, net/pacing.ts, la mesure).
+   */
+  rate = 1;
   /** Partie solo : nombre de nouveaux mondes reçus (images `reset` appliquées). */
   resets = 0;
   /** Partie solo : l'état des armes de la caméra libre (son HUD), d'après la dernière image. */
@@ -190,9 +195,12 @@ export class Replica implements World {
     this.receiveFrame(decodeFrame(bytes));
   }
 
-  /** Une image reçue, déjà décodée (`decodeFrame` : le client regarde d'abord si elle annonce une arène à charger). */
-  receiveFrame({ header, snapshot }: { header: FrameHeader; snapshot: Uint8Array }): void {
-    const snap = readSnapshot(snapshot);
+  /**
+   * Une image reçue, déjà décodée (`decodeFrame` : le client regarde d'abord si elle annonce une arène
+   * à charger) ; son instantané en octets, ou déjà lu (une image du fil du serveur : net/wire.ts).
+   */
+  receiveFrame({ header, snapshot }: { header: FrameHeader; snapshot: Uint8Array | Snapshot }): void {
+    const snap = snapshot instanceof Uint8Array ? readSnapshot(snapshot) : snapshot;
     // Partie solo, un nouveau monde : il s'affiche tout de suite (comme une première image), même partie figée
     if (header.reset) {
       this.queue.length = 0;
@@ -211,7 +219,7 @@ export class Replica implements World {
     if (!newest) return;
     const target = newest.time - this.delay;
     if (this.clock === null || Math.abs(target - this.clock) > RESYNC) this.clock = target;
-    else this.clock += dt + (target - this.clock) * CATCH_UP;
+    else this.clock += dt * this.rate + (target - this.clock) * CATCH_UP;
     // La première image s'affiche tout de suite, même si elle est plus récente que l'instant visé
     if (!this.current && this.queue.length) this.clock = Math.max(this.clock, this.queue[0].time);
     while (this.queue.length && this.queue[0].time <= this.clock) this.apply(this.queue.shift()!);

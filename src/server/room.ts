@@ -3,7 +3,7 @@ import type { MapFile } from "../shared/map/format";
 import { registerMap } from "../shared/map/load";
 import { isArmId } from "../shared/catalog/melee";
 import { designCost } from "../shared/design/budget";
-import { hasPart, lockedParts, matchReward, partPrice, unlockParts } from "../shared/design/progression";
+import { hasPart, lockedParts, matchReward, partPrice, unlockParts, type MatchResult } from "../shared/design/progression";
 import { profileFromDesign } from "../shared/design/custom";
 import type { BotProfile } from "../shared/design/presets";
 import { upgradeDesign, validateDesign, type RobotDesign } from "../shared/design/robotDesign";
@@ -11,8 +11,10 @@ import { vec3, type Vec3 } from "../shared/math/vec";
 import { GAME_MODES, PILOTABLE, pickRoster } from "../shared/modes";
 import { describeWorld, NetEncoder } from "../shared/net/encoder";
 import {
-  encodeFrame, KNOWN_MAPS, PROTOCOL_VERSION, SNAPSHOT_EVERY, type ClientMessage, type LockState, type NetEvent, type RobotChoice, type ServerMessage,
+  encodeFrame, KNOWN_MAPS, PROTOCOL_VERSION, SNAPSHOT_EVERY, type ClientMessage, type FrameHeader, type LockState, type NetEvent, type RobotChoice,
+  type ServerMessage,
 } from "../shared/net/protocol";
+import { STEP } from "../shared/config";
 import type { MatchRules } from "../shared/sim/match";
 import { writeSnapshot } from "../shared/net/snapshot";
 import { lockProgress, pilotLock } from "../shared/combat/lock";
@@ -36,7 +38,9 @@ import { ProgressBook, TOKEN_PATTERN } from "./progressBook";
 const RESTART_DELAY = 8;
 /** Longueur maximale d'un nom de joueur. */
 const NAME_MAX = 20;
-export const MODE = GAME_MODES.battle;
+/** Le mode de jeu de la salle. */
+export const MODE_ID = "battle";
+export const MODE = GAME_MODES[MODE_ID];
 const TEAM_SIZE = MODE.size / 2;
 const TEAMS: readonly Team[] = ["blue", "red"];
 
@@ -63,6 +67,36 @@ export interface Player<B = Bot> {
   kills: number;
   /** Les cartes communautaires qu'il a déjà (annoncées en rejoignant, ou envoyées depuis) : on ne les lui renvoie pas. */
   known: Set<string>;
+  /**
+   * Sa réplique montre le monde d'une salle qui s'est arrêtée sur une erreur (server/roomHost.ts) : sa
+   * prochaine image (qui décrit tout le monde) lui dit de l'oublier (`FrameHeader.reset`).
+   */
+  reset: boolean;
+}
+
+/**
+ * Ce qu'une salle neuve reprend de celle qui s'est arrêtée sur une erreur (server/roomHost.ts) : les
+ * clients connectés, et où en était la rotation des arènes.
+ */
+export interface RoomCarry {
+  /** Les clients connectés ; ceux qui avaient rejoint gardent leur nom, leur robot, leur équipe, leur jeton, leurs cartes. */
+  readonly players: readonly Player<unknown>[];
+  /** Le rang, dans la rotation, de l'arène de la partie interrompue : la première partie se joue dans la suivante. */
+  readonly arena: number;
+}
+
+/** Où en est une salle, d'après ce qu'elle tient elle-même : rien n'est demandé à sa simulation (lisible après une erreur). */
+export interface RoomSummary {
+  /** L'arène de la partie en cours, et son rang dans la rotation. */
+  readonly arena: ArenaKey;
+  readonly arenaRank: number;
+  /** Le mode de jeu de la salle. */
+  readonly mode: string;
+  /** Temps simulé depuis la création de la salle, et depuis le début de la partie en cours (s). */
+  readonly time: number;
+  readonly matchTime: number;
+  /** Joueurs dans la partie. */
+  readonly players: number;
 }
 
 /** Ce qu'on peut donner à une salle en plus de la progression des joueurs. */
@@ -76,6 +110,8 @@ export interface RoomOptions {
   readonly maps?: readonly MapFile[];
   /** Seulement les cartes communautaires dans la rotation (s'il y en a). */
   readonly mapsOnly?: boolean;
+  /** Ce que la salle reprend de celle qui s'est arrêtée sur une erreur (server/roomHost.ts). */
+  readonly carry?: RoomCarry;
 }
 
 /**
@@ -90,6 +126,8 @@ export abstract class RoomBase<B> {
   protected readonly players = new Set<Player<B>>();
   private nextPlayer = 1;
   private steps = 0;
+  /** Le pas où la partie en cours a commencé. */
+  private matchStep = 0;
   /** Temps simulé auquel la partie suivante commence (après la fin de celle en cours), ou null. */
   private restartAt: number | null = null;
   /** Rang de l'arène de la partie en cours : elles se succèdent d'une partie à l'autre. */
@@ -107,7 +145,53 @@ export abstract class RoomBase<B> {
     }
     const community = [...this.maps.keys()];
     this.rotation = options.mapsOnly && community.length ? community : [...(options.arenas ?? ARENA_IDS), ...community];
+    // Reprise après une erreur : les clients connectés passent dans cette salle (avant sa première partie,
+    // qui place ceux qui avaient rejoint), qui reprend la rotation après l'arène de la partie interrompue
+    const carry = options.carry;
+    if (carry) {
+      this.arenaIndex = carry.arena % this.rotation.length;
+      for (const p of carry.players) this.adopt(p as Player<B>);
+    }
   }
+
+  /** Un client de la salle qui s'est arrêtée : son robot de là-bas n'existe plus, son monde est à refaire. */
+  private adopt(player: Player<B>): void {
+    player.bot = null;
+    player.kills = 0;
+    player.fresh = true;
+    player.reset = player.profile !== null;
+    this.players.add(player);
+    this.nextPlayer = Math.max(this.nextPlayer, player.id + 1);
+  }
+
+  /** Les clients connectés (ceux qui ont rejoint la partie, et les autres). */
+  get connected(): readonly Player<B>[] {
+    return [...this.players];
+  }
+
+  /** Où en est la salle : lu sans rien demander à la simulation (une simulation qui a paniqué ne répond plus). */
+  summary(): RoomSummary {
+    return {
+      arena: this.rotation[Math.max(0, this.arenaIndex)], arenaRank: this.arenaIndex, mode: MODE_ID,
+      time: this.steps * STEP, matchTime: (this.steps - this.matchStep) * STEP, players: this.playerCount,
+    };
+  }
+
+  /** Temps simulé depuis la création de la salle (s), d'après ses pas. */
+  get elapsed(): number {
+    return this.steps * STEP;
+  }
+
+  /** Ce que la simulation sait d'une erreur (le message d'une panique du module Rust, `SimModule.explain`). */
+  explain(e: unknown): string {
+    return e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+  }
+
+  /**
+   * Outil d'essai (`SIM_FAULT`, server/main.ts ; tests/roomHost.test.ts) : une vraie panne de la
+   * simulation, comme une panique au milieu d'un pas ; elle lève l'erreur.
+   */
+  abstract provokeFault(): void;
 
   // La simulation de la salle (chaque sorte la sienne)
   /** Temps simulé, arène en place, vainqueur de la partie en cours (null : elle continue, ou pas de partie). */
@@ -154,16 +238,16 @@ export abstract class RoomBase<B> {
   connect(conn: Connection): Player<B> {
     const player: Player<B> = {
       id: this.nextPlayer++, conn, name: "", profile: null, team: "blue", input: newInput(), bot: null, fresh: true, token: "", kills: 0,
-      known: new Set(),
+      known: new Set(), reset: false,
     };
     this.players.add(player);
     return player;
   }
 
-  /** Le client s'en va : son robot repasse à l'IA. */
+  /** Le client s'en va : son robot repasse à l'IA (il quitte la salle d'abord : une erreur de la simulation ne le retient pas). */
   disconnect(player: Player<B>): void {
-    if (player.bot !== null) this.releaseBot(player.bot);
     this.players.delete(player);
+    if (player.bot !== null) this.releaseBot(player.bot);
   }
 
   receive(player: Player<B>, text: string): void {
@@ -271,10 +355,22 @@ export abstract class RoomBase<B> {
 
   /** Fin de partie : chaque joueur gagne des crédits (partie jouée, victoire, destructions), ici gardés. */
   private reward(winner: Team | "draw"): void {
+    this.pay((p) => (winner === "draw" ? "draw" : winner === p.team ? "win" : "loss"));
+  }
+
+  /**
+   * La salle s'arrête sur une erreur au milieu d'une partie (server/roomHost.ts) : chaque joueur gagne
+   * ce que la partie lui a déjà rapporté (partie jouée, ses destructions), ni victoire ni match nul.
+   * Ne lit rien de la simulation (elle a pu paniquer). Rien entre deux parties : la précédente a payé.
+   */
+  rewardInterrupted(): void {
+    if (this.restartAt === null) this.pay(() => "loss");
+  }
+
+  private pay(outcomeOf: (p: Player<B>) => MatchResult["outcome"]): void {
     for (const p of this.players) {
       if (!p.profile || !p.token) continue;
-      const outcome = winner === "draw" ? "draw" : winner === p.team ? "win" : "loss";
-      const reward = matchReward({ outcome, kills: p.kills, captures: 0 });
+      const reward = matchReward({ outcome: outcomeOf(p), kills: p.kills, captures: 0 });
       const ledger = this.book.get(p.token);
       ledger.credits += reward.total;
       this.send(p, { t: "progress", progress: ledger, reward });
@@ -327,6 +423,7 @@ export abstract class RoomBase<B> {
     });
     this.startMatchWorld(MODE.match);
     this.restartAt = null;
+    this.matchStep = this.steps;
   }
 
   /** Image pour chacun : les changements depuis la précédente, ou tout le monde pour qui arrive. */
@@ -337,8 +434,11 @@ export abstract class RoomBase<B> {
     for (const p of this.players) {
       if (!p.profile) continue;
       const lock = p.bot !== null ? this.lockOf(p.bot) : null;
-      const header = { events: p.fresh ? (world ??= this.describeWorld()) : events, you: p.bot !== null ? this.botId(p.bot) : null, lock };
+      const header: FrameHeader = { events: p.fresh ? (world ??= this.describeWorld()) : events, you: p.bot !== null ? this.botId(p.bot) : null, lock };
+      // La salle d'avant s'est arrêtée sur une erreur : sa réplique oublie le monde qu'elle montrait
+      if (p.reset) header.reset = true;
       p.fresh = false;
+      p.reset = false;
       p.conn.send(encodeFrame(header, snapshot));
     }
   }
@@ -454,6 +554,10 @@ export class Room extends RoomBase<Bot> {
   protected lockOf(bot: Bot): LockState | null {
     const locking = pilotLock(bot);
     return locking?.lockOn ? { turret: locking.block.id, target: locking.lockOn.id, progress: lockProgress(locking) } : null;
+  }
+
+  provokeFault(): void {
+    throw new Error("panne d'essai de la simulation du TypeScript (SIM_FAULT)");
   }
 
   dispose(): void {

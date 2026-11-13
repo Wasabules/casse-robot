@@ -231,4 +231,7 @@ export const hud = {
   "hud.gpu.stuck": "L'image ne revient pas : le navigateur n'a pas rendu la carte graphique au jeu. Recharger la page le relance (la partie en cours est perdue).",
   "hud.gpu.reset": "La carte graphique s'est réinitialisée. En WebGPU, le jeu ne la reprend pas de lui-même : recharger la page le relance (la partie en cours est perdue).",
   "hud.gpu.reload": "Recharger la page",
+  // La simulation de la partie solo arrêtée sur une erreur (client/hud/notice.ts)
+  "hud.sim.fallbackTs": "La simulation Rust s'est arrêtée sur une erreur : la partie reprend sur celle du TypeScript.",
+  "hud.sim.fallbackPage": "La simulation s'est arrêtée sur une erreur : la partie reprend dans la page, plus lentement.",
 } as const;

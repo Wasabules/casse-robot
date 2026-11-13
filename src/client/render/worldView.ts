@@ -31,6 +31,7 @@ import { MeleeRig } from "./meleeView";
 import { MELEE_IDS } from "../../shared/catalog/melee";
 import { lampColors, lampLevels, LIGHT_BLOCKS, lightPowered, sweepAngle } from "./lightSources";
 import { PropBatches } from "./propBatches";
+import { keepThinBounds } from "./thinBounds";
 
 /** Échelle d'un débris par rapport à un bloc, et d'un éclat par rapport à son accessoire. */
 const DEBRIS_SCALE = 0.47;
@@ -609,6 +610,8 @@ export class WorldView {
     mesh.parent = this.parts.get(part)?.node ?? null;
     mesh.thinInstanceEnablePicking = true;
     mesh.thinInstanceRegisterAttribute(B.VertexBuffer.ColorKind, 4);
+    // (sa boîte se refait quand ses blocs changent, `flushBatches` ; pas à chaque image où le morceau bouge)
+    keepThinBounds(mesh);
     this.shadows.addShadowCaster(mesh, false);
     return mesh;
   }

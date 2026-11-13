@@ -31,9 +31,10 @@ import { utf8Decode, utf8Encode } from "./binary";
  * les feux décoratifs (feu de position, feu à éclats, feu anticollision, gyrophare, rampe de police) ;
  * 27 : les paquets de cartes (`MapFile.assets` : l'empreinte des modèles et de l'ambiance d'une carte,
  * que son identifiant couvre ; un client qui l'ignorerait ne trouverait pas la carte que le serveur
- * nomme), servis à part par le serveur de jeu (`MAP_ASSET_PATH`).
+ * nomme), servis à part par le serveur de jeu (`MAP_ASSET_PATH`) ; 28 : le fil (net/wire.ts) : les
+ * images du serveur passent quantifiées, en écarts à la précédente, compressées par la WebSocket.
  */
-export const PROTOCOL_VERSION = 27;
+export const PROTOCOL_VERSION = 28;
 /**
  * Où le serveur de jeu sert les ressources des cartes qu'il fait jouer (modèles, ambiance), d'après
  * leur empreinte : `<origine HTTP du serveur>/map-assets/<sha256>`. En HTTP plutôt que dans la
@@ -105,7 +106,11 @@ export interface FrameHeader {
   you: number | null;
   /** Verrouillage en cours d'une arme de ce client (voir combat/lock.ts), pour son HUD. */
   lock?: LockState | null;
-  /** Image d'une partie solo (net/session.ts) : un nouveau monde (une autre partie, une autre vague), la réplique oublie l'ancien. */
+  /**
+   * Un nouveau monde, la réplique oublie l'ancien : une partie solo (net/session.ts) qui change de partie
+   * ou de vague ; le serveur de jeu qui a relancé sa salle après une erreur de la simulation
+   * (server/roomHost.ts : le joueur est dans une partie neuve, l'image décrit tout le monde).
+   */
   reset?: boolean;
   /** Image d'une partie solo : l'état des armes de la caméra libre, pour son HUD. */
   arms?: [WeaponId, ArmState][];

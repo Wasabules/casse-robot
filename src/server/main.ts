@@ -11,12 +11,14 @@ import { assetEntries, folderSource, isArchive, PACKAGE_FILES, readMapArchive, r
 import { readMapText } from "../shared/map/read";
 import { checkMap } from "../shared/map/validate";
 import { DEFAULT_PORT, MAP_ASSET_PATH } from "../shared/net/protocol";
+import { WireEncoder } from "../shared/net/wire";
 import { initPhysics } from "../shared/sim/simulation";
-import { loadSimModule } from "../shared/native/simModule";
+import { SimCompiled } from "../shared/native/simModule";
 import { DEFAULT_SIMULATION, simulationNamed, type SimulationEngine } from "../shared/native/choice";
 import { NativeRoom } from "./nativeRoom";
 import { ProgressBook } from "./progressBook";
 import { Room, type Player, type RoomBase, type RoomOptions } from "./room";
+import { RoomHost } from "./roomHost";
 import { cacheControl, contentType, IMMUTABLE, mapAssetHash, staticPath } from "./staticFiles";
 
 /*
@@ -43,15 +45,41 @@ try {
   // Premier démarrage : pas encore de fichier
 }
 let saving: ReturnType<typeof setTimeout> | null = null;
+/** Enregistre la progression, si elle a changé depuis la dernière fois. */
+function saveProgress(): void {
+  if (!saving) return;
+  clearTimeout(saving);
+  saving = null;
+  // Écrire à côté puis renommer : un arrêt brutal ne laisse pas un fichier à moitié écrit
+  writeFileSync(`${PROGRESS_FILE}.tmp`, JSON.stringify(book));
+  renameSync(`${PROGRESS_FILE}.tmp`, PROGRESS_FILE);
+}
 book.onChange = () => {
-  if (saving) return;
-  saving = setTimeout(() => {
-    saving = null;
-    // Écrire à côté puis renommer : un arrêt brutal ne laisse pas un fichier à moitié écrit
-    writeFileSync(`${PROGRESS_FILE}.tmp`, JSON.stringify(book));
-    renameSync(`${PROGRESS_FILE}.tmp`, PROGRESS_FILE);
-  }, SAVE_DELAY * 1000);
+  saving ??= setTimeout(saveProgress, SAVE_DELAY * 1000);
 };
+
+/**
+ * Le processus s'arrête : la progression d'abord (un changement de moins d'une seconde n'est pas encore
+ * écrit). Une erreur que rien n'a rattrapée l'arrête avec le code 1, qu'un superviseur relance
+ * (tools/server/supervise.mjs, `npm run server:supervised`) ; un arrêt demandé (Ctrl+C, SIGTERM), avec le code 0.
+ */
+function stop(code: number): never {
+  try {
+    saveProgress();
+  } catch (e) {
+    console.error("Progression non enregistrée :", e);
+  }
+  process.exit(code);
+}
+process.on("uncaughtException", (e) => {
+  console.error("Erreur que rien n'a rattrapée : le serveur s'arrête", e);
+  stop(1);
+});
+process.on("unhandledRejection", (e) => {
+  console.error("Promesse rejetée que rien n'a rattrapée : le serveur s'arrête", e);
+  stop(1);
+});
+for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, () => stop(0));
 /**
  * Dossier des arènes du jeu (ARENAS_DIR pour en changer) : leurs fichiers de carte (content/arenas/,
  * faits par `npm run map:export`), lus et construits au démarrage (map/gameArenas.ts). Une arène dont
@@ -203,22 +231,44 @@ function simWasm(): Uint8Array | null {
  * La salle, sur la simulation choisie : `SIM=ts` ou `SIM=rust`, sinon celle par défaut
  * (`DEFAULT_SIMULATION`, src/shared/native/choice.ts) ; les mêmes images. La simulation Rust demandée
  * (`SIM=rust`) dont le module manque arrête le serveur ; celle par défaut laisse la place au TypeScript.
+ * Le module est compilé une fois : chaque salle a son instance (une salle relancée après une panique,
+ * server/roomHost.ts, en prend une neuve).
  */
-async function openRoom(options: RoomOptions): Promise<{ room: RoomBase<unknown>; sim: SimulationEngine }> {
+async function openHost(options: RoomOptions): Promise<RoomHost> {
   const asked = simulationNamed(process.env.SIM);
   if (process.env.SIM && !asked) throw new Error(`SIM : « ts » ou « rust », pas « ${process.env.SIM} »`);
+  let compiled: SimCompiled | null = null;
   if ((asked ?? DEFAULT_SIMULATION) === "rust") {
     const bytes = simWasm();
-    if (bytes) return { room: new NativeRoom(await loadSimModule(bytes), book, options), sim: "rust" };
-    if (asked) throw new Error("SIM=rust : la simulation compilée est introuvable (npm run native, ou SIM_WASM)");
-    console.warn("Simulation Rust introuvable (npm run native, ou SIM_WASM) : la salle tourne sur celle du TypeScript");
+    if (bytes) compiled = await SimCompiled.compile(bytes);
+    else if (asked) throw new Error("SIM=rust : la simulation compilée est introuvable (npm run native, ou SIM_WASM)");
+    else console.warn("Simulation Rust introuvable (npm run native, ou SIM_WASM) : la salle tourne sur celle du TypeScript");
   }
-  return { room: new Room(book, options), sim: "ts" };
+  const make = (engine: SimulationEngine, roomOptions: RoomOptions): RoomBase<unknown> =>
+    engine === "rust" && compiled ? new NativeRoom(compiled.instance(), book, roomOptions) : new Room(book, roomOptions);
+  return new RoomHost(make, compiled ? "rust" : "ts", options, {
+    fault: faultOf(process.env.SIM_FAULT),
+    onGiveUp: () => stop(1),
+  });
+}
+
+/**
+ * Outil d'essai, pas pour un vrai serveur : `SIM_FAULT=secondes[,nombre]` provoque une vraie panne de la
+ * simulation (une panique du module Rust, une exception de celle du TypeScript : `provokeFault`) après
+ * tant de secondes de temps simulé dans chaque salle, `nombre` fois en tout (1 par défaut) ; la salle
+ * se relance (server/roomHost.ts). `SIM_FAULT=10,3` : trois paniques de la Rust, puis le repli sur le TypeScript.
+ */
+function faultOf(text: string | undefined): { after: number; count: number } | null {
+  if (!text) return null;
+  const [after, count = 1] = text.split(",").map(Number);
+  if (!Number.isFinite(after) || after < 0 || !Number.isInteger(count) || count < 1) throw new Error(`SIM_FAULT : « secondes[,nombre] », pas « ${text} »`);
+  console.warn(`SIM_FAULT=${text} : ${count} panne(s) d'essai de la simulation, après ${after} s dans chaque salle`);
+  return { after, count };
 }
 
 const roomOptions: RoomOptions = { arenas: rotationOf(loadGameArenas(ARENAS_DIR)), maps: await loadMaps(MAPS_DIR), mapsOnly: process.env.MAPS_ONLY === "1" };
-const { room, sim: SIM } = await openRoom(roomOptions);
-console.log(`Rotation des arènes : ${room.rotation.length} (simulation ${SIM === "rust" ? "Rust" : "TypeScript"})`);
+const host = await openHost(roomOptions);
+console.log(`Rotation des arènes : ${host.room.rotation.length} (simulation ${host.engine === "rust" ? "Rust" : "TypeScript"})`);
 const port = Number(process.env.PORT) || DEFAULT_PORT;
 
 /** Dossier du client compilé, servi à côté de la partie. */
@@ -232,8 +282,8 @@ const http = createServer((req, res) => {
   const url = req.url ?? "/";
   if (url === "/status" || url.startsWith("/status?")) {
     res.writeHead(200, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-cache" });
-    // Pour l'hébergeur, pas pour le joueur : en français, comme les journaux du serveur
-    res.end(`Casse-Robot : serveur de jeu, ${room.playerCount} joueur(s), simulation ${SIM}\n`); // i18n-ignore
+    // Pour l'hébergeur, pas pour le joueur : en français, comme les journaux du serveur (la simulation, ses redémarrages, la dernière panne)
+    res.end(`Casse-Robot : serveur de jeu, ${host.playerCount} joueur(s), ${host.describe()}\n`); // i18n-ignore
     return;
   }
   const asset = mapAssetHash(url, MAP_ASSET_PATH);
@@ -244,7 +294,7 @@ const http = createServer((req, res) => {
   if ((req.method === "GET" || req.method === "HEAD") && serveFile(req, res, url)) return;
   res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
   res.end(staticPath(url) === "index.html"
-    ? `Casse-Robot : serveur de jeu, ${room.playerCount} joueur(s). La page du jeu n'est pas compilée : npm run build.\n` // i18n-ignore
+    ? `Casse-Robot : serveur de jeu, ${host.playerCount} joueur(s). La page du jeu n'est pas compilée : npm run build.\n` // i18n-ignore
     : "Introuvable\n");
 });
 
@@ -307,20 +357,27 @@ function serveFile(req: IncomingMessage, res: ServerResponse, url: string): bool
   return true;
 }
 
-const sockets = new WebSocketServer({ server: http });
+/**
+ * Le fil (shared/net/wire.ts) : chaque image de la salle, quantifiée une fois pour tous, part à chacun en
+ * écarts à la précédente qu'il a reçue ; la WebSocket la compresse par-dessus (`permessage-deflate`,
+ * que les navigateurs parlent : chaque liaison garde son contexte d'une image à l'autre).
+ */
+const wire = new WireEncoder(() => performance.now());
+const sockets = new WebSocketServer({ server: http, perMessageDeflate: { threshold: 64 } });
 sockets.on("connection", (socket: WebSocket, request) => {
-  const player: Player<unknown> = room.connect({
+  const stream = wire.stream();
+  const player: Player<unknown> = host.connect({
     send: (data) => {
-      if (socket.readyState === socket.OPEN) socket.send(data);
+      if (socket.readyState === socket.OPEN) socket.send(typeof data === "string" ? data : stream.encode(data));
     },
   });
   const from = request.socket.remoteAddress ?? "?";
   console.log(`connexion ${player.id} (${from})`);
   socket.on("message", (data, isBinary) => {
-    if (!isBinary) room.receive(player, data.toString());
+    if (!isBinary) host.receive(player, data.toString());
   });
   socket.on("close", () => {
-    room.disconnect(player);
+    host.disconnect(player);
     console.log(`départ ${player.id}${player.name ? ` (${player.name})` : ""}`);
   });
 });
@@ -336,7 +393,7 @@ setInterval(() => {
   last = now;
   let steps = 0;
   while (accumulator >= STEP && steps < MAX_STEPS) {
-    room.tick();
+    host.tick();
     accumulator -= STEP;
     steps++;
   }

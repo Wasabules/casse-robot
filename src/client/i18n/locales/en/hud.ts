@@ -211,4 +211,6 @@ export const hud = {
   "hud.gpu.stuck": "The picture isn't coming back: the browser didn't give the graphics card back to the game. Reloading the page restarts it (the current match is lost).",
   "hud.gpu.reset": "The graphics card was reset. With WebGPU, the game can't pick it back up on its own: reloading the page restarts it (the current match is lost).",
   "hud.gpu.reload": "Reload the page",
+  "hud.sim.fallbackTs": "The Rust simulation stopped on an error: the match restarts on the TypeScript one.",
+  "hud.sim.fallbackPage": "The simulation stopped on an error: the match restarts in the page, more slowly.",
 } as const satisfies ZoneOf<typeof fr>;

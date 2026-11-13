@@ -23,7 +23,7 @@ import { CRUISE_POWER } from "../shared/sim/player";
 import { Simulation } from "../shared/sim/simulation";
 import type { SimEvent } from "../shared/sim/events";
 import type { World } from "../shared/sim/world";
-import { INPUT_RATE } from "../shared/net/protocol";
+import { InputPacer } from "../shared/net/pacing";
 import { NetClient } from "./net/netClient";
 import { WorkerLink } from "./sim/workerLink";
 import { spawnTeams, spawnWave } from "../shared/sim/wave";
@@ -37,6 +37,7 @@ import { Reticle, SIGHTS } from "./hud/reticle";
 import { aimSpread } from "../shared/combat/accuracy";
 import { readiness, type Readiness } from "../shared/combat/arsenal";
 import { MatchHud } from "./hud/matchHud";
+import { Notice } from "./hud/notice";
 import { CameraRig } from "./input/cameraRig";
 import { Controls, RETICLE_HEIGHT } from "./input/controls";
 import { ACTIONS, WEAPON_SLOTS, type ActionId } from "./input/bindings";
@@ -53,7 +54,7 @@ import { Fx } from "./render/fx/fx";
 import { SceneLighting } from "./render/lighting";
 import { PoseInterpolation } from "./render/interpolation";
 import { firingTurret, recoilKick } from "./render/recoil";
-import { requestedSimulation, type FxLook, type ShadowQuality, type SimulationEngine } from "./settings";
+import { requestedSimulation, type FarShadows, type FxLook, type ShadowQuality, type SimulationEngine } from "./settings";
 import { DEFAULT_SIMULATION } from "../shared/native/choice";
 import { LocomotionView } from "./render/locomotionView";
 import { applyArenaLook, SHADOW_MAPS, type SceneKit } from "./render/scene";
@@ -62,6 +63,7 @@ import { ProjectileView } from "./render/projectiles";
 import { createScene } from "./render/scene";
 import { dustColor } from "./render/propModels";
 import { SmokeView } from "./render/smokeView";
+import { pickTerrain } from "./render/terrainPick";
 import { BarrierView } from "./render/barrierView";
 import { WorldView } from "./render/worldView";
 import { t } from "./i18n/i18n";
@@ -258,10 +260,12 @@ export class ArenaGame {
   private net: NetClient | WorkerLink | null = null;
   /** La partie solo dans un Worker (client/sim/workerLink.ts), s'il a pu démarrer. */
   private local: WorkerLink | null = null;
-  /** Temps avant le prochain envoi des commandes au serveur (s). */
-  private inputTimer = 0;
+  /** Quand envoyer les commandes au serveur : une touche qui change tout de suite, le reste à INPUT_RATE (net/pacing.ts). */
+  private readonly inputPacer = new InputPacer();
   private unbindWorld: () => void;
   private readonly matchHud = new MatchHud();
+  /** Le bandeau de ce qui arrive à la partie (une simulation arrêtée sur une erreur, la partie qui reprend). */
+  private readonly notices = new Notice();
   private readonly feedback = new HitFeedback();
   private readonly reticle = new Reticle();
   private readonly instruments = new Instruments();
@@ -384,30 +388,48 @@ export class ArenaGame {
   /**
    * La partie solo dans un Worker (client/sim/workerLink.ts) : le fil du rendu ne fait plus la
    * simulation, il rejoue les images du Worker dans une réplique, comme en réseau. Sans Worker (ou
-   * `?sim=page` dans l'adresse), la simulation reste dans ce fil, comme avant. Si le Worker échoue,
-   * la partie en cours reprend dans ce fil.
+   * `?sim=page` dans l'adresse), la simulation reste dans ce fil, comme avant.
    */
   private startLocal(simulation: SimulationEngine): void {
     if (typeof Worker === "undefined" || new URLSearchParams(location.search).get("sim") === "page") return;
+    // La simulation du TypeScript ou celle portée en Rust (le réglage, ou `?sim=` ; les mêmes images)
+    this.openWorker(requestedSimulation(simulation), true);
+  }
+
+  /**
+   * Un Worker de la partie solo sur cette simulation (`playing` : la partie s'y joue tout de suite) ;
+   * faux s'il ne démarre pas. Si sa simulation s'arrête sur une erreur en cours de route (une panique
+   * de la simulation Rust : son instance du module est perdue), la partie en cours reprend dans un
+   * Worker neuf sur celle du TypeScript ; si c'est elle qui s'arrête, dans ce fil. Un bandeau le dit.
+   */
+  private openWorker(engine: SimulationEngine, playing: boolean): boolean {
+    let link: WorkerLink;
     try {
-      // La simulation du TypeScript ou celle portée en Rust (le réglage, ou `?sim=` ; les mêmes images)
-      const link = new WorkerLink(requestedSimulation(simulation));
-      link.onFail = () => {
-        if (this.local !== link) return;
-        link.close();
-        this.local = null;
-        if (this.net === link) {
-          this.net = null;
-          this.bind(this.sim);
-          this.newWave();
-        }
-      };
-      this.local = link;
-      this.net = link;
-      this.bind(link.replica);
+      link = new WorkerLink(engine);
     } catch (e) {
       console.warn("La simulation reste sur la page : pas de Worker", e);
+      return false;
     }
+    link.onFail = () => {
+      if (this.local !== link) return;
+      link.close();
+      this.local = null;
+      const shown = this.net === link;
+      if (shown) this.net = null;
+      // (seule la simulation Rust passe la main à un Worker du TypeScript ; un Worker du TypeScript qui échoue laisse la partie à la page)
+      const again = link.engine === "rust" && this.openWorker("ts", shown);
+      if (!shown) return;
+      if (!again) this.bind(this.sim);
+      this.newWave();
+      // (la démonstration derrière le menu reprend sans rien dire : le joueur n'y perd rien)
+      if (!this.attract) this.notices.show(t(again ? "hud.sim.fallbackTs" : "hud.sim.fallbackPage"));
+    };
+    this.local = link;
+    if (playing) {
+      this.net = link;
+      this.bind(link.replica);
+    }
+    return true;
   }
 
   /**
@@ -670,6 +692,11 @@ export class ArenaGame {
   /** Une ligne dans le fil de la partie (crédits gagnés sur le serveur…). */
   note(text: string): void {
     this.matchHud.note(text);
+  }
+
+  /** Un bandeau quelques secondes en haut de l'écran (le serveur a relancé la partie après une erreur…). */
+  notice(text: string): void {
+    this.notices.show(text);
   }
 
   resetMatchStats(): void {
@@ -1056,11 +1083,13 @@ export class ArenaGame {
    * s'il pilote), au plus `timeout` s ; sans Worker, tout de suite.
    */
   async worldReady(timeout = 10): Promise<void> {
-    const link = this.local;
-    if (!link || !this.inWorker) return;
+    if (!this.local || !this.inWorker) return;
     const end = performance.now() + timeout * 1000;
     const pilot = GAME_MODES[this.mode].pilot && this.playerProfile !== null;
     while (performance.now() < end) {
+      // (le Worker du moment : celui du TypeScript remplace celui de la Rust qui s'arrête sur une erreur)
+      const link = this.local;
+      if (!link || !this.inWorker) return;
       if (link.arrived && (!pilot || this.world.player)) return;
       await this.renderedFrames(1);
     }
@@ -1091,6 +1120,11 @@ export class ArenaGame {
     const mapSize = Math.min(size, this.engine.getCaps().maxTextureSize);
     if (this.shadows.mapSize !== mapSize) this.shadows.mapSize = mapSize;
     this.shadows.filteringQuality = filtering;
+  }
+
+  /** Ombres lointaines : la cascade la plus lointaine refaite à chaque image, ou une image sur deux (render/scene.ts, `FarCascade`). */
+  setFarShadows(mode: FarShadows): void {
+    if (this.kit.farShadows) this.kit.farShadows.every = mode === "half" ? 2 : 1;
   }
 
   /** Part de la résolution de l'écran à laquelle l'image est calculée (1 : pleine résolution, écrans haute densité compris). */
@@ -1404,9 +1438,14 @@ export class ArenaGame {
   private pick(origin: Vec3, dir: Vec3, length: number): Vec3 | null {
     if (this.net) {
       const player = this.world.player;
-      const ray = new B.Ray(new B.Vector3(origin.x, origin.y, origin.z), new B.Vector3(dir.x, dir.y, dir.z), length);
+      // Le relief d'abord, sans la scène (render/terrainPick.ts : ses triangles ne sont pas visables par
+      // elle) ; puis ce qu'il y a de plus près dans la scène
+      const terrain = this.world.arena.terrain;
+      const ground = terrain ? pickTerrain(terrain, origin, dir, length) : null;
+      const ray = new B.Ray(new B.Vector3(origin.x, origin.y, origin.z), new B.Vector3(dir.x, dir.y, dir.z), ground ?? length);
       const hit = this.scene.pickWithRay(ray, (m) => m.isPickable && m.isEnabled() && !(player && this.view.belongsTo(m, player)));
-      return hit?.hit && hit.pickedPoint ? toVec3(hit.pickedPoint) : null;
+      if (hit?.hit && hit.pickedPoint) return toVec3(hit.pickedPoint);
+      return ground === null ? null : add(origin, scale(dir, ground));
     }
     return this.sim.raycast(origin, dir, length, this.sim.player)?.point ?? null;
   }
@@ -1493,11 +1532,7 @@ export class ArenaGame {
   /** En réseau : la réplique rejoue les images reçues, et les commandes partent au serveur. */
   private replay(dt: number): void {
     this.net!.replica.advance(dt);
-    this.inputTimer -= dt;
-    if (this.inputTimer <= 0) {
-      this.net!.send({ t: "input", input: this.sim.input });
-      this.inputTimer = 1 / INPUT_RATE;
-    }
+    if (this.inputPacer.due(dt, this.sim.input)) this.net!.send({ t: "input", input: this.sim.input });
   }
 
   /**

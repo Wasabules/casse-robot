@@ -46,6 +46,7 @@ export { MultiMaterial } from "@babylonjs/core/Materials/multiMaterial";
 export type { Material } from "@babylonjs/core/Materials/material";
 export { Texture } from "@babylonjs/core/Materials/Textures/texture";
 export type { BaseTexture } from "@babylonjs/core/Materials/Textures/baseTexture";
+export type { RenderTargetTexture } from "@babylonjs/core/Materials/Textures/renderTargetTexture";
 export { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
 // Fumée et flammes réalistes (render/fx/sprites.ts, render/fx/fxMaterial.ts) : leurs shaders et leurs textures calculées
 export { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial";

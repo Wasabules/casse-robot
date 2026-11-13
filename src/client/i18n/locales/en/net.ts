@@ -23,5 +23,7 @@ export const net = {
   "net.earned": "+{total} credits ({lines}) · {credits}",
   "net.unlocked": "Unlocked on this server: {parts} (−{price}) · {credits}",
   "net.lost": "The connection to the server was lost.",
+  "net.restarted": "A simulation error stopped the match: the server started a new one.",
+  "net.corrupt": "A frame from the server couldn't be read: the connection was closed.",
   "net.unreachable": "Can't reach the server {url}.",
 } as const satisfies ZoneOf<typeof fr>;

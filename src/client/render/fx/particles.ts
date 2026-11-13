@@ -72,29 +72,36 @@ const FLAME_TINT = 0.4;
 export const FLAME_LEAN = 0.1;
 export const FLAME_LEAN_MAX = 1.2;
 
-interface Particle {
-  kind: PuffKind;
-  x: number; y: number; z: number;
-  vx: number; vy: number; vz: number;
-  age: number; life: number;
+/**
+ * Une particule. Une classe, dont le constructeur donne tous les champs dans le même ordre : une
+ * particule reprise du réservoir peut avoir été une volute, une flamme posée ou une particule
+ * vivante, et des objets nés vides (`{}`) puis remplis dans trois ordres différents prenaient
+ * chacun leur forme cachée. Le vieillissement, le tri et l'écriture, qui les lisent toutes,
+ * devenaient mégamorphes : ~2 ms par image au Dépôt pour quelques centaines de particules.
+ */
+class Particle {
+  kind: PuffKind = "smoke";
+  x = 0; y = 0; z = 0;
+  vx = 0; vy = 0; vz = 0;
+  age = 0; life = 1;
   /** Née pendant cette image : elle est dessinée telle qu'elle naît avant de vieillir (voir `update`). */
-  fresh: boolean;
-  size: number; grow: number;
-  alpha: number; fadeIn: number; fadeOut: number;
-  drag: number; gravity: number; stretch: number; wind: number;
-  r: number; g: number; b: number;
+  fresh = false;
+  size = 1; grow = 1;
+  alpha = 1; fadeIn = 0; fadeOut = 1;
+  drag = 0; gravity = 0; stretch = 0; wind = 0;
+  r = 1; g = 1; b = 1;
   // Effets réalistes
   /** Éclat, copeau : une petite boule pleine, pas une volute. */
-  solid: boolean;
-  angle: number; spin: number; frame: number; seed: number;
+  solid = false;
+  angle = 0; spin = 0; frame = 0; seed = 0;
   /** Hauteur du sol sous son point de départ. */
-  ground: number;
-  heat: number; burn: number; billow: boolean;
+  ground = 0;
+  heat = 1; burn = 1; billow = false;
   /** Flamme posée pour une image (`flame`) : son haut, de la longueur de sa hauteur en part de sa largeur. */
-  posed: boolean;
-  lx: number; ly: number; lz: number;
+  posed = false;
+  lx = 0; ly = 0; lz = 0;
   /** Ce qu'elle a été à la dernière image (pour le tri et l'écriture) : position, taille, opacité. */
-  size1: number; a1: number; long: number;
+  size1 = 1; a1 = 0; long = 0;
 }
 
 /**
@@ -160,7 +167,7 @@ export class ParticleField {
   emit(at: Vec3, spec: PuffSpec, vel?: Vec3, scale = 1): void {
     const list = this.live[spec.kind];
     if (list.length >= this.limit[spec.kind]) return;
-    const p = this.pool.pop() ?? ({} as Particle);
+    const p = this.pool.pop() ?? new Particle();
     this.init(p, at, spec, vel, scale);
     list.push(p);
   }
@@ -172,7 +179,7 @@ export class ParticleField {
    */
   volute(at: Vec3, size: number, color: string, alpha: number, angle: number, frame: number, age: number, ground: number, shade: number, seed: number): void {
     if (this.look !== "realistic" || this.transient.length >= TRANSIENT) return;
-    const p = this.pool.pop() ?? ({} as Particle);
+    const p = this.pool.pop() ?? new Particle();
     const [r, g, b] = rgb(color);
     p.kind = "smoke";
     p.x = at.x; p.y = at.y; p.z = at.z;
@@ -196,7 +203,7 @@ export class ParticleField {
    */
   flame(at: Vec3, size: number, up: Vec3, heat: number, alpha: number, seed: number, color: string): void {
     if (this.look !== "realistic" || this.transientFire.length >= TRANSIENT_FIRE) return;
-    const p = this.pool.pop() ?? ({} as Particle);
+    const p = this.pool.pop() ?? new Particle();
     const [r, g, b] = rgb(color);
     p.kind = "fire";
     p.x = at.x; p.y = at.y; p.z = at.z;
