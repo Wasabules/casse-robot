@@ -244,6 +244,12 @@ export class FarCascade {
       compute();
       this.afterMatrices();
     };
+    // Le contexte rendu après une perte (hud/gpuNotice.ts) : Babylon recrée la carte d'ombre vide,
+    // sans la redessiner ; gardée telle quelle, la cascade lointaine serait lue comme une ombre partout
+    // au loin jusqu'à l'image suivante. Rien de gardé : elle est refaite à la prochaine image
+    shadows.getLight().getScene().getEngine().onContextRestoredObservable.add(() => {
+      this.saved = null;
+    });
   }
 
   /** Une nouvelle carte d'ombre (autre arène, autre qualité) : rien de gardé, et son effacement suit `skipping`. */
